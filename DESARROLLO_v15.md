@@ -123,7 +123,7 @@ def fetch(self, site: dict, *, pages: int, search_text: str | None,
 
 ```powershell
 # === ENTORNO ===
-cd D:\Proyectos\jobpulse_cr\v1_5
+cd D:\Proyectos\v1_5
 py -3.11 -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -e .
 .\.venv\Scripts\playwright install chromium  # para scrapers browser
@@ -353,3 +353,7 @@ llama-server -m modelo.gguf -c 8192 --port 8080
   actualizarla con `credenciales set`.
 - **Docs al día y verificados contra el código**: `AGENTS.md`, este documento
   (estado, FASE 1, gaps, comandos) y `README.md` (tests con pytest).
+- **Mudanza a repo propio**: `giovar24/jobpulse-cr-v15` en `D:\Proyectos\v1_5`
+  (95 commits del fork vía subtree split; contraseña de ANE purgada del
+  historial con git-filter-repo ANTES de publicar; venv, `.env` y BD movidos
+  con la carpeta; editable reinstalado en venv y python del sistema).

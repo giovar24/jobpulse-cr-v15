@@ -18,7 +18,7 @@ migraciones solo modifican la ruta de base configurada para esa instancia.
 Crear un entorno virtual independiente e instalar el paquete:
 
 ```powershell
-cd v1_5
+cd D:\Proyectos\v1_5
 py -3.11 -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -e .
 ```

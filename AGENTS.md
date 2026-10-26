@@ -1,6 +1,8 @@
 # AGENTS.md — JobPulse CR v1.5
 
-Instrucciones para agentes IA que trabajan en este fork (`v1_5`).
+Instrucciones para agentes IA que trabajan en este repo
+(`giovar24/jobpulse-cr-v15` — hasta 2026-10-26 fue la carpeta `v1_5` dentro
+del repo `jobpulse_cr`).
 Objetivo: orientación instantánea sin re-explorar el proyecto.
 
 ## Al iniciar sesión
@@ -9,9 +11,10 @@ Objetivo: orientación instantánea sin re-explorar el proyecto.
    objetivos (O1–O6), decisiones y pendiente inmediato.
 2. Referencia de arquitectura y comparación con el proyecto principal:
    `DESARROLLO_v15.md` (§6 = notas técnicas importantes).
-3. La raíz del repo es el proyecto principal v1.x, **congelado** (su `AGENTS.md`
-   lo advierte): no modificarlo. Sus comandos (`main.py`, `unittest`,
-   `tools/auditar.py`) NO aplican en `v1_5/`.
+3. Este es un repo PROPIO e independiente (desde 2026-10-26). El proyecto
+   principal v1.x sigue en `D:\Proyectos\jobpulse_cr`, **congelado** (su
+   `AGENTS.md` lo advierte): no modificarlo. Sus comandos (`main.py`,
+   `unittest`, `tools/auditar.py`) NO aplican aquí.
 
 ## Al cerrar sesión (OBLIGATORIO)
 
