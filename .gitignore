@@ -1,0 +1,27 @@
+# --- Secretos y datos personales: NUNCA al repo (regla dura del proyecto) ---
+.env
+data/usuario/
+data/empresas/
+
+# --- Python ---
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# --- BD y datos generados (regenerables) ---
+data/*.db
+data/*.db-*
+data/*.db.bak*
+data/backups/
+data/ia_server.log
+data/comparacion_cache/
+data/*.csv
+*.log
+
+# --- CVs personales: el CV real nunca viaja a git ---
+*.pdf
+*.doc
+*.docx
+~$*
