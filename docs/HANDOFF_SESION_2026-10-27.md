@@ -108,8 +108,8 @@ conocía el estado actual. Investigación del código:
 | Guardar los puestos aplicados | ✅ YA existente: tabla `applications` (planned → applied → recruiter_contact → interview → offer; applied_at, next_action_at, notas) + diálogo "Seguimiento" por vacante (ui.py) |
 | Anotar que ya se aplicó | ✅ manual: diálogo de estado ("Aplicada") con skip_automatic=True por defecto → ya excluye de la búsqueda |
 | Categorías de puestos | ❌ no existe ningún campo (solo categorías de REQUISITOS: education/experience/language/license/skill) |
-| Recurrentes vs. ya aplicado | ❌ la republicación nace con ID nuevo; el estado manual del ID viejo NO se arrastra → la copia resucita |
-| De-baja después de un tiempo | ❌ NADA caduca: la búsqueda no filtra por edad ni vigencia; `expires_at` existe pero solo lo llena ANE y `gate.es_vigente` está dormido |
+| Recurrentes vs. ya aplicado | ⚠️ **CORRECCIÓN (27-10, código revisado por pedido del usuario): ESTABA RESUELTO en v1.x y NO se portó** — `core/database.py marcar_duplicados_exactos()` (`dup_of`) + tombstones `jobs_excluidas` con clave empresa\|título\|ubicación normalizada ("identifica el puesto aunque cambie el job_id del repost") + barrera `filtrar_offers` (`core/exclusiones.py`). v1.5 solo tiene `source_job_memory` por `(site_id, source_job_id)` = idempotencia de re-scrape, NO barrera de republicación (vacio: ni `dup_of`, ni tombstones) |
+| De-baja después de un tiempo | ⚠️ **también estaba resuelto en v1.x y no se portó**: `core/database.py purge_expired(dias=30)` (vencidas por `expires_at` — ANE lo trae; sin vencimiento → `date_published < ventana`; sin fecha legible → TTL por `created_at`). En v1.5 borra nada: la búsqueda no filtra por edad ni vigencia; `expires_at` solo lo llena ANE y `gate.es_vigente` está dormido. Portar como OCULTAR (v1.5 no borra filas) |
 
 Decisión del usuario (27-10): **puesto recurrente NO sale salvo que el
 usuario decida mostrarlo** (vale también para lo ya aplicado: "solo se
@@ -127,7 +127,9 @@ decisión del usuario 27-10; ancla = updated_at del estado del original —
 existe en user_job_state): la copia solo hereda estado si el original
 tiene MENOS de la ventana; superada, la copia entra como vacante NUEVA
 (nuevo ciclo, re-aplicable). Default del selector por decidir (prop. 3
-meses).
+meses). **Y la implementación deja de ser diseño desde cero**: se PORTA el
+mecanismo probado de v1.x (tombstones + dup_of + purge_expired → ver el
+"O8 — sub-diseño" en DESARROLLO_v15.md §3) con las adaptaciones v1.5.
 → Creado objetivo **O8** (O8.1 categorías · O8.2 recurrentes/aplicadas
 ocultas por defecto · O8.3 registro de aplicados ✅ · O8.4 de-baja por
 tiempo) y placeholder **O9** (optimización de UI). Además: O2 gana

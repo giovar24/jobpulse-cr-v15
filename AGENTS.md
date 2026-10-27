@@ -80,7 +80,12 @@ de recuperación). Reglas de oro que resumen todo el documento:
 - **Scrapers browser reciben `port` CDP** del caller; el fetcher nunca crea navegador.
 - **Config declarativa**: plataformas/sitios en BD (`init-sources`), no en código.
 - **Dedupe conservador**: `quality duplicates` lista grupos candidatos para
-  revisión manual; nunca automerge (`dup_of` previsto, hoy no existe la columna).
+  revisión manual; nunca automerge (`dup_of` previsto, hoy no existe la
+  columna). ACTUALIZADO (27-10, decisión de usuario por portar O8 desde
+  v1.x): los duplicados EXACTOS (clave empresa|título|ubicación y/o huella
+  de descripción idéntica) se auto-marcan `dup_of` o heredan estado al
+  ingest — cero riesgo, patrón probado en v1.x; lo DUDOSO (similitud media)
+  sigue siendo revisión manual; NUNCA se borran ni se funden datos.
 - **Esquema solo con migraciones**: cambio de BD = archivo nuevo
   `src/jobpulse_v15/migrations/00N_*.sql`; nunca ALTER manual ni editar una
   migración ya aplicada.
