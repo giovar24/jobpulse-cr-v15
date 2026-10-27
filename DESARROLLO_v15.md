@@ -124,11 +124,11 @@ def fetch(self, site: dict, *, pages: int, search_text: str | None,
 
 | Objetivo | Qué es | Estado |
 |---|---|---|
-| **O1** Enriquecimiento IA | Pase IA (Gemma local) llenando huecos: city/region/work_mode/employment_type/salary/skills/languages | ✅ motor completo · 🟡 **SIGUE pendiente el pase sobre los 120 ANE nuevos** — 1 clic: botón "Enriquecer" de la UI (O7.3) o `run_enriquecimiento.py`; es la acción #1 para búsquedas exactas (decisión data-first del usuario) |
+| **O1** Enriquecimiento IA | Pase IA (Gemma local) llenando huecos: city/region/work_mode/employment_type/salary/skills/languages | ✅ **COMPLETO (27-10, 44 min; O7.3 E2E: servidor subió → pasó → se apagó solo)**. Resultado: skills 100%, date_published 100%, region 95.6%, employment_type 95.3%, languages 95.3%, city 91.9% (residuo = remotos / lat_raw de Indeed sin normalizar), work_mode 53.6% (137 'unknown': 46 basura O5.3 + 91 honestos sin mención), salary_raw 117 = fuente SIN texto salarial (irrecuperable). Los ciclos 2+ son replays de caché (ver gotcha: failed ≠ error) |
 | **O2** Afinar la búsqueda | ~~ATS + gate + ranking semántico~~ **Redefinido por el usuario (2026-10-27): la precisión viene de la data extraída** → completar O1 (huecos) y ajustar filtros/consultas; motor semántico **DORMIDO por decisión** (nicho: texto libre ES↔EN) | 🟡 enfoque data-first · verificado 2026-10-27: `search_engine.py` funcional (EmbeddingGemma gated → fallback `paraphrase-multilingual-mpnet` 768d; similitud ES↔EN correcta) pero **sin cablear**, caché de embeddings vacía; `ats.py`/`gate.py`/`ia_calibracion.py` sin callers ni tests |
 | **O3** Fetchers ATS huérfanos | Validar los 7 fetchers ATS (workday, greenhouse, ashby, lever, recruitee, workable, successfactors) con tableros reales | ⏳ no iniciado |
 | **O4** Calibración gate-vs-IA | Pearson/Spearman/MAE + umbral sugerido (`ia_calibracion.py`) | ⏳ depende de O1+O2 |
-| **O5** Higiene de datos | O5.1 ✅ auditoría/huecos · O5.3 re-barrido de los ~14-19 jobs con descripción basura (login-wall) · **O5.4 dedupe manual de las 120 republicaciones ANE** (`quality duplicates`) | 🟡 en curso |
+| **O5** Higiene de datos | O5.1 ✅ auditoría/huecos · O5.3 re-barrido de los ~14-19 jobs con descripción basura (login-wall) · **O5.4 ✅ CERRADO (2026-10-27)**: análisis por **huella de descripción** (en ANE el título+empresa NO es identidad — "Confidencial"); solo 4/120 del lote 26-10 eran republicaciones → **las 4 viejas marcadas `dismissed` con nota** (parejas 121034/121185, 121026/121184, 121025/121183, 120958/121094), las nuevas quedan activas; grupos misma-empresa+misma-ciudad (INAMU ×3, SALESLAND ×2) = **plazas múltiples, decisión del usuario, intactos**; multi-sede (INAMU 8 ciudades, HIPERMASCOTAS 2 tiendas) = vacantes reales | 🟢 solo queda O5.3 |
 | **O6** Perfil del candidato | O6.1 editor ✅ · O6.2 capa IA de CVs + integración UI ✅ · O6.3 matching afinado (niveles/CEFR/work_authorization) | 🟢 en curso |
 | **O7** Operación UI-first (servidores bajo demanda) | La app arranca/detiene lo que necesita; el usuario no toca CLI ni launchers | ✅ **completo (2026-10-27)** |
 
@@ -214,19 +214,21 @@ python -m pytest tests/ -q    # pytest vive en el python del sistema (el venv no
 
 Pendientes vivos (handoff vigente `docs/HANDOFF_SESION_2026-10-27.md`):
 
-1. **Prueba de humo del usuario (flujo O7)**: abrir la UI → "Ejecutar barrido"
-   (Brave debe abrirse y cerrarse solo) → "Enriquecer" (servidor IA sube,
-   enriquece los 120 ANE nuevos, se apaga) → "Re-login ANE" si la sesión
-   caducó. Con eso se cierra **O1** (pase sobre los 120 nuevos).
-2. **O5.4**: dedupe manual de las 120 republicaciones ANE (`quality duplicates`).
-3. **O6.3**: matching afinado (niveles/CEFR/work_authorization); **O5.3**:
-   re-barrido de los ~14-19 jobs con descripción basura (login-wall).
-4. **Dedupe semántico del perfil**: slugs ES/EN distintos para el mismo hecho —
+1. **Prueba de humo del usuario (cierra O7)**: abrir la UI → "Ejecutar barrido"
+   (Brave abre/cierra solo; de paso refresca las ~46 descripciones basura si
+   la sesión ANE vive — si no, "Re-login ANE" primero) → "Enriquecer" (con
+   la BD ya llena responde casi instantáneo por caché).
+2. **O6.3**: matching afinado (niveles/CEFR/work_authorization); **O5.3**:
+   re-barrido de los jobs con descripción basura (login-wall) — hoy ~46
+   (creció con el lote nuevo); vía UI.
+3. **Dedupe semántico del perfil**: slugs ES/EN distintos para el mismo hecho —
    decidir si se normaliza en import o se deja al usuario en el diálogo.
-5. Luego: **O2-redefinido** (con la data completa, revisar qué filtros/consultas
-   faltan; motor semántico DORMIDO por decisión del usuario — retomar solo si
-   duelen las búsquedas de texto libre ES↔EN), O3 (validar 7 fetchers ATS),
-   O4 (calibración — redefinir: sin gate semántico no tiene contra-qué comparar).
+4. **O2-redefinido (afinar búsqueda)**: candidatos medidos el 27-10 —
+   normalizar locations crudos de Indeed ("Heredia, Provincia de Heredia");
+   filtro/columna de requisitos obligatorios (decisión del usuario: para
+   después); motor semántico DORMIDO. Luego la optimización de UI.
+5. Luego: O3 (validar 7 fetchers ATS), O4 (calibración — redefinir: sin gate
+   semántico no tiene contra-qué comparar).
 
 ---
 

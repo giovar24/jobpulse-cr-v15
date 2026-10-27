@@ -59,9 +59,10 @@ de recuperación). Reglas de oro que resumen todo el documento:
    almacén `credencial("ANE")` — keyring de Windows; nada en código ni `.env`)
    → re-barrido
    `.\.venv\Scripts\python.exe run_scrapes.py ane` (scripts de la raíz del fork:
-   siempre el python del venv). Ojo: ANE **republica vacantes con IDs nuevos**
-   (re-barridos traen "nuevas" que son republicaciones — revisar con
-   `quality duplicates`, dedupe manual).
+   siempre el python del venv). Ojo: ANE **republica vacantes con IDs
+   nuevos**, pero es minoría — el 26-10 solo 4/120 eran republicaciones
+   (desc. idéntica + fecha movida). Revisar con `quality duplicates` +
+   comparar descripciones; dedupe manual, nunca automerge.
 3. **Indeed (cr.indeed.com)**: SSO Google. El popup de alertas de empleo
    intercepta clics — ya resuelto con `_cerrar_popups`; si aparece un popup
    nuevo, agregar su selector en `_POPUP_SELECTORES`.
@@ -168,6 +169,12 @@ python -m pytest tests/ -q
     pero SIN cablear y con caché vacía. La precisión de búsqueda viene de la
     data extraída (O1) — nicho del motor: texto libre ES↔EN. `ats.py`/`gate.py`/
     `ia_calibracion.py` sin callers ni tests; no borrar sin redefinir O2/O4.
+14. **`failed` en `run_ia_enrichment` NO es error de red**: cuenta jobs cuya
+    respuesta IA fue null/"no mencionado" para lo que faltaba; en ciclos
+    siguientes la caché de disco los repite instantáneo (0 llamadas HTTP) y
+    siguen contando "failed". Los errores REALES se ven como WARNING
+    "IA extract {campo} fallo tras 3 intentos". Pase 27-10: ciclo 2 con
+    "failed=155" resuelto en 1 segundo = puro caché, nada roto.
 
 ## Estado de referencia (2026-10-26, tras re-barrido ANE)
 
@@ -182,18 +189,28 @@ python -m pytest tests/ -q
   primero; si sugieren < 5 facts se ofrece el pase IA (aviso de privacidad
   si el motor del `.env` es externo; progreso no-modal; datos llegan a
   `_DialogoRevision` para revisión antes de guardar).
-- BD: **295 jobs** (ANE 240 — ojo: 120 viejos + 120 republicadas con IDs
-  nuevos, dedupe manual pendiente; Indeed 30, CINDE 17, LinkedIn 7, Procomer 1).
-  Huecos (crecerán hasta pasar el enriquecimiento): city 38, region 13,
-  work_mode 'unknown' 148, employment_type 120, salary 117, skills 120,
-  languages 124. Análisis: 295/295 hechos (273 requisitos).
+- BD: **295 jobs** (ANE 240 = 120 lote 25-10 + 120 lote 26-10 — el lote nuevo
+  es casi todo NUEVO: **solo 4 republicaciones** con desc. idéntica + fecha
+  movida; las 4 VIEJAS quedan `dismissed` con nota desde el 27-10, las 4
+  nuevas activas. Los grupos misma-empresa+misma-ciudad (INAMU, SALESLAND)
+  son plazas múltiples por decisión del usuario. En ANE la identidad real es
+  la DESCRIPCIÓN, no el título+empresa ("Confidencial"). Indeed 30,
+  CINDE 17, LinkedIn 7, Procomer 1).
+  Enriquecimiento COMPLETO (27-10, O1 ✅): city faltan 24 (mayoría remotos o
+  lat_raw de Indeed sin normalizar), region 13, work_mode 'unknown' 137
+  (46 basura O5.3 + 91 honestos sin mención), employment_type 14, skills 0,
+  languages 14 (10 basura), salary_raw 117 = fuente sin texto (irrecuperable).
+  Análisis: 295/295 hechos (273 requisitos).
 - Perfil: 48 facts (editor CV en `ui_perfil.py`; datos personales y resumen
   reales ya cargados; `value_code='portfolio'` reservado). Compatibilidad
   sobre 295: no_required 168, needs_review 109, not_registered 18, matched 0.
   Los 4 CVs en `data/usuario/cv/` son material de pruebas (mismo CV en ES/EN).
-- **Sesión 2026-10-27 (O7 completo)**: flujo UI-first — el barrido de la UI
-  abre/cierra Brave; botones "Enriquecer" (servidor IA bajo demanda) y
-  "Re-login ANE" en la Corrida; el launcher ya no pre-arranca la IA. Suite:
-  244 tests. BD sin cambios (el enriquecimiento de los 120 ANE nuevos queda
-  como pendiente #1 — botón "Enriquecer"). Embeddings verificados funcionales
-  y DORMIDOS por decisión del usuario (data-first) — ver gotcha 13.
+- **Sesión 2026-10-27 (O7 + O5.4 + O1)**: flujo UI-first — el barrido de la
+  UI abre/cierra Brave; botones "Enriquecer" (servidor IA bajo demanda,
+  validado E2E: subió → 44 min de pase → se apagó solo) y "Re-login ANE";
+  el launcher ya no pre-arranca la IA. Suite: 244 tests. O5.4 cerrado: solo
+  4/120 del lote nuevo eran republicaciones (la huella en ANE es la
+  DESCRIPCIÓN, no título+empresa); las 4 viejas quedaron `dismissed` con
+  nota; los grupos INAMU/SALESLAND son plazas múltiples (decisión del
+  usuario). Embeddings verificados funcionales y DORMIDOS por decisión del
+  usuario (data-first) — ver gotchas 13-14.

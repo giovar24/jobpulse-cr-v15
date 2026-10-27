@@ -25,8 +25,14 @@ Reemplaza como handoff vigente al de 2026-10-26
   `paraphrase-multilingual-mpnet`), pero está sin cablear y sin caché. El
   usuario decidió **data-first**: la precisión de búsqueda viene de la data
   extraída (O1), no del vector. **O2 redefinido** en consecuencia.
-- BD sin cambios (295 jobs; enriquecimiento de los 120 ANE nuevos sigue
-  pendiente — ahora es un clic: botón "Enriquecer").
+- **O5.4 CERRADO + O1 COMPLETO (continuación de la sesión)**: dedupe ANE
+  resuelto por **huella de descripción** (en ANE el nombre de empresa puede
+  ser "Confidencial" — la identidad es la descripción): solo 4/120 del lote
+  nuevo eran republicaciones → 4 viejas `dismissed` con nota; grupos
+  INAMU/SALESLAND = plazas múltiples (decisión del usuario). Y el pase de
+  enriquecimiento corrió 44 min con el servidor IA **bajo demanda E2E**
+  (subió → 125/166 enriquecidos → se apagó solo). Skills 100%, city 91.9%,
+  work_mode 53.6% (resto = honesto/basura O5.3).
 
 ## 1. Lo que se hizo
 
@@ -112,25 +118,26 @@ CORREGIDO; nota ECONNREFUSED desde la UI), `IA_ENRIQUECIMIENTO.md` (modo
 
 | Objetivo | Estado |
 |---|---|
-| O1 Enriquecimiento IA | ✅ motor · 🔵 **pendiente #1: pase sobre los 120 ANE** — botón "Enriquecer" (valida O7.3 E2E) |
+| O1 Enriquecimiento IA | ✅ **COMPLETO (27-10, 44 min, servidor bajo demanda E2E)**: 125/166; skills 100%, date 100%, region 95.6%, employment_type/languages 95.3%, city 91.9%; work_mode 137 'unknown' (46 basura O5.3 + 91 honestos); salary_raw 117 = fuente sin texto |
 | O2 Afinar la búsqueda | 🟡 **redefinido (data-first)**: completar O1 y ajustar filtros; motor semántico DORMIDO por decisión del usuario |
 | O3 Validar 7 fetchers ATS | ⏳ no iniciado |
 | O4 Calibración gate-vs-IA | ⏳ redefinir (sin gate semántico no tiene contra-qué comparar) |
-| O5 Higiene | 🟡 O5.1 ✅ · O5.3 re-barrido jobs basura · **O5.4 dedupe manual 120 republicaciones ANE** |
+| O5 Higiene | 🟢 O5.1 ✅ · **O5.4 ✅ CERRADO (27-10)**: 4/120 republicaciones (huella = descripción) → 4 viejas `dismissed` con nota; INAMU/SALESLAND = plazas múltiples (usuario); queda **O5.3**: ~46 jobs con descripción basura |
 | O6 Perfil candidato | 🟢 O6.1/O6.2 ✅ · sigue O6.3 matching afinado |
 | **O7 Operación UI-first** | ✅ **COMPLETO (2026-10-27)** — falta solo la prueba de humo del usuario |
 
 ## 4. Pendiente inmediato en la próxima sesión
 
-1. **Prueba de humo del usuario** (cierra O7 de hecho y O1 de paso):
-   abrir la app → "Ejecutar barrido" (Brave abre/cierra solo) →
-   "Enriquecer" (servidor IA sube, llena los 120 ANE ~7-10 min, se apaga) →
-   si ANE dice "sin sesión": "Re-login ANE".
-2. **O5.4**: dedupe manual de las 120 republicaciones ANE
-   (`quality duplicates --limit 100`).
-3. **O6.3** (matching afinado) y **O5.3** (jobs con descripción basura).
-4. Con la data completa: revisar qué filtros/consultas faltan (O2-redefinido)
-   y recién entonces la optimización de UI que pide el usuario.
+1. **Prueba de humo del usuario** (cierra O7): abrir la UI → "Ejecutar
+   barrido" (Brave abre/cierra solo; de paso refresca las ~46 descripciones
+   basura si la sesión ANE vive) → "Enriquecer" (con la BD llena es casi
+   instantáneo por caché) → si ANE dice "sin sesión": "Re-login ANE".
+2. **O6.3** (matching afinado) y **O5.3** (re-barrido de los ~46 jobs con
+   descripción basura — login-wall; ahora ~46, creció con el lote nuevo).
+3. **Dedupe semántico del perfil** (slugs ES/EN) — decidir import vs diálogo.
+4. **O2-redefinido** (afinar búsqueda con data completa): normalizar
+   locations crudos de Indeed; filtro/columna de requisitos obligatorios
+   (decisión del usuario: para después); luego optimización de UI.
 
 ## 5. Cómo retomar (comandos)
 
@@ -175,10 +182,12 @@ python -X utf8 -m pytest tests/ -q
 
 ## 7. Datos de contexto que no hay que olvidar
 
-- **BD sin cambios**: 295 jobs (ANE 240 = 120 viejos + 120 republicadas;
-  Indeed 30, CINDE 17, LinkedIn 7, Procomer 1). Huecos de los 120 ANE:
-  city 38, region 13, work_mode 'unknown' 148, employment_type 120,
-  salary 117, skills 120, languages 124.
+- **BD enriquecida (27-10)**: 295 jobs (ANE 240 = 120 lote 25-10 + 120 lote
+  26-10 con solo 4 republicaciones — las 4 viejas `dismissed`; Indeed 30,
+  CINDE 17, LinkedIn 7, Procomer 1). Estado de campos tras O1: city faltan 24
+  (mayoría remotos o lat_raw Indeed sin normalizar), region 13, work_mode
+  'unknown' 137 (46 basura O5.3 + 91 honestos), employment_type 14, skills 0,
+  languages 14, salary_raw 117 = fuente sin texto (irrecuperable).
 - **El barrido de hoy 04:43 no agregó nada** (0 nuevas — todo duplicado);
   el ANE que "funcionó" fue el re-barrido CLI del 26-10.
 - **llama-server consume ~4GB de RAM** (máquina: 15.4GB, ~10GB libres tras
