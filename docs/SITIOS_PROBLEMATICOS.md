@@ -35,6 +35,11 @@ Brave debe estar corriendo con **depuración remota en el puerto 9222** y con el
 Chromium crea un perfil NUEVO y vacío dentro de ese directorio: Brave se abre
 "como si fuera la primera vez" (sin marcadores, sin sesiones) y el login
 siempre falla. Este bug estuvo en `jobpulse-v15.bat` y se corrigió.
+**2026-10-27: el MISMO bug sigue vivo en `BraveManager._get_user_data_dir()`**
+(la ruta genérica que usan el botón "Login manual" de Configuración y el CLI
+`login`). Lo enmascara `login_ane.py` — teclea credenciales frescas y ANE
+"funciona" — pero con ese perfil Indeed/LinkedIn nunca ven las sesiones
+reales. Fix previsto: O7.1 (ver `DESARROLLO_v15.md` §3).
 
 **Verificar que CDP está vivo:**
 
@@ -46,6 +51,10 @@ curl.exe -s http://127.0.0.1:9222/json/version
 **Error típico si no está vivo:** `BrowserType.connect_over_cdp: connect
 ECONNREFUSED 127.0.0.1:9222` → el barrido termina en `error`. Solución: lanzar
 Brave con el comando de arriba (o usar el launcher `jobpulse-v15.bat`).
+Nota: si corres el barrido **desde la UI**, hoy la UI no arranca Brave — los
+sitios de navegador (ANE/Indeed/LinkedIn) fallan así, pero CINDE/Procomer
+(API) sí corren y sus "0 nuevas" son idempotencia normal. O7.2 hará que la
+UI gestione Brave sola.
 
 ---
 
@@ -204,8 +213,9 @@ Flujo del fetcher (`src/jobpulse_v15/linkedin.py`):
 ## Checklist de diagnóstico rápido (los 3 sitios)
 
 1. **¿Brave vive con CDP?** → `curl http://127.0.0.1:9222/json/version`
-2. **¿Es el perfil real?** → si Brave se ve vacío, el launcher apunta a
-   `User Data\Default` (mal) en vez de `User Data` (bien).
+2. **¿Es el perfil real?** → si Brave se ve vacío, el launcher (o
+   `BraveManager`) apunta a `User Data\Default` (mal) en vez de `User Data`
+   (bien).
 3. **¿Hay sesión en el sitio?** → abrir el sitio en tu Brave y verificar a mano.
 4. **¿Qué dijo la última corrida?** → tabla `source_run_sites` en la BD
    (`status`, `error_message`).

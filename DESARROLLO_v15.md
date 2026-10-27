@@ -60,6 +60,7 @@ browser reciben `port` CDP del caller (nunca crean navegador).
 | **Dedupe cross-source (boards ↔ directos)** | 🟡 Alta | Hoy solo idempotencia misma-fuente + `quality duplicates` (revisión manual); `dup_of` previsto, sin columna |
 | **Scheduler / recordatorio Windows** | 🟢 Media | Launcher `jobpulse-v15.bat` ya existe; falta portar `recordatorio.py` |
 | **O2 / O3 / O4** (ATS + ranking en búsqueda UI; validar 7 fetchers ATS huérfanos; calibración gate-vs-IA) | 🟡 | Ver handoff vigente |
+| **Operación UI-first / servidores bajo demanda (O7)** | 🟡 Alta (acordada 2026-10-27) | Hoy barrido UI y enriquecimiento dependen de Brave/IA arrancados a mano (launcher o CLI); objetivo: la UI los gestiona — arranca al usar, apaga al terminar |
 
 ---
 
@@ -116,6 +117,28 @@ def fetch(self, site: dict, *, pages: int, search_text: str | None,
 | `init-sources` command | `cli.py` | Registra plataformas + sitios CR por defecto |
 | `recordatorio.py` | Portado | Login startup + recordatorio Windows (Task Scheduler) |
 | `jobpulse-v15.cmd` | Nuevo | Launcher UI + corrida con un clic |
+
+### OBJETIVOS O1–O7 (lista canónica, estado al 2026-10-27)
+
+> Cada handoff de sesión lleva su copia de esta tabla con el estado al cierre.
+
+| Objetivo | Qué es | Estado |
+|---|---|---|
+| **O1** Enriquecimiento IA | Pase IA (Gemma local) llenando huecos: city/region/work_mode/employment_type/salary/skills/languages | ✅ motor completo · 🟡 pendiente el pase sobre los 120 ANE nuevos (con el botón "Enriquecer" de O7.3) |
+| **O2** ATS + gate + ranking | Score ATS + gate fecha/relevancia + ranking en la búsqueda UI | ⏳ no iniciado |
+| **O3** Fetchers ATS huérfanos | Validar los 7 fetchers ATS (workday, greenhouse, ashby, lever, recruitee, workable, successfactors) con tableros reales | ⏳ no iniciado |
+| **O4** Calibración gate-vs-IA | Pearson/Spearman/MAE + umbral sugerido (`ia_calibracion.py`) | ⏳ depende de O1+O2 |
+| **O5** Higiene de datos | O5.1 ✅ auditoría/huecos · O5.3 re-barrido de los ~14-19 jobs con descripción basura (login-wall) · **O5.4 dedupe manual de las 120 republicaciones ANE** (`quality duplicates`) | 🟡 en curso |
+| **O6** Perfil del candidato | O6.1 editor ✅ · O6.2 capa IA de CVs + integración UI ✅ · O6.3 matching afinado (niveles/CEFR/work_authorization) | 🟢 en curso |
+| **O7** Operación UI-first (servidores bajo demanda) | Nuevo (acordado 2026-10-27): la app arranca/detiene lo que necesita; el usuario no toca CLI ni launchers | 🔜 **inmediato** |
+
+**O7 — sub-objetivos acordados (2026-10-27, tras el barrido fallido desde la UI):**
+
+- **O7.1 Fix `BraveManager`**: `--user-data-dir` a la **raíz** `User Data` (+ `--profile-directory`) — el bug histórico documentado (perfil vacío → "todos los logins fallan") seguía vivo en el manager; lo enmascaraba `login_ane.py` (teclea credenciales frescas, así que ANE "funcionaba").
+- **O7.2 Brave auto-gestionado en el barrido**: al "Ejecutar barrido" con sitios de navegador (ane/indeed/linkedin), la UI verifica el CDP y **abre Brave si hace falta**; al terminar **lo cierra — solo si ELLA lo abrió** (el Brave diario del usuario nunca se toca).
+- **O7.3 Servidor IA bajo demanda**: se arranca **solo cuando se necesita** (enriquecer, pase IA de CV) y **se apaga al terminar**. Botón **"Enriquecer"** en la UI (orquestación compartida con `run_enriquecimiento.py`); el launcher `.bat` deja de pre-arrancar la IA en cada apertura.
+- **O7.4 Re-login ANE desde la UI**: botón en el diálogo de Corrida; la lógica de `login_ane.py` pasa al paquete y el script queda como wrapper thin (documentado para sesiones de agente).
+- **Criterio de éxito**: abrir la app → "Ejecutar barrido" → "Enriquecer" → cerrar. Cero CLI, cero launcher obligatorio, cero `ECONNREFUSED 9222`.
 
 ---
 
@@ -189,13 +212,19 @@ python -m pytest tests/ -q    # pytest vive en el python del sistema (el venv no
 
 ## 5. PRÓXIMA ACCIÓN INMEDIATA
 
-Pendientes vivos (handoff vigente `docs/HANDOFF_SESION_2026-10-25_noche.md`):
+Pendientes vivos (handoff vigente `docs/HANDOFF_SESION_2026-10-26.md`):
 
-1. **O6.3**: matching afinado (niveles/CEFR/work_authorization).
-2. **O5.3**: re-barrido de los ~14-19 jobs con descripción basura (login-wall).
-3. **Dedupe semántico del perfil**: slugs ES/EN distintos para el mismo hecho —
+1. **O7 (acordado 2026-10-27)**: fix `BraveManager` → Brave auto-gestionado en
+   el barrido → servidor IA bajo demanda con botón "Enriquecer" → re-login ANE
+   desde la UI. Ver detalle de sub-objetivos en §3.
+2. **O1**: pase de enriquecimiento sobre los 120 ANE nuevos (vía el botón
+   "Enriquecer" de O7.3; `run_enriquecimiento.py` queda para sesiones de agente).
+3. **O5.4**: dedupe manual de las 120 republicaciones ANE (`quality duplicates`).
+4. **O6.3**: matching afinado (niveles/CEFR/work_authorization); **O5.3**:
+   re-barrido de los ~14-19 jobs con descripción basura (login-wall).
+5. **Dedupe semántico del perfil**: slugs ES/EN distintos para el mismo hecho —
    decidir si se normaliza en import o se deja al usuario en el diálogo.
-4. Luego: O2 (ATS + gate + ranking en la búsqueda UI), O3 (validar 7 fetchers
+6. Luego: O2 (ATS + gate + ranking en la búsqueda UI), O3 (validar 7 fetchers
    ATS huérfanos), O4 (calibración gate-vs-IA).
 
 ---
@@ -241,8 +270,8 @@ Pendientes vivos (handoff vigente `docs/HANDOFF_SESION_2026-10-25_noche.md`):
 
 ---
 
-*Última actualización: 2026-10-26*
-*Próxima revisión: tras cerrar O6.3 / O5.3 (ver §5)*
+*Última actualización: 2026-10-27 (objetivos O1–O7 canonizados tras acordar O7)*
+*Próxima revisión: tras cerrar O7 (ver §5)*
 
 ---
 

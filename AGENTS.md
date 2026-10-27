@@ -8,13 +8,15 @@ Objetivo: orientación instantánea sin re-explorar el proyecto.
 ## Al iniciar sesión
 
 1. **Lee el handoff más reciente**: `docs/HANDOFF_SESION_*.md` — estado exacto,
-   objetivos (O1–O6), decisiones y pendiente inmediato.
+   objetivos (O1–O7), decisiones y pendiente inmediato.
 2. Referencia de arquitectura y comparación con el proyecto principal:
    `DESARROLLO_v15.md` (§6 = notas técnicas importantes).
 3. Este es un repo PROPIO e independiente (desde 2026-10-26). El proyecto
    principal v1.x sigue en `D:\Proyectos\jobpulse_cr`, **congelado** (su
    `AGENTS.md` lo advierte): no modificarlo. Sus comandos (`main.py`,
-   `unittest`, `tools/auditar.py`) NO aplican aquí.
+   `unittest`, `tools/auditar.py`) NO aplican aquí. Ojo: la rama `fork-v15`
+   del repo viejo conserva la password de ANE previa a la purga — jamás
+   pushearla a GitHub.
 
 ## Al cerrar sesión (OBLIGATORIO)
 
@@ -32,7 +34,7 @@ Cuando el usuario dice "vamos a otra sesión":
 | `docs/HANDOFF_SESION_*.md` | Bitácora por sesión (empezar siempre por el más nuevo) |
 | `docs/IA_ENRIQUECIMIENTO.md` | Operación del pase IA: modelo local, caché, depuración |
 | `docs/SITIOS_PROBLEMATICOS.md` | Guía ANE / Indeed / LinkedIn (login-wall, Cloudflare) |
-| `DESARROLLO_v15.md` | Arquitectura vs proyecto principal, objetivos O1–O6, comandos |
+| `DESARROLLO_v15.md` | Arquitectura vs proyecto principal, objetivos O1–O7 (lista canónica en §3), comandos |
 | `README.md` | Setup equipo nuevo: venv, `pip install -e .`, `init-db`, backup |
 
 ## Scrapers de navegador: ANE, Indeed, LinkedIn
@@ -45,8 +47,13 @@ de recuperación). Reglas de oro que resumen todo el documento:
    a la raíz `User Data`, **NUNCA** a `User Data\Default` (crea perfil vacío y
    todos los logins "fallan"). Verificar: `curl http://127.0.0.1:9222/json/version`.
    Arranque de todo (venv + servidor IA + Brave CDP + UI): `.\jobpulse-v15.bat`.
+   Ojo: la UI **hoy no arranca Brave** — sin CDP arriba, ANE/Indeed/LinkedIn
+   fallan con `ECONNREFUSED 9222` (CINDE/Procomer son API y sí corren). O7.2
+   lo corrige: el barrido de la UI gestionará Brave solo.
 2. **ANE (ane.cr)**: sesión obligatoria. Sin sesión el barrido se omite limpio
-   (no es error). Re-login: `.\.venv\Scripts\python.exe login_ane.py` → re-barrido
+   (no es error). Re-login: `.\.venv\Scripts\python.exe login_ane.py` (lee la
+   credencial del almacén `credencial("ANE")` — keyring de Windows; nada en
+   código ni `.env`) → re-barrido
    `.\.venv\Scripts\python.exe run_scrapes.py ane` (scripts de la raíz del fork:
    siempre el python del venv). Ojo: ANE **republica vacantes con IDs nuevos**
    (re-barridos traen "nuevas" que son republicaciones — revisar con
@@ -79,6 +86,8 @@ de recuperación). Reglas de oro que resumen todo el documento:
 ```powershell
 # Arranque completo (equipo nuevo incluido): venv + servidor IA + Brave CDP 9222 + UI
 .\jobpulse-v15.bat
+#   (su ruta de Brave está hardcodeada para el PC del usuario; el launcher
+#    portátil es .\jobpulse-v15.ps1, que NO arranca el servidor IA)
 
 # CLI de orquestación: scrape, site, platform, credenciales, login, run, search, quality…
 .\.venv\Scripts\python.exe -m jobpulse_v15 --help
@@ -97,7 +106,7 @@ de recuperación). Reglas de oro que resumen todo el documento:
 .\.venv\Scripts\python.exe tools\progreso_enriquecimiento.py   # % por campo
 .\.venv\Scripts\python.exe tools\huecos_restantes.py     # huecos: basura vs recuperable
 
-# Tests — test_ui requiere display; corre OK en el PC del usuario (217 tests).
+# Tests — test_ui requiere display; corre OK en el PC del usuario (221 tests).
 # pytest vive en el python del sistema (el venv no lo tiene instalado).
 # Los roots Tk de test se crean con `_tkroot_reintentos()` (tests/test_ui.py):
 # encadenar muchos interpretes Tcl falla de vez en cuando en Windows
@@ -124,6 +133,26 @@ python -m pytest tests/ -q
    llena TODOS los huecos de los jobs seleccionados, incluidos secundarios.
    Efecto neto benigno (idempotente), pero no te sorprendas en los logs.
 6. **A/B de modelos**: usar `tools/comparar_ia.py` (caché aislada + mismos jobs).
+7. **`-X utf8` SIEMPRE en CLI/scripts que imprimen datos de la BD**: un
+   `\uf0b7` dentro de una descripción revienta la salida (extract-pending
+   reventó así; los saves se completan igual — idempotente). Para CSV por
+   consola, fijar antes `[Console]::OutputEncoding = UTF8` (un NEL `\x85`
+   parte líneas y falsea conteos).
+8. **Venv movido con el repo, no recreado**: los `activate` y `pip.exe` del
+   venv apuntan a la ruta vieja y fallan. Siempre `.\.venv\Scripts\python.exe`;
+   para pip, `python.exe -m pip` (nunca `pip.exe` ni `activate`).
+9. **`--profile-compatibility` se aplica DESPUÉS de `--limit`**: un límite
+   chico puede devolver 0 filas aunque haya coincidencias más atrás.
+10. **Los launchers NO reinstalan deps si el venv ya existe**: tras añadir
+    deps a `pyproject.toml` → `python.exe -m pip install -e .` a mano (así se
+    detectó el keyring faltante).
+11. **`BraveManager` tiene el bug del perfil vacío** (descubierto 2026-10-27,
+    fix previsto en O7.1): `_get_user_data_dir()` devuelve `User Data\Default`
+    en vez de la raíz `User Data` → Brave se abre "como nueva" y los logins
+    heredados "fallan". Lo enmascara `login_ane.py` (teclea credenciales
+    frescas), pero el botón "Login manual" de Configuración y el CLI `login`
+    heredan el bug. El `.bat`/`.ps1` usan la raíz correcta, por eso el
+    launcher es hoy la vía fiable.
 
 ## Estado de referencia (2026-10-26, tras re-barrido ANE)
 
