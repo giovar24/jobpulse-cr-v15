@@ -246,5 +246,87 @@ class TestRunIAEnrichment(unittest.TestCase):
         self.assertIsNone(job["city"])
 
 
+class TestPaseCompleto(unittest.TestCase):
+    """O7.3: orquestación compartida CLI/UI (ciclos críticos + pase completo)."""
+
+    def _run(self, coro):
+        return asyncio.run(coro)
+
+    @staticmethod
+    def _stats(**kw):
+        base = {"total": 0, "enriched": 0, "failed": 0, "skipped": 0, "fields_filled": {}}
+        base.update(kw)
+        return base
+
+    def test_ciclos_y_pase_completo(self):
+        llamadas = []
+
+        async def fake_run(limit=50, only_critical=True):
+            llamadas.append(("crit" if only_critical else "full", limit))
+            if only_critical:
+                if len([c for c in llamadas if c[0] == "crit"]) == 1:
+                    return {"stats": self._stats(total=10, enriched=4, skipped=6,
+                                                fields_filled={"city": 4})}
+                return {"stats": self._stats()}
+            return {"stats": self._stats(total=5, enriched=2, skipped=3,
+                                         fields_filled={"skills": 2})}
+
+        eventos = []
+        with patch.object(iae, "run_ia_enrichment", fake_run), \
+             patch.object(iae, "get_ia_client", lambda: FakeIAClient()), \
+             patch.object(iae, "verificar_servidor_ia", self._verificar_ok):
+            r = self._run(iae.pase_completo(on_event=eventos.append))
+        self.assertEqual(len(r["ciclos"]), 2)  # 1 con trabajo + 1 vacío = stop
+        self.assertEqual(r["completo"]["total"], 5)
+        self.assertIn(("full", 2000), llamadas)
+        self.assertIn(("crit", 500), llamadas)
+        self.assertTrue(any("CR\u00cdTICO ciclo 1" in e for e in eventos))
+        self.assertTrue(any("COMPLETO" in e for e in eventos))
+
+    async def _verificar_ok(self, cliente):
+        return None
+
+    def test_solo_criticos_no_corre_pase_completo(self):
+        llamadas = []
+
+        async def fake_run(limit=50, only_critical=True):
+            llamadas.append(("crit" if only_critical else "full", limit))
+            if only_critical:
+                return {"stats": self._stats()}
+            raise AssertionError("el pase completo no debe correr con --solo-criticos")
+
+        with patch.object(iae, "run_ia_enrichment", fake_run), \
+             patch.object(iae, "get_ia_client", lambda: FakeIAClient()), \
+             patch.object(iae, "verificar_servidor_ia", self._verificar_ok):
+            r = self._run(iae.pase_completo(solo_criticos=True))
+        self.assertIsNone(r["completo"])
+        self.assertEqual([c[0] for c in llamadas], ["crit"])
+
+    def test_sin_configuracion_error_claro(self):
+        with patch.object(iae, "get_ia_client", lambda: None):
+            r = self._run(iae.pase_completo())
+        self.assertIn("error", r)
+        self.assertIn("no configurada", r["error"])
+
+    def test_error_del_pase_se_propaga_con_lo_acumulado(self):
+        async def fake_run(limit=50, only_critical=True):
+            if len([1]) == 1 and only_critical:
+                # primer ciclo ok, segundo ciclo revienta
+                if not getattr(fake_run, "_ya", False):
+                    fake_run._ya = True
+                    return {"stats": self._stats(total=3, enriched=1)}
+                fake_run._ya = True
+                return {"error": "servidor cayo"}
+            raise AssertionError("no debe llegar al completo")
+
+        with patch.object(iae, "run_ia_enrichment", fake_run), \
+             patch.object(iae, "get_ia_client", lambda: FakeIAClient()), \
+             patch.object(iae, "verificar_servidor_ia", self._verificar_ok):
+            r = self._run(iae.pase_completo())
+        self.assertIn("error", r)
+        self.assertIn("servidor cayo", r["error"])
+        self.assertEqual(len(r.get("ciclos", [])), 1)
+
+
 if __name__ == "__main__":
     unittest.main()

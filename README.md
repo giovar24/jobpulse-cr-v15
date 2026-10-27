@@ -24,8 +24,9 @@ py -3.11 -m venv .venv
 ```
 
 Alternativa de un clic: `.\jobpulse-v15.bat` crea el venv si falta (con
-`pip install -e .` y chromium de playwright), levanta el servidor IA local,
-abre Brave con CDP 9222 y lanza la UI.
+`pip install -e .` y chromium de playwright), abre Brave con CDP 9222 y lanza
+la UI. El servidor IA ya no se arranca aquí: la UI lo levanta bajo demanda
+(botón "Enriquecer" o pase IA de CV) y lo apaga al terminar.
 
 Inicializar la DB exclusiva de v1.5:
 

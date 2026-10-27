@@ -15,6 +15,11 @@ from typing import Any, Mapping, Sequence
 from jobpulse_v15.ane import AneFetcher
 from jobpulse_v15.analysis import EXTRACTOR_VERSION, RuleBasedExtractor
 from jobpulse_v15.ashby import AshbyFetcher
+from jobpulse_v15.browser_manager import (
+    PLATAFORMAS_NAVEGADOR,
+    asegurar_brave,
+    cdp_vivo,
+)
 from jobpulse_v15.candidate_profile import (
     CandidateProfileImport,
     extract_candidate_profile,
@@ -690,6 +695,11 @@ class JobPulseWindow:
             detail_header,
             text="Analizar pendientes",
             command=self.analyze_visible_unanalyzed,
+        ).pack(side="right", padx=(0, 8))
+        ttk.Button(
+            detail_header,
+            text="Enriquecer",
+            command=self.open_enriquecimiento,
         ).pack(side="right", padx=(0, 8))
         ttk.Button(
             detail_header,
@@ -1740,82 +1750,116 @@ class JobPulseWindow:
                 def _progreso_paso():
                     progress.step(1)
 
-                for idx, site_id in enumerate(sitios_seleccionados):
-                    site = repo.get_site(site_id)
-                    if not site:
-                        dialog.after(0, _progreso_paso)
-                        dialog.after(0, lambda s=site_id: resultado_text.insert(
-                            "end", f"  {s}: sitio no encontrado en BD\n"
-                        ))
-                        errores += 1
-                        continue
-
-                    site_name = site.get("site_name", site_id)
-                    platform_id = site.get("platform_id", "")
-                    site_config = site.get("site_config") or {}
-                    pages = site_config.get("pages", pages_default)
-
-                    dialog.after(0, lambda n=idx + 1, t=total_sel,
-                                 s=site_name: _progreso_inicio(n, t, s))
-
-                    fetcher = fetcher_map.get(platform_id)
-                    if not fetcher:
-                        dialog.after(0, _progreso_paso)
-                        dialog.after(0, lambda p=platform_id, s=site_id: resultado_text.insert(
-                            "end", f"  {s} ({p}): no hay fetcher implementado\n"
-                        ))
-                        errores += 1
-                        continue
-
-                    dialog.after(0, lambda s=site_name: resultado_text.insert(
-                        "end", f"  {s} ... "
-                    ))
+                def _log(texto: str) -> None:
+                    dialog.after(0, lambda t=texto: resultado_text.insert("end", t))
                     dialog.after(0, lambda: resultado_text.see("end"))
 
-                    try:
-                        if platform_id == "ane":
-                            result = service.fetch_and_import(
-                                site_id,
-                                lambda s=site, p=port, d=dias: fetcher.fetch(
-                                    s, pages=s.get("site_config", {}).get("pages", pages),
-                                    port=p, dias=d
-                                ),
-                                run_kind="ane",
-                            )
-                        elif platform_id in ("indeed", "linkedin"):
-                            result = service.fetch_and_import(
-                                site_id,
-                                lambda s=site, p=port: fetcher.fetch(
-                                    s, pages=s.get("site_config", {}).get("pages", pages), port=p
-                                ),
-                                run_kind=platform_id,
-                            )
-                        else:
-                            result = service.fetch_and_import(
-                                site_id,
-                                lambda s=site: fetcher.fetch(
-                                    s, pages=s.get("site_config", {}).get("pages", pages)
-                                ),
-                                run_kind=platform_id,
+                # O7.2: Brave auto-gestionado — con sitios de navegador se
+                # garantiza CDP arriba; el manager se cierra SOLO si esta
+                # corrida abrió el navegador (el Brave diario no se toca).
+                mgr_brave = None
+                plataformas_sel = {
+                    (repo.get_site(sid) or {}).get("platform_id", "")
+                    for sid in sitios_seleccionados
+                }
+                if plataformas_sel & PLATAFORMAS_NAVEGADOR:
+                    if cdp_vivo(port):
+                        _log(f"Brave CDP ya activo en {port} (no se toca).\n")
+                    else:
+                        _log("Abriendo Brave con CDP (se cerrará al terminar)...\n")
+                        try:
+                            mgr_brave = asegurar_brave(port)
+                        except Exception as e:
+                            _log(
+                                f"  AVISO: no se pudo abrir Brave ({e}).\n"
+                                "  Cierra Brave del todo y reintenta; los sitios de\n"
+                                "  navegador fallarán con ECONNREFUSED.\n"
                             )
 
-                        new_count = result.get("jobs_new", 0)
-                        total_offers += result.get("jobs_found", 0)
-                        total_new += new_count
+                try:
+                    for idx, site_id in enumerate(sitios_seleccionados):
+                        site = repo.get_site(site_id)
+                        if not site:
+                            dialog.after(0, _progreso_paso)
+                            dialog.after(0, lambda s=site_id: resultado_text.insert(
+                                "end", f"  {s}: sitio no encontrado en BD\n"
+                            ))
+                            errores += 1
+                            continue
 
-                        dialog.after(0, lambda s=site_id, n=new_count: resultado_text.insert(
-                            "end", f"{n} nuevas\n"
+                        site_name = site.get("site_name", site_id)
+                        platform_id = site.get("platform_id", "")
+                        site_config = site.get("site_config") or {}
+                        pages = site_config.get("pages", pages_default)
+
+                        dialog.after(0, lambda n=idx + 1, t=total_sel,
+                                     s=site_name: _progreso_inicio(n, t, s))
+
+                        fetcher = fetcher_map.get(platform_id)
+                        if not fetcher:
+                            dialog.after(0, _progreso_paso)
+                            dialog.after(0, lambda p=platform_id, s=site_id: resultado_text.insert(
+                                "end", f"  {s} ({p}): no hay fetcher implementado\n"
+                            ))
+                            errores += 1
+                            continue
+
+                        dialog.after(0, lambda s=site_name: resultado_text.insert(
+                            "end", f"  {s} ... "
                         ))
                         dialog.after(0, lambda: resultado_text.see("end"))
-                        dialog.after(0, _progreso_paso)
 
-                    except Exception as e:
-                        errores += 1
-                        dialog.after(0, lambda s=site_id, e=str(e): resultado_text.insert(
-                            "end", f"  {s}: ERROR - {e}\n"
-                        ))
-                        dialog.after(0, lambda: resultado_text.see("end"))
-                        dialog.after(0, _progreso_paso)
+                        try:
+                            if platform_id == "ane":
+                                result = service.fetch_and_import(
+                                    site_id,
+                                    lambda s=site, p=port, d=dias: fetcher.fetch(
+                                        s, pages=s.get("site_config", {}).get("pages", pages),
+                                        port=p, dias=d
+                                    ),
+                                    run_kind="ane",
+                                )
+                            elif platform_id in ("indeed", "linkedin"):
+                                result = service.fetch_and_import(
+                                    site_id,
+                                    lambda s=site, p=port: fetcher.fetch(
+                                        s, pages=s.get("site_config", {}).get("pages", pages), port=p
+                                    ),
+                                    run_kind=platform_id,
+                                )
+                            else:
+                                result = service.fetch_and_import(
+                                    site_id,
+                                    lambda s=site: fetcher.fetch(
+                                        s, pages=s.get("site_config", {}).get("pages", pages)
+                                    ),
+                                    run_kind=platform_id,
+                                )
+
+                            new_count = result.get("jobs_new", 0)
+                            total_offers += result.get("jobs_found", 0)
+                            total_new += new_count
+
+                            dialog.after(0, lambda s=site_id, n=new_count: resultado_text.insert(
+                                "end", f"{n} nuevas\n"
+                            ))
+                            dialog.after(0, lambda: resultado_text.see("end"))
+                            dialog.after(0, _progreso_paso)
+
+                        except Exception as e:
+                            errores += 1
+                            dialog.after(0, lambda s=site_id, e=str(e): resultado_text.insert(
+                                "end", f"  {s}: ERROR - {e}\n"
+                            ))
+                            dialog.after(0, lambda: resultado_text.see("end"))
+                            dialog.after(0, _progreso_paso)
+                finally:
+                    if mgr_brave is not None:
+                        try:
+                            mgr_brave.stop_brave_sync()
+                            _log("\nBrave cerrado (lo abrió esta corrida).")
+                        except Exception as e:
+                            _log(f"\nNo se pudo cerrar Brave: {e}")
 
                 dialog.after(0, lambda: _mostrar_resultado(
                     total_offers, total_new, errores
@@ -1869,7 +1913,151 @@ class JobPulseWindow:
         ttk.Button(btn_frame, text="Ejecutar barrido", command=_ejecutar).pack(
             side="left", padx=(0, 8)
         )
+        ttk.Button(
+            btn_frame,
+            text="Re-login ANE",
+            command=lambda: self._relogin_ane(
+                dialog, resultado_text, status_var, port_var
+            ),
+        ).pack(side="left", padx=(0, 8))
         ttk.Button(btn_frame, text="Cerrar", command=dialog.destroy).pack(side="right")
+
+    def _relogin_ane(self, dialog, resultado_text, status_var, port_var) -> None:
+        """O7.4: re-login de ANE con la credencial del almacén, desde la UI.
+
+        Garantiza Brave con CDP (lo abre si hace falta y lo cierra SOLO si
+        esta acción lo abrió) y llena el formulario de ane.cr.
+        """
+        import time
+
+        from jobpulse_v15.ane_login import login_ane
+
+        try:
+            port = int(port_var.get())
+        except ValueError:
+            port = 9222
+
+        def _log(texto: str) -> None:
+            dialog.after(0, lambda t=texto: resultado_text.insert("end", t))
+            dialog.after(0, lambda: resultado_text.see("end"))
+
+        def _run() -> None:
+            mgr = None
+            try:
+                dialog.after(0, lambda: status_var.set("Login ANE..."))
+                if not cdp_vivo(port):
+                    _log("Abriendo Brave con CDP (se cerrará al terminar)...\n")
+                    mgr = asegurar_brave(port)
+                _log("Llenando el login de ANE con la credencial del almacén...\n")
+                resultado = login_ane(port)
+                if resultado["estado"] == "ok":
+                    # Margen para que Chromium persista la cookie de sesión
+                    # en el perfil antes de un cierre forzado del proceso.
+                    time.sleep(3)
+                _log(
+                    f"LOGIN ANE: {resultado['estado'].upper()} — "
+                    f"{resultado['detalle']}\n\n"
+                )
+                dialog.after(0, lambda e=resultado["estado"]: status_var.set(
+                    f"Login ANE: {e}"
+                ))
+            except Exception as e:
+                _log(f"LOGIN ANE: ERROR — {e}\n\n")
+                dialog.after(0, lambda: status_var.set("Login ANE: error"))
+            finally:
+                if mgr is not None:
+                    try:
+                        mgr.stop_brave_sync()
+                        _log("Brave cerrado (lo abrió el login).\n")
+                    except Exception:
+                        pass
+
+        threading.Thread(target=_run, daemon=True).start()
+
+    def open_enriquecimiento(self) -> None:
+        """O7.3: enriquecimiento IA con el servidor bajo demanda.
+
+        Arranca el servidor local si hace falta (y lo detiene al terminar SOLO
+        si esta ventana lo arrancó), corre el pase completo (idempotente) y
+        refresca la lista principal.
+        """
+        import asyncio
+
+        from jobpulse_v15 import ia_enrichment as iae
+        from jobpulse_v15.ia_servidor import asegurar_servidor, servidor_arriba
+
+        dialog = tk.Toplevel(self.root)
+        dialog.title("Enriquecimiento IA")
+        dialog.geometry("760x460")
+        dialog.transient(self.root)
+
+        frame = ttk.Frame(dialog, padding=12)
+        frame.pack(fill="both", expand=True)
+
+        ttk.Label(
+            frame,
+            text="Enriquecimiento IA (idempotente: solo procesa lo que falta)",
+            font=("Segoe UI", 11, "bold"),
+        ).pack(anchor="w")
+        info_var = tk.StringVar(value="Servidor IA: verificando...")
+        ttk.Label(frame, textvariable=info_var, foreground="gray").pack(
+            anchor="w", pady=(2, 8)
+        )
+
+        texto_frame = ttk.Frame(frame)
+        texto_frame.pack(fill="both", expand=True)
+        resultado_text = tk.Text(texto_frame, height=14, wrap="word")
+        resultado_text.pack(side="left", fill="both", expand=True)
+        scroll = ttk.Scrollbar(texto_frame, orient="vertical", command=resultado_text.yview)
+        scroll.pack(side="right", fill="y")
+        resultado_text.configure(yscrollcommand=scroll.set)
+
+        progress = ttk.Progressbar(frame, mode="indeterminate")
+        progress.pack(fill="x", pady=(8, 4))
+        progress.start(24)
+        status_var = tk.StringVar(value="Ejecutando...")
+        ttk.Label(frame, textvariable=status_var, foreground="gray").pack(anchor="w")
+
+        ttk.Button(dialog, text="Cerrar", command=dialog.destroy).pack(pady=(0, 10))
+
+        def _log(texto: str) -> None:
+            dialog.after(0, lambda t=texto: resultado_text.insert("end", t + "\n"))
+            dialog.after(0, lambda: resultado_text.see("end"))
+
+        def _correr() -> None:
+            servidor = None
+            try:
+                if not iae.get_ia_client():
+                    _log("ERROR: IA no configurada (Configuración → IA, o .env).")
+                    dialog.after(0, lambda: status_var.set("IA no configurada"))
+                    return
+                if servidor_arriba():
+                    _log("Servidor IA ya activo (no se toca).")
+                else:
+                    servidor = asegurar_servidor(on_log=_log)
+                dialog.after(0, lambda: info_var.set("Enriqueciendo..."))
+                r = asyncio.run(iae.pase_completo(on_event=_log))
+                if "error" in r:
+                    _log(f"ERROR: {r['error']}")
+                    dialog.after(0, lambda: status_var.set("Terminó con error"))
+                else:
+                    dialog.after(0, lambda: status_var.set("Completado"))
+            except Exception as e:
+                _log(f"ERROR: {e}")
+                dialog.after(0, lambda: status_var.set("Error"))
+            finally:
+                if servidor is not None:
+                    try:
+                        servidor.detener()
+                        _log("Servidor IA detenido (lo abrió esta corrida).")
+                    except Exception as e:
+                        _log(f"No se pudo detener el servidor IA: {e}")
+                dialog.after(0, progress.stop)
+                # Refresca la lista principal (el enriquecimiento cambia datos).
+                if self.root.winfo_exists():
+                    dialog.after(0, self.search_jobs)
+
+        threading.Thread(target=_correr, daemon=True).start()
 
     def open_configuration(self) -> None:
         """Abre la ventana de configuraci\u00f3n global."""

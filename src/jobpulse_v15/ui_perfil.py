@@ -23,6 +23,7 @@ from typing import Any, Callable, Mapping
 from jobpulse_v15.candidate_profile import extract_candidate_profile, read_cv_text
 from jobpulse_v15.cv_ia import extraer_cv_ia
 from jobpulse_v15.ia_api import IAClient, IAError
+from jobpulse_v15.ia_servidor import asegurar_servidor
 from jobpulse_v15.profile_model import (
     CONTACTO_CODIGOS,
     RESUMEN_CODE,
@@ -889,11 +890,23 @@ class CandidateProfileWindowCV:
             # SOLO toca atributos: Tcl con hilos rechaza llamadas Tk
             # (createcommand/after) desde el worker; el marshaling a la UI
             # lo hace el _poll, que corre en el main thread.
+            servidor = None
             try:
+                if getattr(cliente, "es_local", False):
+                    # O7.3: servidor IA bajo demanda — se detiene al terminar
+                    # (solo si ESTE pase lo arrancó; si ya estaba, no se toca).
+                    # getattr: los clientes de test pueden omitir es_local.
+                    servidor = asegurar_servidor()
                 perfil = asyncio.run(extraer_cv_ia(texto, cliente))
                 self._resultado_pase_ia = ("ok", facts_desde_perfil_dict(perfil))
             except Exception as exc:  # IAError/httpx/JSON: la UI decide como mostrarlo
                 self._resultado_pase_ia = ("error", str(exc))
+            finally:
+                if servidor is not None:
+                    try:
+                        servidor.detener()
+                    except Exception:
+                        pass
 
         def _poll() -> None:
             if not self.window.winfo_exists():

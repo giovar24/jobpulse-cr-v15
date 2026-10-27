@@ -10,7 +10,7 @@ import socket
 import subprocess
 import time
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
 from playwright.async_api import Browser, BrowserContext, Playwright, async_playwright
 
@@ -60,6 +60,14 @@ class BraveManager:
         )
 
     def _get_user_data_dir(self) -> Path:
+        """Devuelve la RA\u00cdZ ``User Data`` para ``--user-data-dir``.
+
+        Regla de oro (docs/SITIOS_PROBLEMATICOS.md, fix O7.1): apuntar a
+        ``User Data\\Default`` crea un perfil NUEVO y vac\u00edo y todos los
+        logins heredados "fallan" (bug hist\u00f3rico que estuvo aqu\u00ed).
+        El perfil concreto se elige con ``--profile-directory`` (ver
+        ``_build_args``); aqu\u00ed solo se valida que exista.
+        """
         if self._user_data_dir:
             return self._user_data_dir
         local_app = Path(os.getenv("LOCALAPPDATA", ""))
@@ -72,12 +80,15 @@ class BraveManager:
                 f"Perfil '{self.brave_perfil}' no existe en {base}. "
                 f"Perfiles disponibles: {[p.name for p in base.iterdir() if p.is_dir()]}"
             )
-        self._user_data_dir = perfil_dir
+        self._user_data_dir = base
         return self._user_data_dir
 
     def _build_args(self) -> list[str]:
         args = [
             f"--remote-debugging-port={self.cdp_port}",
+            # O7.1: el perfil se selecciona asi; --user-data-dir queda en la
+            # raiz "User Data" (_get_user_data_dir).
+            f"--profile-directory={self.brave_perfil}",
             "--no-first-run",
             "--no-default-browser-check",
             "--disable-background-networking",
@@ -190,6 +201,53 @@ class BraveManager:
 
     async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
         await self.stop_brave()
+
+    def stop_brave_sync(self) -> None:
+        """Versión síncrona de ``stop_brave`` para callers sin event loop (UI).
+
+        Si este manager conectó Playwright (``get_browser_context``), delega en
+        ``stop_brave`` vía ``asyncio.run``; si solo arrancó el proceso
+        (``asegurar_brave``), termina el proceso directamente.
+        """
+        if self._browser or self._playwright:
+            asyncio.run(self.stop_brave())
+            return
+        if self._process and self._process.poll() is None:
+            self._process.terminate()
+            try:
+                self._process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                self._process.kill()
+        self._process = None
+        logger.info("Brave detenido")
+
+
+# Plataformas cuyos fetchers necesitan un navegador con CDP vivo.
+# Fuente única para la UI (barrido, O7.2) y para tests.
+PLATAFORMAS_NAVEGADOR = frozenset({"ane", "indeed", "linkedin"})
+
+
+def cdp_vivo(port: int = 9222, host: str = "127.0.0.1", timeout: float = 0.5) -> bool:
+    """True si hay un navegador escuchando CDP en ``host:port``."""
+    try:
+        with socket.create_connection((host, port), timeout=timeout):
+            return True
+    except OSError:
+        return False
+
+
+def asegurar_brave(cdp_port: int = 9222, **kwargs: Any) -> Optional[BraveManager]:
+    """Garantiza CDP vivo en ``cdp_port``; devuelve el manager SOLO si lo arrancó.
+
+    ``None`` = ya había CDP arriba (Brave del usuario o del launcher): no se
+    toca y no hay nada que cerrar. Si devuelve un ``BraveManager``, el caller
+    debe llamar ``stop_brave_sync()`` al terminar (O7.2).
+    """
+    if cdp_vivo(cdp_port):
+        return None
+    mgr = BraveManager(cdp_port=cdp_port, **kwargs)
+    mgr.start_brave()
+    return mgr
 
 
 async def get_browser_context(

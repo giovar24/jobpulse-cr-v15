@@ -43,17 +43,21 @@ Cuando el usuario dice "vamos a otra sesión":
 cualquiera de estos 3 — tiene errores exactos con su solución y procedimientos
 de recuperación). Reglas de oro que resumen todo el documento:
 
-1. **Brave DEBE correr con CDP 9222 y el perfil real**: `--user-data-dir` apunta
+1. **Brave corre con CDP 9222 y el perfil real**: `--user-data-dir` apunta
    a la raíz `User Data`, **NUNCA** a `User Data\Default` (crea perfil vacío y
    todos los logins "fallan"). Verificar: `curl http://127.0.0.1:9222/json/version`.
-   Arranque de todo (venv + servidor IA + Brave CDP + UI): `.\jobpulse-v15.bat`.
-   Ojo: la UI **hoy no arranca Brave** — sin CDP arriba, ANE/Indeed/LinkedIn
-   fallan con `ECONNREFUSED 9222` (CINDE/Procomer son API y sí corren). O7.2
-   lo corrige: el barrido de la UI gestionará Brave solo.
+   **Desde O7.2 (2026-10-27) el barrido de la UI abre Brave solo** (si hay
+   sitios de navegador) y lo cierra al terminar — solo si ella lo abrió.
+   Si tu Brave diario corre SIN CDP, la app no puede abrir el puerto (Chromium
+   delega en la instancia viva): ciérralo del todo y reintenta.
+   Launcher: `.\jobpulse-v15.bat` (venv + Brave CDP + UI; la IA ya no se
+   pre-arranca).
 2. **ANE (ane.cr)**: sesión obligatoria. Sin sesión el barrido se omite limpio
-   (no es error). Re-login: `.\.venv\Scripts\python.exe login_ane.py` (lee la
-   credencial del almacén `credencial("ANE")` — keyring de Windows; nada en
-   código ni `.env`) → re-barrido
+   (no es error). Re-login **desde la UI**: botón **"Re-login ANE"** en el
+   diálogo de Corrida (O7.4; abre/cierra Brave solo si hace falta). Vía CLI:
+   `.\.venv\Scripts\python.exe login_ane.py` (wrapper; lee la credencial del
+   almacén `credencial("ANE")` — keyring de Windows; nada en código ni `.env`)
+   → re-barrido
    `.\.venv\Scripts\python.exe run_scrapes.py ane` (scripts de la raíz del fork:
    siempre el python del venv). Ojo: ANE **republica vacantes con IDs nuevos**
    (re-barridos traen "nuevas" que son republicaciones — revisar con
@@ -84,10 +88,11 @@ de recuperación). Reglas de oro que resumen todo el documento:
 ## Comandos esenciales
 
 ```powershell
-# Arranque completo (equipo nuevo incluido): venv + servidor IA + Brave CDP 9222 + UI
+# Arranque (equipo nuevo incluido): venv + Brave CDP 9222 + UI
+# (la IA ya NO se pre-arranca: la UI la levanta bajo demanda — botón "Enriquecer")
 .\jobpulse-v15.bat
 #   (su ruta de Brave está hardcodeada para el PC del usuario; el launcher
-#    portátil es .\jobpulse-v15.ps1, que NO arranca el servidor IA)
+#    portátil es .\jobpulse-v15.ps1)
 
 # CLI de orquestación: scrape, site, platform, credenciales, login, run, search, quality…
 .\.venv\Scripts\python.exe -m jobpulse_v15 --help
@@ -106,7 +111,7 @@ de recuperación). Reglas de oro que resumen todo el documento:
 .\.venv\Scripts\python.exe tools\progreso_enriquecimiento.py   # % por campo
 .\.venv\Scripts\python.exe tools\huecos_restantes.py     # huecos: basura vs recuperable
 
-# Tests — test_ui requiere display; corre OK en el PC del usuario (221 tests).
+# Tests — test_ui requiere display; corre OK en el PC del usuario (244 tests).
 # pytest vive en el python del sistema (el venv no lo tiene instalado).
 # Los roots Tk de test se crean con `_tkroot_reintentos()` (tests/test_ui.py):
 # encadenar muchos interpretes Tcl falla de vez en cuando en Windows
@@ -146,13 +151,23 @@ python -m pytest tests/ -q
 10. **Los launchers NO reinstalan deps si el venv ya existe**: tras añadir
     deps a `pyproject.toml` → `python.exe -m pip install -e .` a mano (así se
     detectó el keyring faltante).
-11. **`BraveManager` tiene el bug del perfil vacío** (descubierto 2026-10-27,
-    fix previsto en O7.1): `_get_user_data_dir()` devuelve `User Data\Default`
-    en vez de la raíz `User Data` → Brave se abre "como nueva" y los logins
-    heredados "fallan". Lo enmascara `login_ane.py` (teclea credenciales
-    frescas), pero el botón "Login manual" de Configuración y el CLI `login`
-    heredan el bug. El `.bat`/`.ps1` usan la raíz correcta, por eso el
-    launcher es hoy la vía fiable.
+11. **Bug del perfil vacío en `BraveManager` — CORREGIDO (O7.1, 2026-10-27)**:
+    `_get_user_data_dir()` devolvía `User Data\Default` en vez de la raíz
+    `User Data` (perfil vacío → logins heredados "fallan"; lo enmascaraba
+    `login_ane.py`, que teclea credenciales frescas). Fix: raíz +
+    `--profile-directory={perfil}`. El botón "Login manual" de Configuración
+    y el CLI `login` ya usan el perfil real.
+12. **Tests que tocan el cliente IA local DEBEN parchear `asegurar_servidor`**:
+    sin el patch, el worker del pase IA de CV arranca el llama-server REAL en
+    plena suite (saturación de RAM — ocurrió 2026-10-27; el usuario lo notó).
+    Patrón: `patch("jobpulse_v15.ui_perfil.asegurar_servidor", return_value=None)`
+    (ver tests del pase IA de CV en tests/test_ui.py).
+13. **Embeddings (`search_engine.py`) DORMIDOS por decisión del usuario
+    (2026-10-27)**: verificados funcionales (EmbeddingGemma es gated en HF →
+    fallback `paraphrase-multilingual-mpnet` 768d; similitud ES↔EN correcta)
+    pero SIN cablear y con caché vacía. La precisión de búsqueda viene de la
+    data extraída (O1) — nicho del motor: texto libre ES↔EN. `ats.py`/`gate.py`/
+    `ia_calibracion.py` sin callers ni tests; no borrar sin redefinir O2/O4.
 
 ## Estado de referencia (2026-10-26, tras re-barrido ANE)
 
@@ -176,3 +191,9 @@ python -m pytest tests/ -q
   reales ya cargados; `value_code='portfolio'` reservado). Compatibilidad
   sobre 295: no_required 168, needs_review 109, not_registered 18, matched 0.
   Los 4 CVs en `data/usuario/cv/` son material de pruebas (mismo CV en ES/EN).
+- **Sesión 2026-10-27 (O7 completo)**: flujo UI-first — el barrido de la UI
+  abre/cierra Brave; botones "Enriquecer" (servidor IA bajo demanda) y
+  "Re-login ANE" en la Corrida; el launcher ya no pre-arranca la IA. Suite:
+  244 tests. BD sin cambios (el enriquecimiento de los 120 ANE nuevos queda
+  como pendiente #1 — botón "Enriquecer"). Embeddings verificados funcionales
+  y DORMIDOS por decisión del usuario (data-first) — ver gotcha 13.

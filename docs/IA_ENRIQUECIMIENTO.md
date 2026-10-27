@@ -19,7 +19,7 @@ BD jobs ──> ia_enrichment.run_ia_enrichment ──> IAClient (OpenAI-compat)
 
 | Modo | Qué hacer |
 |---|---|
-| Automático (recomendado) | `jobpulse-v15.bat` levanta todo: [1] venv, [2] **servidor IA** (`start_ia_server.py`), [3] Brave CDP, [4] UI. Si el server ya responde, no hace nada. |
+| Bajo demanda (O7.3, recomendado) | La UI lo gestiona: el botón **"Enriquecer"** y el pase IA de CV arrancan el servidor si hace falta y lo APAGAN al terminar (solo el proceso que ellos abrieron; si ya estaba arriba, no se toca). `run_enriquecimiento.py` hace lo mismo. El launcher `jobpulse-v15.bat` ya NO pre-arranca la IA. |
 | Manual | `ia-server.bat` o `python start_ia_server.py` (verifica/arranca/espera el modelo). El comando replica el build Vulkan del usuario (`D:\llama-b11662-bin-win-vulkan-x64`, modelo `D:\Models\gemma-4-E2B-it-qat-UD-Q4_K_XL`, 8k ctx + MTP draft). Log: `data/ia_server.log`. |
 | **Servidor externo** | Ponga `IA_BASE_URL` del `.env` a la URL remota (p. ej. `http://192.168.1.10:8081/v1`). El preflight lo detecta como no-local y **no** intenta arrancar nada local. |
 

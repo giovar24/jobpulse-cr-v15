@@ -1,0 +1,198 @@
+# Handoff — JobPulse CR v1.5 — Sesión 2026-10-27
+
+Reemplaza como handoff vigente al de 2026-10-26
+(`HANDOFF_SESION_2026-10-26.md`).
+
+## TL;DR
+
+- **Diagnóstico del barrido UI fallido** (el usuario reportó "solo funcionó
+  ANE"): la tabla `source_run_sites` mostró que ANE/Indeed/LinkedIn fallaron
+  con `ECONNREFUSED 9222` — **Brave no corría con CDP y la UI nunca lo
+  arrancaba**; CINDE/Procomer SÍ corrieron (17+1, "0 nuevas" = idempotencia
+  normal, no error).
+- **O7 creado e implementado en la misma sesión** (operación UI-first /
+  servidores bajo demanda): el barrido de la UI abre/cierra Brave solo;
+  botón **"Enriquecer"** (servidor IA sube, enriquece, se apaga); botón
+  **"Re-login ANE"** en el diálogo de Corrida; el launcher ya no pre-arranca
+  la IA. En el camino se encontró y corrigió el **bug histórico del perfil
+  vacío vivo en `BraveManager`** (`User Data\Default` en vez de la raíz).
+- **Incidente de tests**: el pase IA de CV arrancó el llama-server REAL en
+  plena suite (saturación de RAM — el usuario lo notó). Fix: patch de
+  `asegurar_servidor` en los tests (gotcha 12 de AGENTS.md). Suite final:
+  **244 tests + 46 subtests en ~28s**, cero spawns de modelo.
+- **Motor semántico (embeddings) verificado y DORMIDO por decisión del
+  usuario**: funciona tras la mudanza (EmbeddingGemma gated → fallback
+  `paraphrase-multilingual-mpnet`), pero está sin cablear y sin caché. El
+  usuario decidió **data-first**: la precisión de búsqueda viene de la data
+  extraída (O1), no del vector. **O2 redefinido** en consecuencia.
+- BD sin cambios (295 jobs; enriquecimiento de los 120 ANE nuevos sigue
+  pendiente — ahora es un clic: botón "Enriquecer").
+
+## 1. Lo que se hizo
+
+### Diagnóstico del barrido desde la UI (reporte del usuario)
+- Consulta a `source_run_sites`: corridas 04:02 y 04:43 del 27-10 —
+  ane/indeed/linkedin `error ECONNREFUSED ::1:9222`; cinde/procomer `ok`
+  con 0 nuevas (todo duplicado). El barrido ANE que "sí funcionó" fue el
+  del 26-10 23:54 vía CLI tras `login_ane.py`.
+- Causa raíz: la UI solo pasa `port` a los fetchers; nadie garantiza CDP.
+  Además `BraveManager._get_user_data_dir()` devolvía `User Data\Default`
+  (el bug histórico de SITIOS_PROBLEMATICOS.md) — el botón "Login manual"
+  y el CLI `login` abrían un perfil VACÍO; lo enmascaraba `login_ane.py`
+  (teclea credenciales frescas).
+
+### O7 — Operación UI-first (implementado completo)
+| Sub | Qué | Dónde |
+|---|---|---|
+| O7.1 | Fix perfil: `--user-data-dir` a la RAÍZ `User Data` + `--profile-directory={perfil}`; `stop_brave_sync()`, `cdp_vivo()`, `asegurar_brave()` (devuelve manager SOLO si él abrió), `PLATAFORMAS_NAVEGADOR` | `browser_manager.py` |
+| O7.2 | `_ejecutar` (diálogo Corrida): pre-verifica CDP si hay sitios de navegador, abre Brave si falta, lo cierra en `finally` SOLO si ella lo abrió; aviso claro si el Brave diario (sin CDP) bloquea el puerto | `ui.py` |
+| O7.3 | `jobpulse_v15/ia_servidor.py` (NUEVO, única fuente del comando llama-server): `servidor_arriba()`, `asegurar_servidor()`, `ServidorIA.detener()` — solo apaga lo que él encendió. Botón **"Enriquecer"** en la UI con diálogo de progreso; orquestación compartida `ia_enrichment.pase_completo()` (ciclos críticos + pase completo, `on_event` para logs/UI); pase IA de CV con servidor bajo demanda; `jobpulse-v15.bat` sin pre-arranque de IA | `ia_servidor.py`, `ui.py`, `ui_perfil.py`, `ia_enrichment.py`, `run_enriquecimiento.py` |
+| O7.4 | `jobpulse_v15/ane_login.py` (NUEVO): login ANE con credencial del almacén, `{"estado", "detalle"}`; botón **"Re-login ANE"** en la Corrida; `login_ane.py` queda como wrapper CLI (abre/cierra Brave solo si hace falta; margen de 3s tras login OK para persistir la cookie) | `ane_login.py`, `ui.py`, `login_ane.py` |
+
+### Verificación del motor semántico (pregunta del usuario)
+- `search_engine.py` importa y funciona tras la mudanza (torch OK): modelo
+  carga en ~60s la primera vez; **EmbeddingGemma-300m es GATED en HF (401)**
+  → fallback automático a `paraphrase-multilingual-mpnet-base-v2` (768d).
+- Similitud correcta: sim("soporte técnico","IT support")=0.498 vs
+  sim("soporte técnico","chef")=0.222.
+- PERO: sin cablear (nadie importa `ats.py`/`gate.py`/`ia_calibracion.py`),
+  sin tests propios, y `data/usuario/embeddings_cache.npy` NO EXISTE (nunca
+  se indexaron los jobs, ni antes de la mudanza).
+- Respuesta técnica al usuario: los embeddings NO extraen (solo comparan);
+  clasificación por anclas es viable para 2-3 campos con umbral, pero la
+  extracción real es de la IA local. El usuario decidió: **data-first** —
+  completar O1 (huecos → filtros SQL exactos) antes que cualquier ranking;
+  motor semántico dormido (nicho futuro: texto libre ES↔EN). O2 redefinido.
+
+### Tests
+- NUEVOS: `test_browser_manager.py` (raíz User Data, args, cdp_vivo,
+  asegurar_brave, stop_brave_sync), `test_ia_servidor.py` (health stub,
+  asegurar None si arriba, fallo rápido sin llama-server, externo nunca
+  local, comando usa puerto del env, detener idempotente),
+  `test_ane_login.py` (guardas de credencial, selectores estables),
+  `TestPaseCompleto` en `test_ia_enrichment.py` (ciclos, solo_criticos,
+  error acumulado).
+- FIX de tests existentes: los 2 tests del pase IA de CV en `test_ui.py`
+  ahora parchean `jobpulse_v15.ui_perfil.asegurar_servidor` (return None).
+- **Suite: 244 passed + 46 subtests en ~28s**, sin cargar ningún modelo real.
+
+### Docs verificadas contra el código
+`AGENTS.md` (gotchas 11-13, regla de oro Brave, botón Re-login ANE, 244
+tests, estado de sesión), `DESARROLLO_v15.md` (tabla O1-O7 canónica, O2
+redefinido, §5 reordenado), `SITIOS_PROBLEMATICOS.md` (bug BraveManager
+CORREGIDO; nota ECONNREFUSED desde la UI), `IA_ENRIQUECIMIENTO.md` (modo
+"bajo demanda"), `README.md` (launcher sin IA).
+
+## 2. Decisiones de diseño
+
+1. **Política de servidores bajo demanda**: "solo se detiene lo que la app
+   arrancó". Si Brave o el servidor IA ya estaban arriba (usuario/launcher),
+   se usan y NO se tocan. Evita matar el navegador diario del usuario.
+2. **`ia_servidor.py` como única fuente del comando llama-server** (dentro
+   del paquete); `start_ia_server.py` queda como wrapper CLI. Una sola
+   verdad para CLI, UI y scripts.
+3. **`pase_completo()` compartido CLI/UI** en `ia_enrichment.py`: misma
+   orquestación para `run_enriquecimiento.py` y el botón "Enriquecer"
+   (`on_event` para progreso; `load_dotenv()` propio porque el proceso UI
+   no carga `.env`).
+4. **`ane_login.py` al paquete** (login_ane.py = wrapper): el flujo del
+   usuario es 100% UI; los scripts de raíz quedan para sesiones de agente.
+5. **Embeddings dormidos, no borrados**: verificados funcionales; borrar
+   obligaría a redefinir O2/O4 y perdería el nicho ES↔EN. `torch`/`sentence-
+   transformers` se quedan instalados.
+6. **O2 redefinido por el usuario**: afinar la búsqueda = completar la data
+   (O1) → filtros SQL más exactos. La optimización de UI va DESPUÉS de eso.
+7. **Tras login ANE OK, 3s de margen** antes de cerrar Brave (cookie de
+   sesión persista en el perfil pese al terminate forzado).
+8. **Enrichment con reglas primero, IA después** ya existe de facto
+   (`rules-1` + `ia_enrichment`); el pre-pase semántico (Alt 2) quedó
+   descartado por ahora.
+
+## 3. Objetivos (estado)
+
+| Objetivo | Estado |
+|---|---|
+| O1 Enriquecimiento IA | ✅ motor · 🔵 **pendiente #1: pase sobre los 120 ANE** — botón "Enriquecer" (valida O7.3 E2E) |
+| O2 Afinar la búsqueda | 🟡 **redefinido (data-first)**: completar O1 y ajustar filtros; motor semántico DORMIDO por decisión del usuario |
+| O3 Validar 7 fetchers ATS | ⏳ no iniciado |
+| O4 Calibración gate-vs-IA | ⏳ redefinir (sin gate semántico no tiene contra-qué comparar) |
+| O5 Higiene | 🟡 O5.1 ✅ · O5.3 re-barrido jobs basura · **O5.4 dedupe manual 120 republicaciones ANE** |
+| O6 Perfil candidato | 🟢 O6.1/O6.2 ✅ · sigue O6.3 matching afinado |
+| **O7 Operación UI-first** | ✅ **COMPLETO (2026-10-27)** — falta solo la prueba de humo del usuario |
+
+## 4. Pendiente inmediato en la próxima sesión
+
+1. **Prueba de humo del usuario** (cierra O7 de hecho y O1 de paso):
+   abrir la app → "Ejecutar barrido" (Brave abre/cierra solo) →
+   "Enriquecer" (servidor IA sube, llena los 120 ANE ~7-10 min, se apaga) →
+   si ANE dice "sin sesión": "Re-login ANE".
+2. **O5.4**: dedupe manual de las 120 republicaciones ANE
+   (`quality duplicates --limit 100`).
+3. **O6.3** (matching afinado) y **O5.3** (jobs con descripción basura).
+4. Con la data completa: revisar qué filtros/consultas faltan (O2-redefinido)
+   y recién entonces la optimización de UI que pide el usuario.
+
+## 5. Cómo retomar (comandos)
+
+```powershell
+cd D:\Proyectos\v1_5
+
+# Launcher (venv + Brave CDP + UI; la IA ya NO se pre-arranca)
+.\jobpulse-v15.bat
+
+# Flujo de humo desde la UI (sin CLI):
+#   "Ejecutar barrido" → abre/cierra Brave solo
+#   "Enriquecer"       → servidor IA bajo demanda (sube/pasa/apaga)
+#   "Re-login ANE"     → en el diálogo de Corrida, si la sesión caducó
+
+# Suite (pytest del sistema; 244 tests)
+python -X utf8 -m pytest tests/ -q
+
+# Duplicados ANE para revisión manual (O5.4)
+.\.venv\Scripts\python.exe -m jobpulse_v15 quality duplicates --limit 100
+
+# Diagnóstico BD tras el enriquecimiento
+.\.venv\Scripts\python.exe tools\progreso_enriquecimiento.py
+```
+
+## 6. Archivos clave
+
+| Archivo | Qué |
+|---|---|
+| `src/jobpulse_v15/browser_manager.py` | FIX O7.1 (raíz `User Data` + `--profile-directory`) + `cdp_vivo`/`asegurar_brave`/`stop_brave_sync`/`PLATAFORMAS_NAVEGADOR` |
+| `src/jobpulse_v15/ia_servidor.py` | NUEVO: ciclo de vida del servidor IA (única fuente del comando) |
+| `src/jobpulse_v15/ane_login.py` | NUEVO: login ANE con credencial del almacén (selectores probados en producción) |
+| `src/jobpulse_v15/ui.py` | `_ejecutar` con Brave auto-gestionado (try/finally); botones "Enriquecer" y "Re-login ANE"; `open_enriquecimiento` |
+| `src/jobpulse_v15/ui_perfil.py` | Pase IA de CV con servidor bajo demanda (`asegurar_servidor` inyectable para tests) |
+| `src/jobpulse_v15/ia_enrichment.py` | `pase_completo()` compartido CLI/UI |
+| `run_enriquecimiento.py` / `start_ia_server.py` / `login_ane.py` | Wrappers refactorizados sobre el paquete (mismos contratos CLI) |
+| `jobpulse-v15.bat` | Sin pre-arranque de IA (3 pasos) |
+| `tests/test_browser_manager.py`, `test_ia_servidor.py`, `test_ane_login.py`, `TestPaseCompleto` | NUEVOS/extendidos — herméticos (sin navegador ni modelo) |
+| `AGENTS.md` | Gotchas 11-13; regla de oro Brave actualizada; 244 tests; estado de sesión |
+| `DESARROLLO_v15.md` | Tabla O1-O7 canónica (O2 redefinido); §2/§5 al día |
+| `docs/SITIOS_PROBLEMATICOS.md` | Bug de perfil marcado CORREGIDO en BraveManager |
+| `docs/IA_ENRIQUECIMIENTO.md` | Modo "bajo demanda" (O7.3) |
+
+## 7. Datos de contexto que no hay que olvidar
+
+- **BD sin cambios**: 295 jobs (ANE 240 = 120 viejos + 120 republicadas;
+  Indeed 30, CINDE 17, LinkedIn 7, Procomer 1). Huecos de los 120 ANE:
+  city 38, region 13, work_mode 'unknown' 148, employment_type 120,
+  salary 117, skills 120, languages 124.
+- **El barrido de hoy 04:43 no agregó nada** (0 nuevas — todo duplicado);
+  el ANE que "funcionó" fue el re-barrido CLI del 26-10.
+- **llama-server consume ~4GB de RAM** (máquina: 15.4GB, ~10GB libres tras
+  el reinicio). La política "apagar al terminar" evita acumulación; el
+  usuario pidió explícitamente reiniciar/limpiar entre corridas.
+- **El modelo de embeddings mpnet (~470MB) quedó descargado en la caché HF**
+  del usuario tras la verificación — fuera del repo, no molesta.
+- **EmbeddingGemma-300m es gated** en HF: si algún día se quiere usar,
+  `huggingface-cli login` con cuenta que aceptó la licencia; hoy el fallback
+  mpnet funciona sin login.
+- **Los fetchers conectan a `http://localhost:{port}`** (ane/indeed/linkedin/
+  browser_sites) mientras `BraveManager` usa `127.0.0.1` — Node prueba ambas
+  familias, funciona igual; no es fuente de problemas conocida.
+- **`configuration_window.py` "Login manual"** ya abre el perfil REAL tras el
+  fix O7.1 (antes abría el perfil vacío del bug).
+- La rama `fork-v15` del repo viejo sigue SIN pushear (password ANE
+  pre-purga). Rotación de password ANE: pendiente del usuario.

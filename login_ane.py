@@ -1,83 +1,43 @@
+# -*- coding: utf-8 -*-
 """Login de ANE en Brave real (CDP 9222) con credenciales guardadas.
 
-Las credenciales NUNCA viven en este archivo (regla del proyecto: el repo no
-contiene secretos). Se leen del almacen local con `credencial("ANE")`:
-  - keyring de Windows (Administrador de Credenciales) + metadatos en
-    `data/empresas/credenciales.json` (gitignored), o
-  - fallback `.env`: ANE_USER / ANE_PASSWORD.
+Wrapper CLI del paquete (la UI tiene su botón "Re-login ANE", O7.4). La lógica
+vive en ``jobpulse_v15.ane_login``; este script solo garantiza Brave con CDP
+(lo abre con ``BraveManager`` si hace falta y lo cierra si lo abrió él).
+
+Las credenciales NUNCA viven en este archivo (regla del proyecto): se leen del
+almacén con ``credencial("ANE")`` — keyring de Windows + fallback .env
+(ANE_USER/ANE_PASSWORD).
 
 Guardar/actualizar la credencial:
-    .\.venv\Scripts\python.exe -m jobpulse_v15 credenciales set --empresa ANE --usuario <usuario> --password <password>
+    .\.venv\Scripts\python.exe -m jobpulse_v15 credenciales set --empresa ANE --usuario <u> --password <p>
 """
 import sys
+import time
 
-from dotenv import load_dotenv
-from playwright.sync_api import sync_playwright
+from jobpulse_v15.ane_login import login_ane
+from jobpulse_v15.browser_manager import asegurar_brave
 
-from jobpulse_v15.credenciales import credencial
 
-load_dotenv()  # asegura ANE_USER/ANE_PASSWORD disponibles desde .env
-
-LOGIN_URL = "https://www.ane.cr/Cuenta/Login"
-CFG = {
-    "login_url": LOGIN_URL,
-    "user_sel": "input[name='UserName'], input#UserName, input[name='username'], "
-                "input[type=text], input[type=email]",
-    "pass_sel": "input[type=password]",
-    "submit_sel": "button[type=submit], input[type=submit], button:has-text('Ingresar')",
-    "espera": 5000,
-}
-
-cred = credencial("ANE")
-if not cred or not cred.get("usuario") or not cred.get("password"):
-    print("ERROR: no hay credencial ANE usable (usuario + password).")
-    print("Guardala con:")
-    print("  .\\.venv\\Scripts\\python.exe -m jobpulse_v15 credenciales set "
-          "--empresa ANE --usuario <usuario> --password <password>")
-    print("o define ANE_USER/ANE_PASSWORD en .env.")
-    raise SystemExit(1)
-
-USUARIO = cred["usuario"]
-PASSWORD = cred["password"]
-
-with sync_playwright() as p:
-    browser = p.chromium.connect_over_cdp("http://127.0.0.1:9222")
-    ctx = browser.contexts[0]
-    page = ctx.new_page()
-
+def main() -> int:
+    mgr = asegurar_brave(9222)
     try:
-        page.goto(LOGIN_URL, wait_until="domcontentloaded", timeout=45_000)
-        page.wait_for_timeout(2_000)
-
-        u = page.query_selector(CFG["user_sel"])
-        if u is None:
-            print(f"ERROR: no encontre campo usuario. Titulo: {page.title()}")
-            print("Inputs visibles:")
-            for inp in page.query_selector_all("input")[:10]:
-                print("  ", inp.get_attribute("name"), inp.get_attribute("type"), inp.get_attribute("id"))
-            raise SystemExit(1)
-        u.fill(USUARIO)
-
-        pw = page.query_selector(CFG["pass_sel"])
-        if pw is None:
-            print("ERROR: no encontre campo password")
-            raise SystemExit(1)
-        pw.fill(PASSWORD)
-
-        btn = page.query_selector(CFG["submit_sel"])
-        if btn is None:
-            print("ERROR: no encontre boton submit")
-            raise SystemExit(1)
-        btn.click()
-        page.wait_for_timeout(5_000)
-
-        html = page.content()
-        if "Puesto/Detalles" in html or "dashboard" in html.lower():
-            print("LOGIN ANE: OK")
-        elif "loginForm" in html or "Cuenta/RegistroUsuario" in html:
-            print("LOGIN ANE: FALLO (sigue en login). Titulo:", page.title())
-        else:
-            print("LOGIN ANE: INCIERTO. Titulo:", page.title())
-            print("URL:", page.url)
+        if mgr is not None:
+            print("Brave abierto para el login (se cerrará al terminar).")
+        resultado = login_ane(9222)
+        if resultado["estado"] == "ok":
+            # Margen para que Chromium persista la cookie de sesión ANE en el
+            # perfil antes de un cierre forzado del proceso.
+            time.sleep(3)
     finally:
-        page.close()
+        if mgr is not None:
+            mgr.stop_brave_sync()
+            print("Brave cerrado (lo abrió este script).")
+
+    estado = resultado["estado"]
+    print(f"LOGIN ANE: {estado.upper()} — {resultado['detalle']}")
+    return 0 if estado == "ok" else 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

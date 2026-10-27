@@ -504,6 +504,76 @@ async def run_ia_enrichment(
     return {"stats": stats, "message": f"Enriquecidos {stats['enriched']}/{stats['total']}, BD actualizados: {db_updated}"}
 
 
+async def pase_completo(
+    solo_criticos: bool = False,
+    on_event=None,
+) -> Dict[str, Any]:
+    """Orquestación completa del enriquecimiento (compartida CLI/UI, O7.3).
+
+    1) Pase CRÍTICO (city/region/work_mode/date_published) en ciclos hasta que
+    deje de avanzar (los 'unknown' irresolubles no se reintentan eternamente).
+    2) Pase COMPLETO (secundarios incluidos: employment_type, salary, skills,
+    languages) para los jobs que les falte algo.
+
+    ``on_event(texto)`` recibe el avance ciclo por ciclo (para logs o UI).
+    Devuelve ``{"ciclos": [stats...], "completo": stats | None}`` o
+    ``{"error": ...}`` (con lo acumulado hasta el fallo, si hubo).
+    """
+    def _reporta(texto: str) -> None:
+        if on_event:
+            try:
+                on_event(texto)
+            except Exception:  # la UI/log nunca debe romper el pase
+                pass
+
+    from dotenv import load_dotenv
+    load_dotenv()  # el proceso UI no carga .env; mismo patrón que run_ia_enrichment
+
+    cliente = get_ia_client()
+    if not cliente:
+        return {"error": "IA no configurada (ver .env: IA_PROVEEDOR, IA_BASE_URL, IA_MODEL)"}
+    _reporta(
+        f"Servidor IA: {getattr(cliente, 'base_url', '?')} | "
+        f"modelo: {getattr(cliente, 'modelo', '?')}"
+    )
+    error = await verificar_servidor_ia(cliente)
+    if error:
+        return {"error": error}
+    _reporta("Preflight OK: el servidor responde.")
+
+    resumen: Dict[str, Any] = {"ciclos": [], "completo": None}
+    ciclo = 0
+    while True:
+        ciclo += 1
+        r = await run_ia_enrichment(limit=500, only_critical=True)
+        if "error" in r:
+            return {"error": f"CRÍTICO ciclo {ciclo}: {r['error']}", **resumen}
+        s = r["stats"]
+        resumen["ciclos"].append(s)
+        _reporta(
+            f"CRÍTICO ciclo {ciclo}: total={s['total']} enriched={s['enriched']} "
+            f"failed={s['failed']} skipped={s['skipped']} "
+            f"fills={json.dumps(s.get('fields_filled', {}), ensure_ascii=False)}"
+        )
+        if s["total"] == 0 or s["enriched"] == 0:
+            break
+        if ciclo >= 5:  # guardia de seguridad
+            break
+
+    if not solo_criticos:
+        r = await run_ia_enrichment(limit=2000, only_critical=False)
+        if "error" in r:
+            return {"error": f"COMPLETO: {r['error']}", **resumen}
+        s = r["stats"]
+        resumen["completo"] = s
+        _reporta(
+            f"COMPLETO: total={s['total']} enriched={s['enriched']} "
+            f"failed={s['failed']} skipped={s['skipped']} "
+            f"fills={json.dumps(s.get('fields_filled', {}), ensure_ascii=False)}"
+        )
+    return resumen
+
+
 if __name__ == "__main__":
     import asyncio
     from dotenv import load_dotenv

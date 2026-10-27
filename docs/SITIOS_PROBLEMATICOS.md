@@ -35,11 +35,12 @@ Brave debe estar corriendo con **depuración remota en el puerto 9222** y con el
 Chromium crea un perfil NUEVO y vacío dentro de ese directorio: Brave se abre
 "como si fuera la primera vez" (sin marcadores, sin sesiones) y el login
 siempre falla. Este bug estuvo en `jobpulse-v15.bat` y se corrigió.
-**2026-10-27: el MISMO bug sigue vivo en `BraveManager._get_user_data_dir()`**
+**2026-10-27: el MISMO bug se encontró vivo en `BraveManager._get_user_data_dir()`**
 (la ruta genérica que usan el botón "Login manual" de Configuración y el CLI
-`login`). Lo enmascara `login_ane.py` — teclea credenciales frescas y ANE
-"funciona" — pero con ese perfil Indeed/LinkedIn nunca ven las sesiones
-reales. Fix previsto: O7.1 (ver `DESARROLLO_v15.md` §3).
+`login`); lo enmascaraba `login_ane.py` — teclea credenciales frescas y ANE
+"funciona" — pero con ese perfil Indeed/LinkedIn nunca veían las sesiones
+reales. **CORREGIDO el mismo día (O7.1)**: `--user-data-dir` a la raíz +
+`--profile-directory={perfil}`.
 
 **Verificar que CDP está vivo:**
 
@@ -51,10 +52,10 @@ curl.exe -s http://127.0.0.1:9222/json/version
 **Error típico si no está vivo:** `BrowserType.connect_over_cdp: connect
 ECONNREFUSED 127.0.0.1:9222` → el barrido termina en `error`. Solución: lanzar
 Brave con el comando de arriba (o usar el launcher `jobpulse-v15.bat`).
-Nota: si corres el barrido **desde la UI**, hoy la UI no arranca Brave — los
-sitios de navegador (ANE/Indeed/LinkedIn) fallan así, pero CINDE/Procomer
-(API) sí corren y sus "0 nuevas" son idempotencia normal. O7.2 hará que la
-UI gestione Brave sola.
+Nota: **desde O7.2 (2026-10-27) el barrido de la UI abre Brave solo** y lo
+cierra al terminar (solo si ella lo abrió). Si tu Brave diario corre SIN CDP,
+la app no puede abrir el puerto: ciérralo del todo y reintenta. CINDE/Procomer
+(API) siempre corren — sus "0 nuevas" son idempotencia normal, no un fallo.
 
 ---
 

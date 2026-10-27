@@ -1984,6 +1984,10 @@ class TestManualJobStateUI(unittest.TestCase):
                 "jobpulse_v15.ui_perfil.IAClient", return_value=_ClienteFake()
             ), patch(
                 "jobpulse_v15.ui_perfil.extraer_cv_ia", _fake_extraer
+            ), patch(
+                # O7.3: sin esto el test arrancaría el llama-server REAL
+                # (saturación de memoria) — con None "ya estaba arriba".
+                "jobpulse_v15.ui_perfil.asegurar_servidor", return_value=None
             ):
                 window._importar_cv()
                 dialogo = self._esperar_dialogo_revision(window, "cv_ia.txt (IA)")
@@ -2050,6 +2054,10 @@ class TestManualJobStateUI(unittest.TestCase):
                 "jobpulse_v15.ui_perfil.IAClient", return_value=_ClienteFake()
             ), patch(
                 "jobpulse_v15.ui_perfil.extraer_cv_ia", _fake_extraer
+            ), patch(
+                # O7.3: sin esto el test arrancaría el llama-server REAL
+                # (saturación de memoria) — con None "ya estaba arriba".
+                "jobpulse_v15.ui_perfil.asegurar_servidor", return_value=None
             ):
                 window._importar_cv()
                 dialogo = self._esperar_dialogo_revision(window, "candidate.txt")
