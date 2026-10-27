@@ -33,6 +33,14 @@ Reemplaza como handoff vigente al de 2026-10-26
   enriquecimiento corrió 44 min con el servidor IA **bajo demanda E2E**
   (subió → 125/166 enriquecidos → se apagó solo). Skills 100%, city 91.9%,
   work_mode 53.6% (resto = honesto/basura O5.3).
+- **Objetivos O8 (ciclo de vida de la vacante) + O9 (optimización de UI)
+  formalizados al cierre, con decisión del usuario**: recurrentes y aplicadas
+  OCULTAS por defecto (visibles solo con filtro opt-in); marcar aplicado =
+  manual. Estado del código investigado: registro de aplicados YA existía
+  (tabla `applications` + diálogo Seguimiento); NO hay categorías de puestos,
+  NADA caduca, y las republicaciones resucitan (estado pegado al ID viejo).
+  O2 ganó O2.1 (normalizar locations Indeed) y O2.2 (filtro requisitos +
+  columna Req.); O6 ganó O6.4 (dedupe semántico del perfil).
 
 ## 1. Lo que se hizo
 
@@ -89,6 +97,30 @@ redefinido, §5 reordenado), `SITIOS_PROBLEMATICOS.md` (bug BraveManager
 CORREGIDO; nota ECONNREFUSED desde la UI), `IA_ENRIQUECIMIENTO.md` (modo
 "bajo demanda"), `README.md` (launcher sin IA).
 
+### Formalización de objetivos O8/O9 (cierre de sesión)
+
+El usuario recordó un plan previo (puestos recurrentes, guardado de
+aplicados, de-baja por tiempo) y pidió agregarlo a los objetivos, porque no
+conocía el estado actual. Investigación del código:
+
+| Pieza pedida | Estado real |
+|---|---|
+| Guardar los puestos aplicados | ✅ YA existente: tabla `applications` (planned → applied → recruiter_contact → interview → offer; applied_at, next_action_at, notas) + diálogo "Seguimiento" por vacante (ui.py) |
+| Anotar que ya se aplicó | ✅ manual: diálogo de estado ("Aplicada") con skip_automatic=True por defecto → ya excluye de la búsqueda |
+| Categorías de puestos | ❌ no existe ningún campo (solo categorías de REQUISITOS: education/experience/language/license/skill) |
+| Recurrentes vs. ya aplicado | ❌ la republicación nace con ID nuevo; el estado manual del ID viejo NO se arrastra → la copia resucita |
+| De-baja después de un tiempo | ❌ NADA caduca: la búsqueda no filtra por edad ni vigencia; `expires_at` existe pero solo lo llena ANE y `gate.es_vigente` está dormido |
+
+Decisión del usuario (27-10): **puesto recurrente NO sale salvo que el
+usuario decida mostrarlo** (vale también para lo ya aplicado: "solo se
+muestran si el usuario lo desea"); **marcar aplicado siempre es MANUAL**.
+→ Creado objetivo **O8** (O8.1 categorías · O8.2 recurrentes/aplicadas
+ocultas por defecto · O8.3 registro de aplicados ✅ · O8.4 de-baja por
+tiempo) y placeholder **O9** (optimización de UI). Además: O2 gana
+**O2.1** (normalizar locations de Indeed) y **O2.2** (filtro "solo con
+requisitos obligatorios" + columna "Req.", aprobado hace tiempo y
+pospuesto); O6 gana **O6.4** (dedupe semántico del perfil, slugs ES/EN).
+
 ## 2. Decisiones de diseño
 
 1. **Política de servidores bajo demanda**: "solo se detiene lo que la app
@@ -119,12 +151,14 @@ CORREGIDO; nota ECONNREFUSED desde la UI), `IA_ENRIQUECIMIENTO.md` (modo
 | Objetivo | Estado |
 |---|---|
 | O1 Enriquecimiento IA | ✅ **COMPLETO (27-10, 44 min, servidor bajo demanda E2E)**: 125/166; skills 100%, date 100%, region 95.6%, employment_type/languages 95.3%, city 91.9%; work_mode 137 'unknown' (46 basura O5.3 + 91 honestos); salary_raw 117 = fuente sin texto |
-| O2 Afinar la búsqueda | 🟡 **redefinido (data-first)**: completar O1 y ajustar filtros; motor semántico DORMIDO por decisión del usuario |
+| O2 Afinar la búsqueda | 🟡 **redefinido (data-first)**: motor semántico DORMIDO; alcance operativo — **O2.1** normalizar locations de Indeed · **O2.2** filtro "solo con requisitos obligatorios" + columna "Req." (aprobado, estaba pospuesto) |
 | O3 Validar 7 fetchers ATS | ⏳ no iniciado |
 | O4 Calibración gate-vs-IA | ⏳ redefinir (sin gate semántico no tiene contra-qué comparar) |
 | O5 Higiene | 🟢 O5.1 ✅ · **O5.4 ✅ CERRADO (27-10)**: 4/120 republicaciones (huella = descripción) → 4 viejas `dismissed` con nota; INAMU/SALESLAND = plazas múltiples (usuario); queda **O5.3**: ~46 jobs con descripción basura |
-| O6 Perfil candidato | 🟢 O6.1/O6.2 ✅ · sigue O6.3 matching afinado |
+| O6 Perfil candidato | 🟢 O6.1/O6.2 ✅ · sigue O6.3 matching afinado · **O6.4** dedupe semántico del perfil (slugs ES/EN, decisión import vs diálogo) |
 | **O7 Operación UI-first** | ✅ **COMPLETO (2026-10-27)** — falta solo la prueba de humo del usuario |
+| **O8 Ciclo de vida de la vacante** | 🔵 **creado 27-10** (plan previo del usuario): O8.1 categorías ❌ · O8.2 recurrentes+aplicadas OCULTAS por defecto con opt-in (decisión 27-10) · O8.3 registro de aplicados ✅ YA existía · O8.4 de-baja por tiempo ❌ — pendiente decidir ventana (¿60/90 días?) y taxonomía |
+| **O9 Optimización de UI** | ⏳ placeholder — alcances por definir tras O2-redefinido |
 
 ## 4. Pendiente inmediato en la próxima sesión
 
@@ -132,12 +166,15 @@ CORREGIDO; nota ECONNREFUSED desde la UI), `IA_ENRIQUECIMIENTO.md` (modo
    barrido" (Brave abre/cierra solo; de paso refresca las ~46 descripciones
    basura si la sesión ANE vive) → "Enriquecer" (con la BD llena es casi
    instantáneo por caché) → si ANE dice "sin sesión": "Re-login ANE".
-2. **O6.3** (matching afinado) y **O5.3** (re-barrido de los ~46 jobs con
-   descripción basura — login-wall; ahora ~46, creció con el lote nuevo).
-3. **Dedupe semántico del perfil** (slugs ES/EN) — decidir import vs diálogo.
-4. **O2-redefinido** (afinar búsqueda con data completa): normalizar
-   locations crudos de Indeed; filtro/columna de requisitos obligatorios
-   (decisión del usuario: para después); luego optimización de UI.
+2. **O5.3** (re-barrido de los ~46 jobs con descripción basura —
+   login-wall; vía UI).
+3. **O8 Ciclo de vida** (nuevo): comportamientos ya decididos — recurrentes
+   y aplicadas ocultas por defecto, opt-in para verlas; aplicado = manual.
+   Faltan decisiones: ventana de de-baja (¿60/90 días?) y taxonomía O8.1.
+4. **O2-redefinido**: **O2.1** normalizar locations de Indeed · **O2.2**
+   filtro "solo con requisitos obligatorios" + columna "Req.".
+5. **O6.3** matching · **O6.4** dedupe semántico del perfil (import vs
+   diálogo). Luego **O9** (UI, por definir), O3, O4.
 
 ## 5. Cómo retomar (comandos)
 

@@ -125,12 +125,14 @@ def fetch(self, site: dict, *, pages: int, search_text: str | None,
 | Objetivo | Qué es | Estado |
 |---|---|---|
 | **O1** Enriquecimiento IA | Pase IA (Gemma local) llenando huecos: city/region/work_mode/employment_type/salary/skills/languages | ✅ **COMPLETO (27-10, 44 min; O7.3 E2E: servidor subió → pasó → se apagó solo)**. Resultado: skills 100%, date_published 100%, region 95.6%, employment_type 95.3%, languages 95.3%, city 91.9% (residuo = remotos / lat_raw de Indeed sin normalizar), work_mode 53.6% (137 'unknown': 46 basura O5.3 + 91 honestos sin mención), salary_raw 117 = fuente SIN texto salarial (irrecuperable). Los ciclos 2+ son replays de caché (ver gotcha: failed ≠ error) |
-| **O2** Afinar la búsqueda | ~~ATS + gate + ranking semántico~~ **Redefinido por el usuario (2026-10-27): la precisión viene de la data extraída** → completar O1 (huecos) y ajustar filtros/consultas; motor semántico **DORMIDO por decisión** (nicho: texto libre ES↔EN) | 🟡 enfoque data-first · verificado 2026-10-27: `search_engine.py` funcional (EmbeddingGemma gated → fallback `paraphrase-multilingual-mpnet` 768d; similitud ES↔EN correcta) pero **sin cablear**, caché de embeddings vacía; `ats.py`/`gate.py`/`ia_calibracion.py` sin callers ni tests |
+| **O2** Afinar la búsqueda | ~~ATS + gate + ranking semántico~~ **Redefinido por el usuario (2026-10-27): la precisión viene de la data extraída** → completar O1 (huecos). Alcance operativo: **O2.1** normalizar locations crudas de Indeed ("Heredia, Provincia de Heredia" → city/region); **O2.2** filtro UI "solo con requisitos obligatorios" + columna "Req." (aprobado por el usuario, estaba pospuesto); motor semántico **DORMIDO por decisión** (nicho: texto libre ES↔EN) | 🟡 enfoque data-first · verificado 2026-10-27: `search_engine.py` funcional (EmbeddingGemma gated → fallback `paraphrase-multilingual-mpnet` 768d; similitud ES↔EN correcta) pero **sin cablear**, caché de embeddings vacía; `ats.py`/`gate.py`/`ia_calibracion.py` sin callers ni tests |
 | **O3** Fetchers ATS huérfanos | Validar los 7 fetchers ATS (workday, greenhouse, ashby, lever, recruitee, workable, successfactors) con tableros reales | ⏳ no iniciado |
 | **O4** Calibración gate-vs-IA | Pearson/Spearman/MAE + umbral sugerido (`ia_calibracion.py`) | ⏳ depende de O1+O2 |
 | **O5** Higiene de datos | O5.1 ✅ auditoría/huecos · O5.3 re-barrido de los ~14-19 jobs con descripción basura (login-wall) · **O5.4 ✅ CERRADO (2026-10-27)**: análisis por **huella de descripción** (en ANE el título+empresa NO es identidad — "Confidencial"); solo 4/120 del lote 26-10 eran republicaciones → **las 4 viejas marcadas `dismissed` con nota** (parejas 121034/121185, 121026/121184, 121025/121183, 120958/121094), las nuevas quedan activas; grupos misma-empresa+misma-ciudad (INAMU ×3, SALESLAND ×2) = **plazas múltiples, decisión del usuario, intactos**; multi-sede (INAMU 8 ciudades, HIPERMASCOTAS 2 tiendas) = vacantes reales | 🟢 solo queda O5.3 |
-| **O6** Perfil del candidato | O6.1 editor ✅ · O6.2 capa IA de CVs + integración UI ✅ · O6.3 matching afinado (niveles/CEFR/work_authorization) | 🟢 en curso |
+| **O6** Perfil del candidato | O6.1 editor ✅ · O6.2 capa IA de CVs + integración UI ✅ · O6.3 matching afinado (niveles/CEFR/work_authorization) · O6.4 dedupe semántico del perfil (slugs ES/EN del mismo hecho: normalizar al importar vs. decidir en diálogo — pendiente decisión del usuario) | 🟢 en curso |
 | **O7** Operación UI-first (servidores bajo demanda) | La app arranca/detiene lo que necesita; el usuario no toca CLI ni launchers | ✅ **completo (2026-10-27)** |
+| **O8** Ciclo de vida de la vacante | Plan previo del usuario (recordado 2026-10-27; formalizado tras investigar el estado real del código). **O8.1 categorías de puestos** ❌ no existe ningún campo (hoy solo hay categorías de REQUISITOS: education/experience/language/license/skill) → taxonomía nueva (migración 00N) editable en UI, sugerencia IA opcional · **O8.2 recurrentes y aplicadas, OCULTAS por defecto (decisión del usuario 27-10)**: hoy la republicación nace con ID nuevo y el estado manual del ID viejo NO se arrastra (la copia resucita como vacante fresca) → detectar por huella de descripción (criterio O5.4) y ligar el estado del ID viejo para que la copia NO resucite; un puesto recurrente no sale a menos que el usuario decida mostrarlo (filtro opt-in); lo ya aplicado solo se muestra si el usuario lo desea (skip_automatic ya lo oculta; falta el opt-in de vista); marcar aplicado = SIEMPRE manual, sin autodetección · **O8.3 registro de aplicados** ✅ YA EXISTE: estado "Aplicada" en el diálogo de estado (excluye de búsqueda por defecto vía skip_automatic) + tabla `applications` (planned → applied → recruiter_contact → interview → offer, con applied_at + next_action_at + notas) + diálogo Seguimiento por vacante · **O8.4 de-baja automática por tiempo** ❌ NADA caduca: la búsqueda no filtra por edad ni vigencia; `expires_at` existe pero SOLO ANE lo llena y `gate.es_vigente` está dormido (sin callers) → ventana configurable para jobs sin expires_at (60/90 días, por decidir) + respetar el vencimiento ANE | 🔵 creado 2026-10-27 |
+| **O9** Optimización de UI | Ajustes de interfaz pedidos por el usuario y siempre pospuestos — alcances por definir (después de O2-redefinido) | ⏳ placeholder |
 
 **O7 — sub-objetivos (implementados 2026-10-27, tras el barrido fallido desde la UI):**
 
@@ -218,17 +220,22 @@ Pendientes vivos (handoff vigente `docs/HANDOFF_SESION_2026-10-27.md`):
    (Brave abre/cierra solo; de paso refresca las ~46 descripciones basura si
    la sesión ANE vive — si no, "Re-login ANE" primero) → "Enriquecer" (con
    la BD ya llena responde casi instantáneo por caché).
-2. **O6.3**: matching afinado (niveles/CEFR/work_authorization); **O5.3**:
-   re-barrido de los jobs con descripción basura (login-wall) — hoy ~46
-   (creció con el lote nuevo); vía UI.
-3. **Dedupe semántico del perfil**: slugs ES/EN distintos para el mismo hecho —
-   decidir si se normaliza en import o se deja al usuario en el diálogo.
-4. **O2-redefinido (afinar búsqueda)**: candidatos medidos el 27-10 —
-   normalizar locations crudos de Indeed ("Heredia, Provincia de Heredia");
-   filtro/columna de requisitos obligatorios (decisión del usuario: para
-   después); motor semántico DORMIDO. Luego la optimización de UI.
-5. Luego: O3 (validar 7 fetchers ATS), O4 (calibración — redefinir: sin gate
-   semántico no tiene contra-qué comparar).
+2. **O5.3**: re-barrido de los jobs con descripción basura (login-wall) —
+   hoy ~46 (creció con el lote nuevo); vía UI.
+3. **O8 Ciclo de vida de la vacante** (nuevo, 27-10): comportamientos YA
+   decididos — recurrentes y aplicadas OCULTAS por defecto, visibles solo
+   con opt-in del usuario; marcar aplicado = manual. Falta decidir: la
+   ventana de de-baja (O8.4, ¿60/90 días?) y la taxonomía de categorías
+   (O8.1); luego migración + lógica en repository/search + UI.
+4. **O2-redefinido (afinar búsqueda)**: **O2.1** normalizar locations
+   crudos de Indeed ("Heredia, Provincia de Heredia"); **O2.2** filtro
+   "solo con requisitos obligatorios" + columna "Req."; motor semántico
+   DORMIDO.
+5. **O6.3** (matching afinado) · **O6.4** (dedupe semántico del perfil:
+   slugs ES/EN — decidir import vs diálogo).
+6. Luego: **O9** (optimización de UI — alcances por definir), O3 (validar
+   7 fetchers ATS), O4 (calibración — redefinir: sin gate semántico no
+   tiene contra-qué comparar).
 
 ---
 
