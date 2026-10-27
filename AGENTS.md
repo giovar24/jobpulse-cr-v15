@@ -48,7 +48,9 @@ de recuperación). Reglas de oro que resumen todo el documento:
 2. **ANE (ane.cr)**: sesión obligatoria. Sin sesión el barrido se omite limpio
    (no es error). Re-login: `.\.venv\Scripts\python.exe login_ane.py` → re-barrido
    `.\.venv\Scripts\python.exe run_scrapes.py ane` (scripts de la raíz del fork:
-   siempre el python del venv).
+   siempre el python del venv). Ojo: ANE **republica vacantes con IDs nuevos**
+   (re-barridos traen "nuevas" que son republicaciones — revisar con
+   `quality duplicates`, dedupe manual).
 3. **Indeed (cr.indeed.com)**: SSO Google. El popup de alertas de empleo
    intercepta clics — ya resuelto con `_cerrar_popups`; si aparece un popup
    nuevo, agregar su selector en `_POPUP_SELECTORES`.
@@ -123,7 +125,7 @@ python -m pytest tests/ -q
    Efecto neto benigno (idempotente), pero no te sorprendas en los logs.
 6. **A/B de modelos**: usar `tools/comparar_ia.py` (caché aislada + mismos jobs).
 
-## Estado de referencia (2026-10-25 noche; re-verificado 2026-10-26)
+## Estado de referencia (2026-10-26, tras re-barrido ANE)
 
 - Modelo local canónico: **Gemma 4 E2B QAT** (8k ctx, MTP draft, puerto 8081).
   Qwen 3.5 2B descartado: ~6.5x más lento y llena mucho menos (ver
@@ -136,8 +138,12 @@ python -m pytest tests/ -q
   primero; si sugieren < 5 facts se ofrece el pase IA (aviso de privacidad
   si el motor del `.env` es externo; progreso no-modal; datos llegan a
   `_DialogoRevision` para revisión antes de guardar).
-- BD: 175 jobs. Huecos restantes: skills 0, languages 4, city 24, region 13,
-  work_mode 'unknown' 23, salary sin texto en fuente 82 (no extraíble).
+- BD: **295 jobs** (ANE 240 — ojo: 120 viejos + 120 republicadas con IDs
+  nuevos, dedupe manual pendiente; Indeed 30, CINDE 17, LinkedIn 7, Procomer 1).
+  Huecos (crecerán hasta pasar el enriquecimiento): city 38, region 13,
+  work_mode 'unknown' 148, employment_type 120, salary 117, skills 120,
+  languages 124. Análisis: 295/295 hechos (273 requisitos).
 - Perfil: 48 facts (editor CV en `ui_perfil.py`; datos personales y resumen
-  reales ya cargados; `value_code='portfolio'` reservado). Los 4 CVs en
-  `data/usuario/cv/` son material de pruebas (mismo CV en ES/EN).
+  reales ya cargados; `value_code='portfolio'` reservado). Compatibilidad
+  sobre 295: no_required 168, needs_review 109, not_registered 18, matched 0.
+  Los 4 CVs en `data/usuario/cv/` son material de pruebas (mismo CV en ES/EN).

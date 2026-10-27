@@ -64,6 +64,42 @@ def _save_ui_config(config: Dict[str, Any]) -> None:
         pass
 
 
+ENV_PATH = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+    ".env",
+)
+
+
+def _save_env_values(values: Dict[str, str]) -> None:
+    """Actualiza claves del .env del proyecto preservando el resto de l\u00edneas.
+
+    El .env es local (gitignored): aqu\u00ed viven IA_PROVEEDOR/IA_BASE_URL/
+    IA_MODEL/IA_API_KEY. Si una clave no existe se agrega al final.
+    """
+    lineas: list[str] = []
+    if os.path.exists(ENV_PATH):
+        try:
+            with open(ENV_PATH, "r", encoding="utf-8") as f:
+                lineas = f.read().splitlines()
+        except Exception:
+            lineas = []
+    for clave, valor in values.items():
+        valor = str(valor).replace("\r", " ").replace("\n", " ").strip()
+        for i, linea in enumerate(lineas):
+            if linea.strip() == clave or linea.strip().startswith(f"{clave}="):
+                lineas[i] = f"{clave}={valor}"
+                break
+        else:
+            if lineas and lineas[-1].strip():
+                lineas.append("")
+            lineas.append(f"{clave}={valor}")
+    try:
+        with open(ENV_PATH, "w", encoding="utf-8") as f:
+            f.write("\n".join(lineas) + "\n")
+    except OSError:
+        pass
+
+
 class ConfigurationWindow:
     """Ventana modal de configuraci\u00f3n global."""
 
@@ -686,6 +722,39 @@ class ConfigurationWindow:
             )
         except Exception as e:
             messagebox.showerror("Error guardando credencial", str(e), parent=self.window)
+
+    def _save_all(self) -> None:
+        """Guarda la configuraci\u00f3n de todas las pesta\u00f1as.
+
+        IA -> .env del proyecto; UI -> ui_config.json. Las credenciales se
+        guardan aparte con su propio bot\u00f3n (decisi\u00f3n expl\u00edcita del usuario).
+        """
+        try:
+            _save_env_values({
+                "IA_PROVEEDOR": self.ia_provider_var.get(),
+                "IA_BASE_URL": self.ia_base_url_var.get(),
+                "IA_MODEL": self.ia_model_var.get(),
+                "IA_API_KEY": self.ia_api_key_var.get(),
+            })
+        except Exception as exc:
+            messagebox.showerror("Error al guardar IA (.env)", str(exc), parent=self.window)
+            return
+        try:
+            _save_ui_config({
+                "theme": self.ui_theme_var.get(),
+                "font_size": self.ui_font_size_var.get(),
+                "save_geometry": self.ui_save_geom_var.get(),
+                "confirm_exit": self.ui_confirm_exit_var.get(),
+            })
+        except Exception as exc:
+            messagebox.showerror("Error al guardar UI", str(exc), parent=self.window)
+            return
+        messagebox.showinfo(
+            "Guardado",
+            "Configuraci\u00f3n de IA (.env) y de UI guardada.\n"
+            "Las credenciales se guardan con su propio bot\u00f3n.",
+            parent=self.window,
+        )
 
     def close(self) -> None:
         self.window.destroy()

@@ -1677,9 +1677,9 @@ class JobPulseWindow:
         status_label.grid(row=7, column=0, sticky="w", pady=5)
 
         def _ejecutar():
-            sitios_seleccionados = [
-                site_id for site_id, var in site_vars.items() if var.get()
-            ]
+            # Treeview de fuentes: la selección vive en el set `seleccionados`
+            # (el dict site_vars era del viejo diseño con checkboxes).
+            sitios_seleccionados = sorted(seleccionados)
             if not sitios_seleccionados:
                 messagebox.showwarning(
                     "Seleccionar fuente",
