@@ -8,7 +8,7 @@ Objetivo: orientación instantánea sin re-explorar el proyecto.
 ## Al iniciar sesión
 
 1. **Lee el handoff más reciente**: `docs/HANDOFF_SESION_*.md` — estado exacto,
-   objetivos (O1–O7), decisiones y pendiente inmediato.
+   objetivos (O1–O9), decisiones y pendiente inmediato.
 2. Referencia de arquitectura y comparación con el proyecto principal:
    `DESARROLLO_v15.md` (§6 = notas técnicas importantes).
 3. Este es un repo PROPIO e independiente (desde 2026-10-26). El proyecto
@@ -34,7 +34,7 @@ Cuando el usuario dice "vamos a otra sesión":
 | `docs/HANDOFF_SESION_*.md` | Bitácora por sesión (empezar siempre por el más nuevo) |
 | `docs/IA_ENRIQUECIMIENTO.md` | Operación del pase IA: modelo local, caché, depuración |
 | `docs/SITIOS_PROBLEMATICOS.md` | Guía ANE / Indeed / LinkedIn (login-wall, Cloudflare) |
-| `DESARROLLO_v15.md` | Arquitectura vs proyecto principal, objetivos O1–O7 (lista canónica en §3), comandos |
+| `DESARROLLO_v15.md` | Arquitectura vs proyecto principal, objetivos O1–O9 (lista canónica en §3), comandos |
 | `README.md` | Setup equipo nuevo: venv, `pip install -e .`, `init-db`, backup |
 
 ## Scrapers de navegador: ANE, Indeed, LinkedIn
@@ -79,13 +79,11 @@ de recuperación). Reglas de oro que resumen todo el documento:
   servidores locales sin tope por defecto.
 - **Scrapers browser reciben `port` CDP** del caller; el fetcher nunca crea navegador.
 - **Config declarativa**: plataformas/sitios en BD (`init-sources`), no en código.
-- **Dedupe conservador**: `quality duplicates` lista grupos candidatos para
-  revisión manual; nunca automerge (`dup_of` previsto, hoy no existe la
-  columna). ACTUALIZADO (27-10, decisión de usuario por portar O8 desde
-  v1.x): los duplicados EXACTOS (clave empresa|título|ubicación y/o huella
-  de descripción idéntica) se auto-marcan `dup_of` o heredan estado al
-  ingest — cero riesgo, patrón probado en v1.x; lo DUDOSO (similitud media)
-  sigue siendo revisión manual; NUNCA se borran ni se funden datos.
+- **Dedupe conservador** (decisión 27-10, portando O8 de v1.x): duplicado
+  EXACTO (clave empresa|título|ubicación y/o huella de descripción idéntica)
+  se auto-marca `dup_of` / hereda estado al ingest — patrón probado en v1.x;
+  lo DUDOSO (similitud media) lista `quality duplicates` para revisión manual.
+  NUNCA se borra ni se funden datos.
 - **Esquema solo con migraciones**: cambio de BD = archivo nuevo
   `src/jobpulse_v15/migrations/00N_*.sql`; nunca ALTER manual ni editar una
   migración ya aplicada.
@@ -181,7 +179,7 @@ python -m pytest tests/ -q
     "IA extract {campo} fallo tras 3 intentos". Pase 27-10: ciclo 2 con
     "failed=155" resuelto en 1 segundo = puro caché, nada roto.
 
-## Estado de referencia (2026-10-26, tras re-barrido ANE)
+## Estado de referencia (actualizado 2026-10-27 tarde)
 
 - Modelo local canónico: **Gemma 4 E2B QAT** (8k ctx, MTP draft, puerto 8081).
   Qwen 3.5 2B descartado: ~6.5x más lento y llena mucho menos (ver
