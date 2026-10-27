@@ -179,6 +179,12 @@ no el código literal:
    Configuración** (nueva decisión; v1.x no tenía ventana ni pestaña).
 4. Coincidencia DUDOSA (ratio medio) → `quality duplicates` (nunca
    auto): regla conservadora intacta.
+5. **Lo que v1.x NO tenía (el vacío señalado por el usuario)**: el triage
+   MANUAL — marcar a mano revisado/aplicado. Eso YA está en v1.5
+   (`user_job_state` + diálogo de estado + `applications` + Seguimiento):
+   es la mitad nueva. O8 cierra el ciclo conectando ambas mitades: las
+   piezas automáticas portadas alimentan los estados manuales que ya
+   existe (la republicación hereda LO QUE EL USUARIO MARCÓ).
 
 ---
 
