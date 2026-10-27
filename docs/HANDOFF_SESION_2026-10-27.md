@@ -121,6 +121,13 @@ republicaciones; una copia nueva que coincida (huella exacta o ratio ≥
 ~0.92) con algo ya revisado/aplicado HEREDA el estado al ingest (nace
 oculta + nota de herencia; datos intactos, distinto del automerge
 prohibido). Margen incierto → quality duplicates.
+La ocultación de recurrentes NO es perpetua: **ventana temporal definida
+por el usuario en la pestaña de Configuración** (selector 1/2/3/6 meses…,
+decisión del usuario 27-10; ancla = updated_at del estado del original —
+existe en user_job_state): la copia solo hereda estado si el original
+tiene MENOS de la ventana; superada, la copia entra como vacante NUEVA
+(nuevo ciclo, re-aplicable). Default del selector por decidir (prop. 3
+meses).
 → Creado objetivo **O8** (O8.1 categorías · O8.2 recurrentes/aplicadas
 ocultas por defecto · O8.3 registro de aplicados ✅ · O8.4 de-baja por
 tiempo) y placeholder **O9** (optimización de UI). Además: O2 gana
@@ -178,8 +185,10 @@ pospuesto); O6 gana **O6.4** (dedupe semántico del perfil, slugs ES/EN).
 3. **O8 Ciclo de vida** (nuevo): recurrentes y aplicadas ocultas por
    defecto (opt-in para verlas); aplicado = manual; copia republicada
    hereda el estado por compañía + huella de descripción (exacta o ratio
-   ≥ ~0.92; margen incierto → quality duplicates). Faltan decisiones:
-   ventana de de-baja (¿60/90 días?) y taxonomía O8.1.
+   ≥ ~0.92; margen incierto → quality duplicates); ventana temporal
+   configurable en Configuración (1/2/3/6 meses…). Falta decidir: default
+   de la ventana (prop. 3 meses), de-baja de viejos (O8.4) y taxonomía
+   O8.1.
 4. **O2-redefinido**: **O2.1** normalizar locations de Indeed · **O2.2**
    filtro "solo con requisitos obligatorios" + columna "Req.".
 5. **O6.3** matching · **O6.4** dedupe semántico del perfil (import vs
