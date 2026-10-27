@@ -114,6 +114,13 @@ conocía el estado actual. Investigación del código:
 Decisión del usuario (27-10): **puesto recurrente NO sale salvo que el
 usuario decida mostrarlo** (vale también para lo ya aplicado: "solo se
 muestran si el usuario lo desea"); **marcar aplicado siempre es MANUAL**.
+Refinamiento posterior del mismo día (ejemplo Concentrix, 8 vacantes que
+republica constantemente): el match es **por compañía + descripción**, no
+por título — O5.4 mostró 13 coincidencias solo-título que NO eran
+republicaciones; una copia nueva que coincida (huella exacta o ratio ≥
+~0.92) con algo ya revisado/aplicado HEREDA el estado al ingest (nace
+oculta + nota de herencia; datos intactos, distinto del automerge
+prohibido). Margen incierto → quality duplicates.
 → Creado objetivo **O8** (O8.1 categorías · O8.2 recurrentes/aplicadas
 ocultas por defecto · O8.3 registro de aplicados ✅ · O8.4 de-baja por
 tiempo) y placeholder **O9** (optimización de UI). Además: O2 gana
@@ -168,9 +175,11 @@ pospuesto); O6 gana **O6.4** (dedupe semántico del perfil, slugs ES/EN).
    instantáneo por caché) → si ANE dice "sin sesión": "Re-login ANE".
 2. **O5.3** (re-barrido de los ~46 jobs con descripción basura —
    login-wall; vía UI).
-3. **O8 Ciclo de vida** (nuevo): comportamientos ya decididos — recurrentes
-   y aplicadas ocultas por defecto, opt-in para verlas; aplicado = manual.
-   Faltan decisiones: ventana de de-baja (¿60/90 días?) y taxonomía O8.1.
+3. **O8 Ciclo de vida** (nuevo): recurrentes y aplicadas ocultas por
+   defecto (opt-in para verlas); aplicado = manual; copia republicada
+   hereda el estado por compañía + huella de descripción (exacta o ratio
+   ≥ ~0.92; margen incierto → quality duplicates). Faltan decisiones:
+   ventana de de-baja (¿60/90 días?) y taxonomía O8.1.
 4. **O2-redefinido**: **O2.1** normalizar locations de Indeed · **O2.2**
    filtro "solo con requisitos obligatorios" + columna "Req.".
 5. **O6.3** matching · **O6.4** dedupe semántico del perfil (import vs
