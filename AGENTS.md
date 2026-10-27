@@ -219,3 +219,13 @@ python -m pytest tests/ -q
   nota; los grupos INAMU/SALESLAND son plazas múltiples (decisión del
   usuario). Embeddings verificados funcionales y DORMIDOS por decisión del
   usuario (data-first) — ver gotchas 13-14.
+
+- **Sesion 2026-10-27 tarde - cierre O8/O9** (handoff vigente:
+  `HANDOFF_SESION_2026-10-27_tarde.md`): hallazgo - el ciclo de vida
+  EXISTIA resuelto en v1.x (tombstones + `dup_of` + `purge_expired`); lo
+  que v1.x NUNCA tuvo es el triage MANUAL revisado/aplicado (ese es
+  v1.5, ya implementado). Decididos por el usuario: default ventana
+  recurrentes = **3 meses**, retencion puestos = **6 (propuesto)**,
+  categorias O8.1 = borrador generado desde los 295. **NADA de codigo O8
+  aun** - proxima sesion: implementar el plan de 7 pasos que esta en el
+  handoff.
