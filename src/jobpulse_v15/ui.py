@@ -1677,6 +1677,15 @@ class JobPulseWindow:
         dias_var = tk.StringVar(value="30")
         ttk.Entry(opts_frame, textvariable=dias_var, width=10).grid(row=1, column=1, sticky="w", padx=(6, 0))
 
+        # Flujo completo: tras el barrido, analiza (reglas), enriquece (IA)
+        # y muestra las vacantes que coinciden con el perfil del usuario.
+        flujo_completo_var = tk.BooleanVar(value=False)
+        ttk.Checkbutton(
+            opts_frame,
+            text="Flujo completo (analizar → IA → comparar perfil)",
+            variable=flujo_completo_var,
+        ).grid(row=2, column=0, columnspan=2, sticky="w", pady=(8, 0))
+
         # Área de resultados
         ttk.Label(frame, text="Resultado:").grid(row=4, column=0, sticky="nw", pady=5)
         resultado_text = tk.Text(frame, height=10, width=70, wrap="word")
@@ -1904,6 +1913,12 @@ class JobPulseWindow:
                 dialog.after(0, _cargar)
                 dialog.after(0, self.search_jobs)
 
+                # Flujo completo: tras el barrido, seguir con análisis → IA →
+                # comparación con el perfil (paso 1 ya hecho arriba).
+                if flujo_completo_var.get():
+                    status_var.set("Barrido listo. Iniciando análisis → IA...")
+                    self._post_flujo_completo(dialog, resultado_text, status_var)
+
             # Ejecutar en hilo separado para no bloquear la UI
             hilo = threading.Thread(target=_run, daemon=True)
             hilo.start()
@@ -1977,6 +1992,87 @@ class JobPulseWindow:
                     try:
                         mgr.stop_brave_sync()
                         _log("Brave cerrado (lo abrió el login).\n")
+                    except Exception:
+                        pass
+
+        threading.Thread(target=_run, daemon=True).start()
+
+    def _post_flujo_completo(self, dialog, resultado_text, status_var) -> None:
+        """Pasos 2-4 del flujo completo que el usuario pidió (2026-10-28):
+        2) análisis por reglas de TODOS los pendientes, 3) enriquecimiento IA
+        (servidor bajo demanda), 4) comparar con el perfil y mostrar solo las
+        vacantes que coinciden. Corre en hilo propio para no bloquear la UI.
+
+        El paso 1 (obtener datos + ingest) ya ocurrió en el barrido anterior.
+        """
+        import asyncio
+
+        from jobpulse_v15 import ia_enrichment as iae
+        from jobpulse_v15.ia_servidor import asegurar_servidor, servidor_arriba
+
+        def _log(texto: str) -> None:
+            dialog.after(0, lambda t=texto: resultado_text.insert("end", t))
+            dialog.after(0, lambda: resultado_text.see("end"))
+
+        def _run() -> None:
+            servidor = None
+            try:
+                # Paso 2: limpieza/extracción con reglas en TODOS los pendientes
+                _log("\n=== PASO 2: análisis por reglas ===\n")
+                dialog.after(0, lambda: status_var.set("Analizando (reglas)..."))
+                pendientes = self.repository.search_jobs(
+                    review_reason="analysis_missing", limit=10000
+                )
+                _log(f"{len(pendientes)} vacante(s) sin análisis.\n")
+                ok = 0
+                fallos = 0
+                for job in pendientes:
+                    try:
+                        self._analyze_job(str(job["job_id"]))
+                        ok += 1
+                    except (ValueError, sqlite3.Error):
+                        fallos += 1
+                _log(f"Reglas: {ok} analizadas, {fallos} con error.\n")
+
+                # Paso 3: lo que las reglas no resolvieron → enriquecimiento IA
+                _log("\n=== PASO 3: enriquecimiento IA ===\n")
+                dialog.after(0, lambda: status_var.set("Enriqueciendo (IA)..."))
+                if not iae.get_ia_client():
+                    _log("IA no configurada (Configuración → IA); paso omitido.\n")
+                else:
+                    if servidor_arriba():
+                        _log("Servidor IA ya activo (no se toca).\n")
+                    else:
+                        servidor = asegurar_servidor(on_log=_log)
+                    r = asyncio.run(iae.pase_completo(on_event=_log))
+                    if "error" in r:
+                        _log(f"ERROR IA: {r['error']}\n")
+                    else:
+                        _log("Enriquecimiento IA completado.\n")
+
+                # Paso 4: comparar con el perfil y mostrar las que coinciden
+                _log("\n=== PASO 4: comparar con el perfil ===\n")
+                dialog.after(
+                    0, lambda: status_var.set("Comparando con el perfil...")
+                )
+                dialog.after(
+                    0,
+                    lambda: self.profile_compatibility_var.set(
+                        "Coinciden requisitos obligatorios"
+                    ),
+                )
+                dialog.after(0, self.search_jobs)
+                dialog.after(0, lambda: status_var.set("Flujo completo terminado"))
+                _log("Mostrando vacantes que coinciden con tu perfil.\n")
+                _log("=== FLUJO COMPLETO TERMINADO ===\n")
+            except Exception as e:
+                _log(f"\nERROR en el flujo: {e}\n")
+                dialog.after(0, lambda: status_var.set("Error en el flujo"))
+            finally:
+                if servidor is not None:
+                    try:
+                        servidor.detener()
+                        _log("Servidor IA detenido (lo abrió este flujo).\n")
                     except Exception:
                         pass
 

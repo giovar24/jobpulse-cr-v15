@@ -338,7 +338,15 @@ async def verificar_servidor_ia(client: IAClient) -> Optional[str]:
 
 
 def get_ia_client() -> Optional[IAClient]:
-    """Crea cliente IA si está configurado."""
+    """Crea cliente IA si está configurado.
+
+    Carga ``.env`` aquí (y no solo en ``pase_completo``/``run_ia_enrichment``)
+    porque el pre-chequeo de la UI llama a esta función ANTES de entrar al pase:
+    sin esto, el proceso UI (que no hace ``load_dotenv`` al arrancar) veía
+    ``os.getenv('IA_*')`` vacío y mostraba "IA no configurada" aunque el
+    ``.env`` estuviera bien (bug 2026-10-28)."""
+    from dotenv import load_dotenv
+    load_dotenv()
     if not IA_AVAILABLE:
         return None
     try:
