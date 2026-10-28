@@ -161,6 +161,12 @@ def _cmd_init_sources(repository: Repository, args) -> None:
 
     print("\n[OK] Fuentes CR inicializadas. Usa 'jobpulse-v15 site list --enabled-only' para verlas.")
 
+    # Directorio ATS de Costa Rica (los mismos seeds que usa `site seed-cr`).
+    if getattr(args, "ats_cr", False):
+        from jobpulse_v15.seed_ats import registrar_directorio
+
+        registrar_directorio(repository)
+
 
 def main() -> int:
     parser = argparse.ArgumentParser(prog="jobpulse-v15")
@@ -221,6 +227,30 @@ def main() -> int:
         "mark-reviewed", help="Limpiar la bandera de revision manual."
     ).add_argument("--id", required=True)
 
+    site_seed = site_commands.add_parser(
+        "seed-cr",
+        help=(
+            "Registrar el directorio ATS de Costa Rica (tableros Workday, "
+            "Greenhouse, Ashby, Lever, Recruitee, Workable, SuccessFactors)."
+        ),
+    )
+    site_seed.add_argument(
+        "--platform",
+        action="append",
+        default=[],
+        choices=("workday", "greenhouse", "ashby", "lever", "recruitee",
+                 "workable", "successfactors"),
+        help="Restrictir a una plataforma (repetible).",
+    )
+    site_seed.add_argument(
+        "--dry-run", action="store_true", help="Solo mostrar lo que se registraria."
+    )
+    site_seed.add_argument(
+        "--disabled",
+        action="store_true",
+        help="Registrar los tableros pausados (por defecto se activan).",
+    )
+
     # === Bootstrap automático de fuentes Costa Rica ===
     init_sources = commands.add_parser(
         "init-sources",
@@ -240,6 +270,15 @@ def main() -> int:
         "--skip-existing",
         action="store_true",
         help="No registrar plataformas/sitios que ya existan.",
+    )
+    init_sources.add_argument(
+        "--ats-cr",
+        action="store_true",
+        help=(
+            "Tambien registrar el directorio ATS de Costa Rica "
+            "(Workday, Greenhouse, Ashby, Lever, Recruitee, Workable, "
+            "SuccessFactors) desde los seeds empaquetados."
+        ),
     )
 
     # === Credenciales y Login ===
@@ -723,6 +762,26 @@ def main() -> int:
                 if not repository.mark_site_reviewed(args.id):
                     parser.error(f"No existe el sitio {args.id!r}.")
                 print(f"Sitio {args.id}: revision marcada como resuelta.")
+            elif args.command == "site" and args.site_command == "seed-cr":
+                from jobpulse_v15.seed_ats import registrar_directorio
+
+                stats = registrar_directorio(
+                    repository,
+                    args.platform or None,
+                    enabled=not args.disabled,
+                    dry_run=args.dry_run,
+                )
+                for site_id in stats["registrados"]:
+                    print(f"Sitio registrado: {site_id}")
+                for site_id, motivo in stats["omitidos"]:
+                    print(f"Omitido: {site_id} ({motivo})")
+                print(
+                    f"[OK] {len(stats['registrados'])} registrado(s), "
+                    f"{len(stats['omitidos'])} omitido(s) "
+                    f"de {stats['tableros']} tablero(s)"
+                    + (" [dry-run]" if stats.get("dry_run") else "")
+                    + "."
+                )
             elif args.command == "init-sources":
                 _cmd_init_sources(repository, args)
             elif args.command == "run" and args.run_command == "start":

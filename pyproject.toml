@@ -40,3 +40,7 @@ package-dir = {"" = "src"}
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+# Directorio ATS CR (seeds versionados; la config final vive en la BD).
+[tool.setuptools.package-data]
+jobpulse_v15 = ["seeds/*.json"]

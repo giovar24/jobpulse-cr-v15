@@ -2280,6 +2280,12 @@ class SourceManagerWindow:
             command=self.open_add_successfactors,
         )
         self.add_successfactors_button.pack(side="left", padx=(8, 0))
+        self.seed_ats_button = ttk.Button(
+            actions,
+            text="Importar directorio ATS (CR)",
+            command=self.importar_directorio_ats,
+        )
+        self.seed_ats_button.pack(side="left", padx=(8, 0))
         self.toggle_button = ttk.Button(
             actions, text="Activar / pausar", command=self.toggle_selected
         )
@@ -2492,6 +2498,55 @@ class SourceManagerWindow:
         self.refresh()
         self.sites_table.selection_set(site["site_id"])
         self._update_action_state()
+
+    def importar_directorio_ats(self) -> None:
+        """Registra el directorio ATS de Costa Rica (seed_ats) en la BD.
+
+        Idempotente: los tableros ya registrados (por base_url) se omiten.
+        """
+        if not messagebox.askyesno(
+            "Importar directorio ATS (CR)",
+            "Registra los tableros de empleo del directorio de Costa Rica\n"
+            "(Workday, Greenhouse, Ashby, Lever, Recruitee, Workable y\n"
+            "SuccessFactors; ~100 tableros) como fuentes del sistema.\n\n"
+            "Los tableros ya registrados no se modifican.\n\n"
+            "\u00bfContinuar?",
+            parent=self.window,
+        ):
+            return
+        self.seed_ats_button.configure(state="disabled")
+        try:
+            from jobpulse_v15.seed_ats import registrar_directorio
+
+            stats = registrar_directorio(self.repository)
+        except (sqlite3.Error, ValueError) as exc:
+            self.seed_ats_button.configure(state="normal")
+            messagebox.showerror(
+                "No se pudo importar el directorio", str(exc), parent=self.window
+            )
+            return
+        self.seed_ats_button.configure(state="normal")
+        self.refresh()
+
+        registrados = stats["registrados"]
+        omitidos = stats["omitidos"]
+        detalle = f"Tableros registrados: {len(registrados)}"
+        if omitidos:
+            detalle += f"\nOmitidos (ya existian o dieron error): {len(omitidos)}"
+            muestra = "\n".join(
+                f"  - {site_id}: {motivo}" for site_id, motivo in omitidos[:5]
+            )
+            if len(omitidos) > 5:
+                muestra += f"\n  ... y {len(omitidos) - 5} mas"
+            detalle += f"\n{muestra}"
+        if registrados:
+            primero = registrados[0]
+            self.sites_table.selection_set(primero)
+            self.sites_table.see(primero)
+        self._update_action_state()
+        messagebox.showinfo(
+            "Directorio ATS importado", detalle, parent=self.window
+        )
 
     def open_add_workday(self) -> None:
         dialog = tk.Toplevel(self.window)

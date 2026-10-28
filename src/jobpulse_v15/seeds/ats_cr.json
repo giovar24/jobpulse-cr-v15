@@ -1,0 +1,404 @@
+[
+ {
+  "platform": "ashby",
+  "company": "jbs-dev",
+  "board_url": "https://jobs.ashbyhq.com/jbs-dev",
+  "total_cr": 3
+ },
+ {
+  "platform": "ashby",
+  "company": "greenlight-workforce-solutions",
+  "board_url": "https://jobs.ashbyhq.com/greenlight-workforce-solutions",
+  "total_cr": 1
+ },
+ {
+  "platform": "ashby",
+  "company": "mimica",
+  "board_url": "https://jobs.ashbyhq.com/mimica",
+  "total_cr": 1
+ },
+ {
+  "platform": "ashby",
+  "company": "mindvalley",
+  "board_url": "https://jobs.ashbyhq.com/mindvalley",
+  "total_cr": 1
+ },
+ {
+  "platform": "ashby",
+  "company": "owner",
+  "board_url": "https://jobs.ashbyhq.com/owner",
+  "total_cr": 1
+ },
+ {
+  "platform": "ashby",
+  "company": "possible-finance",
+  "board_url": "https://jobs.ashbyhq.com/possible-finance",
+  "total_cr": 1
+ },
+ {
+  "platform": "ashby",
+  "company": "rehire",
+  "board_url": "https://jobs.ashbyhq.com/rehire",
+  "total_cr": 1
+ },
+ {
+  "platform": "greenhouse",
+  "company": "smartsheet",
+  "board_url": "https://job-boards.greenhouse.io/smartsheet",
+  "total_cr": 7
+ },
+ {
+  "platform": "greenhouse",
+  "company": "zuora",
+  "board_url": "https://job-boards.greenhouse.io/zuora",
+  "total_cr": 2
+ },
+ {
+  "platform": "greenhouse",
+  "company": "12jlkfsk",
+  "board_url": "https://job-boards.greenhouse.io/12jlkfsk",
+  "total_cr": 1
+ },
+ {
+  "platform": "greenhouse",
+  "company": "fivetran",
+  "board_url": "https://job-boards.greenhouse.io/fivetran",
+  "total_cr": 1
+ },
+ {
+  "platform": "greenhouse",
+  "company": "nayya",
+  "board_url": "https://job-boards.greenhouse.io/nayya",
+  "total_cr": 1
+ },
+ {
+  "platform": "greenhouse",
+  "company": "storyblok",
+  "board_url": "https://job-boards.greenhouse.io/storyblok",
+  "total_cr": 1
+ },
+ {
+  "platform": "greenhouse",
+  "company": "thinkacademyus",
+  "board_url": "https://job-boards.greenhouse.io/thinkacademyus",
+  "total_cr": 1
+ },
+ {
+  "platform": "greenhouse",
+  "company": "torq",
+  "board_url": "https://job-boards.greenhouse.io/torq",
+  "total_cr": 1
+ },
+ {
+  "platform": "lever",
+  "company": "westernacher",
+  "board_url": "https://jobs.eu.lever.co/westernacher",
+  "total_cr": 4
+ },
+ {
+  "platform": "lever",
+  "company": "omnidian",
+  "board_url": "https://jobs.lever.co/omnidian",
+  "total_cr": 1
+ },
+ {
+  "platform": "lever",
+  "company": "sysdig",
+  "board_url": "https://jobs.lever.co/sysdig",
+  "total_cr": 1
+ },
+ {
+  "platform": "recruitee",
+  "company": "primeworks",
+  "board_url": "https://primeworks.recruitee.com",
+  "total_cr": 1
+ },
+ {
+  "platform": "recruitee",
+  "company": "pur",
+  "board_url": "https://pur.recruitee.com",
+  "total_cr": 1
+ },
+ {
+  "platform": "workable",
+  "company": "huzzle",
+  "board_url": "https://apply.workable.com/huzzle",
+  "total_cr": 56
+ },
+ {
+  "platform": "workable",
+  "company": "clients-blackbox-inc",
+  "board_url": "https://apply.workable.com/clients-blackbox-inc",
+  "total_cr": 32
+ },
+ {
+  "platform": "workable",
+  "company": "cynet-corp",
+  "board_url": "https://apply.workable.com/cynet-corp",
+  "total_cr": 10
+ },
+ {
+  "platform": "workable",
+  "company": "dacodes-mx",
+  "board_url": "https://apply.workable.com/dacodes-mx",
+  "total_cr": 6
+ },
+ {
+  "platform": "workable",
+  "company": "commercial-lending",
+  "board_url": "https://apply.workable.com/commercial-lending",
+  "total_cr": 5
+ },
+ {
+  "platform": "workable",
+  "company": "freedup",
+  "board_url": "https://apply.workable.com/freedup",
+  "total_cr": 5
+ },
+ {
+  "platform": "workable",
+  "company": "elvtrcom",
+  "board_url": "https://apply.workable.com/elvtrcom",
+  "total_cr": 4
+ },
+ {
+  "platform": "workable",
+  "company": "crewbloom",
+  "board_url": "https://apply.workable.com/crewbloom",
+  "total_cr": 3
+ },
+ {
+  "platform": "workable",
+  "company": "crystalia-glass",
+  "board_url": "https://apply.workable.com/crystalia-glass",
+  "total_cr": 3
+ },
+ {
+  "platform": "workable",
+  "company": "bask-health-1",
+  "board_url": "https://apply.workable.com/bask-health-1",
+  "total_cr": 2
+ },
+ {
+  "platform": "workable",
+  "company": "c-serv",
+  "board_url": "https://apply.workable.com/c-serv",
+  "total_cr": 2
+ },
+ {
+  "platform": "workable",
+  "company": "community-sports-partners",
+  "board_url": "https://apply.workable.com/community-sports-partners",
+  "total_cr": 2
+ },
+ {
+  "platform": "workable",
+  "company": "freelance-latin-america",
+  "board_url": "https://apply.workable.com/freelance-latin-america",
+  "total_cr": 2
+ },
+ {
+  "platform": "workable",
+  "company": "goglobal",
+  "board_url": "https://apply.workable.com/goglobal",
+  "total_cr": 2
+ },
+ {
+  "platform": "workable",
+  "company": "gramian",
+  "board_url": "https://apply.workable.com/gramian",
+  "total_cr": 2
+ },
+ {
+  "platform": "workable",
+  "company": "cloudfactory",
+  "board_url": "https://apply.workable.com/cloudfactory",
+  "total_cr": 1
+ },
+ {
+  "platform": "workable",
+  "company": "creativechaos",
+  "board_url": "https://apply.workable.com/creativechaos",
+  "total_cr": 1
+ },
+ {
+  "platform": "workable",
+  "company": "cxg",
+  "board_url": "https://apply.workable.com/cxg",
+  "total_cr": 1
+ },
+ {
+  "platform": "workable",
+  "company": "geeks-on-site",
+  "board_url": "https://apply.workable.com/geeks-on-site",
+  "total_cr": 1
+ },
+ {
+  "platform": "workable",
+  "company": "hireframe",
+  "board_url": "https://apply.workable.com/hireframe",
+  "total_cr": 1
+ },
+ {
+  "platform": "workable",
+  "company": "hustler-marketing",
+  "board_url": "https://apply.workable.com/hustler-marketing",
+  "total_cr": 1
+ },
+ {
+  "platform": "workable",
+  "company": "jove",
+  "board_url": "https://apply.workable.com/jove",
+  "total_cr": 1
+ },
+ {
+  "platform": "workable",
+  "company": "lago-1",
+  "board_url": "https://apply.workable.com/lago-1",
+  "total_cr": 22
+ },
+ {
+  "platform": "workable",
+  "company": "openfn",
+  "board_url": "https://apply.workable.com/openfn",
+  "total_cr": 1
+ },
+ {
+  "platform": "workable",
+  "company": "pairedrecruiting",
+  "board_url": "https://apply.workable.com/pairedrecruiting",
+  "total_cr": 2
+ },
+ {
+  "platform": "workable",
+  "company": "pavago",
+  "board_url": "https://apply.workable.com/pavago",
+  "total_cr": 230
+ },
+ {
+  "platform": "workable",
+  "company": "pearltalent",
+  "board_url": "https://apply.workable.com/pearltalent",
+  "total_cr": 2
+ },
+ {
+  "platform": "workable",
+  "company": "reallygreatteachers",
+  "board_url": "https://apply.workable.com/reallygreatteachers",
+  "total_cr": 2
+ },
+ {
+  "platform": "workable",
+  "company": "remote-talent-latam",
+  "board_url": "https://apply.workable.com/remote-talent-latam",
+  "total_cr": 3
+ },
+ {
+  "platform": "workable",
+  "company": "remotepass",
+  "board_url": "https://apply.workable.com/remotepass",
+  "total_cr": 1
+ },
+ {
+  "platform": "workable",
+  "company": "shadow-light-studios",
+  "board_url": "https://apply.workable.com/shadow-light-studios",
+  "total_cr": 1
+ },
+ {
+  "platform": "workable",
+  "company": "sidekicktool",
+  "board_url": "https://apply.workable.com/sidekicktool",
+  "total_cr": 1
+ },
+ {
+  "platform": "workable",
+  "company": "supportyourapp",
+  "board_url": "https://apply.workable.com/supportyourapp",
+  "total_cr": 2
+ },
+ {
+  "platform": "workable",
+  "company": "surglobal",
+  "board_url": "https://apply.workable.com/surglobal",
+  "total_cr": 5
+ },
+ {
+  "platform": "workable",
+  "company": "toloka-ai",
+  "board_url": "https://apply.workable.com/toloka-ai",
+  "total_cr": 4
+ },
+ {
+  "platform": "workable",
+  "company": "trivium",
+  "board_url": "https://apply.workable.com/trivium",
+  "total_cr": 1
+ },
+ {
+  "platform": "workable",
+  "company": "tyk-technologies",
+  "board_url": "https://apply.workable.com/tyk-technologies",
+  "total_cr": 1
+ },
+ {
+  "platform": "workable",
+  "company": "uptalent-dot-i-o",
+  "board_url": "https://apply.workable.com/uptalent-dot-i-o",
+  "total_cr": 53
+ },
+ {
+  "platform": "workable",
+  "company": "utopia-life-worth-living",
+  "board_url": "https://apply.workable.com/utopia-life-worth-living",
+  "total_cr": 11
+ },
+ {
+  "platform": "workable",
+  "company": "valatam",
+  "board_url": "https://apply.workable.com/valatam",
+  "total_cr": 3
+ },
+ {
+  "platform": "workable",
+  "company": "visit",
+  "board_url": "https://apply.workable.com/visit",
+  "total_cr": 1
+ },
+ {
+  "platform": "workable",
+  "company": "wecloneyou",
+  "board_url": "https://apply.workable.com/wecloneyou",
+  "total_cr": 3
+ },
+ {
+  "platform": "workable",
+  "company": "winning-assistants",
+  "board_url": "https://apply.workable.com/winning-assistants",
+  "total_cr": 3
+ },
+ {
+  "platform": "workable",
+  "company": "workana-premium",
+  "board_url": "https://apply.workable.com/workana-premium",
+  "total_cr": 6
+ },
+ {
+  "platform": "workable",
+  "company": "zicasso",
+  "board_url": "https://apply.workable.com/zicasso",
+  "total_cr": 2
+ },
+ {
+  "platform": "workable",
+  "company": "zipdev",
+  "board_url": "https://apply.workable.com/zipdev",
+  "total_cr": 3
+ },
+ {
+  "platform": "recruitee",
+  "company": "transperfect",
+  "board_url": "https://transperfect.recruitee.com",
+  "total_cr": 1
+ }
+]
