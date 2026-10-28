@@ -217,6 +217,12 @@ python -m pytest tests/ -q
   `src/jobpulse_v15/seeds/*.json` (idempotente, `site seed-cr` / `init-sources
   --ats-cr` / botón "Importar directorio ATS (CR)" en Fuentes). Verificado:
   primer job Workday/Intel scrapeado hoy.
+- **Objetivo O3 — Scraping masivo ATS**: barrer **todos los 122 tableros** del
+  directorio (7 fetchers: workday, greenhouse, ashby, lever, recruitee,
+  workable, successfactors) en una corrida. El directorio ya está sembrado y
+  activo; los fetchers existen pero no han sido validados en producción salvo
+  Workday. Siguiente paso: ejecutar `run_scrapes.py` o UI "Corrida" con los
+  sitios ATS habilitados y confirmar ingesta sin errores en los 7 proveedores.
 - Embeddings verificados funcionales y **DORMIDOS** por decisión del usuario
   (data-first) — ver gotchas 13-14.
 - Pendiente O8: O8.1 categorías borrador (`tools/categorias_borrador.py`),
