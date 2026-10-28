@@ -224,7 +224,7 @@ class BraveManager:
 
 # Plataformas cuyos fetchers necesitan un navegador con CDP vivo.
 # Fuente única para la UI (barrido, O7.2) y para tests.
-PLATAFORMAS_NAVEGADOR = frozenset({"ane", "indeed", "linkedin"})
+PLATAFORMAS_NAVEGADOR = frozenset({"ane", "indeed", "linkedin", "elempleo"})
 
 
 def cdp_vivo(port: int = 9222, host: str = "127.0.0.1", timeout: float = 0.5) -> bool:

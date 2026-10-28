@@ -28,6 +28,7 @@ from jobpulse_v15 import ciclo_vida
 from jobpulse_v15.ciclo_vida import preferencias as preferencias_ciclo_vida
 from jobpulse_v15.cinde import CindeFetcher
 from jobpulse_v15.db import Database
+from jobpulse_v15.elempleo import ElempleoFetcher
 from jobpulse_v15.exports import (
     PROFILE_COMPATIBILITY_LABELS,
     write_job_search_csv,
@@ -1754,6 +1755,7 @@ class JobPulseWindow:
                     "recruitee": RecruiteeFetcher(),
                     "successfactors": SuccessFactorsFetcher(),
                     "workable": WorkableFetcher(),
+                    "elempleo": ElempleoFetcher(),
                 }
 
                 total_offers = 0

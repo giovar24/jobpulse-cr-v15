@@ -217,9 +217,12 @@ python -m pytest tests/ -q
   `harvie-cr` registrado. API JSON `https://heyharvie.com/api/candidate/jobs`
   (paginado), 192 jobs CR importados (Lagar, Grupo El Lagar, Grupo Sur Química,
   etc.). `work_mode` detectado via campo `workplace` (on-site/remote/hybrid).
-- **elempleo.com/cr/** — analizado: **requiere browser automation** (Playwright).
-  No hay API JSON pública; HTML renderizado client-side con JS pesado
-  (NewRelic, GTM, Prebid). Igual que ANE/Indeed/LinkedIn.
+- **Nueva fuente O3: Elempleo (commit actual)** — `elempleo.py` + sitio
+  `elempleo-cr` registrado. Browser automation via Playwright CDP
+  (iguala a ANE/Indeed/LinkedIn). Selectores: `.result-item` (cards),
+  `data-url` para detalle, `h2.item-title.ee-mod a.js-offer-title` (título),
+  `.item-company a` (empresa). Detalle extrae: ubicación, modalidad
+  (`work_mode`), tipo empleo, fecha, descripción, requisitos, salario.
 - Sub-objetivo O3.x — Gestión tableros en Configuración/Fuentes: activar/pausar
   individual, filtrar por plataforma.
 - Embeddings verificados funcionales y **DORMIDOS** (data-first) — gotchas 13-14.

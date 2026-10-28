@@ -127,7 +127,7 @@ class TestCdpYAsegurar(unittest.TestCase):
         mgr.stop_brave_sync()  # sin proceso: no debe fallar
 
     def test_plataformas_navegador_conocidas(self):
-        self.assertEqual(set(bm.PLATAFORMAS_NAVEGADOR), {"ane", "indeed", "linkedin"})
+        self.assertEqual(set(bm.PLATAFORMAS_NAVEGADOR), {"ane", "indeed", "linkedin", "elempleo"})
 
 
 if __name__ == "__main__":
