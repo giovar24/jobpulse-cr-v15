@@ -179,7 +179,7 @@ python -m pytest tests/ -q
     "IA extract {campo} fallo tras 3 intentos". Pase 27-10: ciclo 2 con
     "failed=155" resuelto en 1 segundo = puro caché, nada roto.
 
-## Estado de referencia (actualizado 2026-10-27 tarde)
+## Estado de referencia (actualizado 2026-10-28)
 
 - Modelo local canónico: **Gemma 4 E2B QAT** (8k ctx, MTP draft, puerto 8081).
   Qwen 3.5 2B descartado: ~6.5x más lento y llena mucho menos (ver
@@ -192,39 +192,34 @@ python -m pytest tests/ -q
   primero; si sugieren < 5 facts se ofrece el pase IA (aviso de privacidad
   si el motor del `.env` es externo; progreso no-modal; datos llegan a
   `_DialogoRevision` para revisión antes de guardar).
-- BD: **295 jobs** (ANE 240 = 120 lote 25-10 + 120 lote 26-10 — el lote nuevo
-  es casi todo NUEVO: **solo 4 republicaciones** con desc. idéntica + fecha
-  movida; las 4 VIEJAS quedan `dismissed` con nota desde el 27-10, las 4
-  nuevas activas. Los grupos misma-empresa+misma-ciudad (INAMU, SALESLAND)
-  son plazas múltiples por decisión del usuario. En ANE la identidad real es
-  la DESCRIPCIÓN, no el título+empresa ("Confidencial"). Indeed 30,
-  CINDE 17, LinkedIn 7, Procomer 1).
-  Enriquecimiento COMPLETO (27-10, O1 ✅): city faltan 24 (mayoría remotos o
-  lat_raw de Indeed sin normalizar), region 13, work_mode 'unknown' 137
-  (46 basura O5.3 + 91 honestos sin mención), employment_type 14, skills 0,
-  languages 14 (10 basura), salary_raw 117 = fuente sin texto (irrecuperable).
-  Análisis: 295/295 hechos (273 requisitos).
+- **BD: 396 jobs** (ANE 332 = 120 lote 25-10 + 120 lote 26-10 + 92 lote 27-10;
+  Indeed 36; CINDE 17; LinkedIn 9; Procomer 1; Workday/Intel 1 — primer scrape
+  E2E del directorio ATS). Republicaciones ANE curadas:
+  - 7 `dismissed` (4 de O5.4 + 3 intermedias 27-10) con nota + `dup_of` al nuevo.
+  - 3 cadenas confirmadas: descripción 100% idéntica, solo fecha movida (23→26→27).
+  - 2 grupos con descripción DIFERENTE (Montacarguista, otro) = plazas múltiples,
+    quedan para revisión manual (`quality duplicates`).
+  - O8.2 `dup_of` + `skip_automatic` en `user_job_state` listo; herencia solo
+    dispara contra `reviewed`/`applied` manuales (aún 0).
+  Enriquecimiento: 273 requisitos extraídos; 127 jobs sin `job_analysis`
+  (lote nuevo + ATS); skills/languages/city/region con huecos recuperables.
 - Perfil: 48 facts (editor CV en `ui_perfil.py`; datos personales y resumen
-  reales ya cargados; `value_code='portfolio'` reservado). Compatibilidad
-  sobre 295: no_required 168, needs_review 109, not_registered 18, matched 0.
-  Los 4 CVs en `data/usuario/cv/` son material de pruebas (mismo CV en ES/EN).
-- **Sesión 2026-10-27 (O7 + O5.4 + O1)**: flujo UI-first — el barrido de la
-  UI abre/cierra Brave; botones "Enriquecer" (servidor IA bajo demanda,
-  validado E2E: subió → 44 min de pase → se apagó solo) y "Re-login ANE";
-  el launcher ya no pre-arranca la IA. Suite: 244 tests. O5.4 cerrado: solo
-  4/120 del lote nuevo eran republicaciones (la huella en ANE es la
-  DESCRIPCIÓN, no título+empresa); las 4 viejas quedaron `dismissed` con
-  nota; los grupos INAMU/SALESLAND son plazas múltiples (decisión del
-  usuario). Embeddings verificados funcionales y DORMIDOS por decisión del
-  usuario (data-first) — ver gotchas 13-14.
-
-- **Sesion 2026-10-27 noche - O8.2 implementado** (commits `76483e5`..`333040c`):
-  migracion 008 (`dup_of`), `ciclo_vida.py` (huella descripcion + clave
-  exacta + herencia + preferencias), herencia best-effort en ingest, pestaña
-  "Vacantes" en Configuracion (fix load-merge-save de ui_config), tablero con
-  `solo_vigentes` (~232/295 visibles; 63 vencidas por expires_at ocultas, no
-  borradas). Bug pillado por la suite: NULL-trap en la condicion de vigencia
-  (job sin fechas = invisible) -> `NOT COALESCE(...,0)`. Suite: **264 tests**
-  (244 + 20). Pendiente O8: O8.1 categorias borrador, prueba de humo del
-  usuario, confirmar default retencion (6 meses), smoke de herencia con
-  republicacion real de ANE.
+  reales ya cargados; `value_code='portfolio'` reservado). Los 4 CVs en
+  `data/usuario/cv/` son material de pruebas (mismo CV en ES/EN).
+- **O7 UI-first completo (2026-10-28, commit `28ef1f2`)**: flujo **scrape →
+  analizar (reglas) → IA → comparar perfil** en un click desde la UI.
+  Checkbox **"Flujo completo (analizar → IA → comparar perfil)"** en el
+  diálogo de Corrida; el botón "Enriquecer" arranca el servidor IA bajo
+  demanda (validado E2E: subió → pase → se apagó solo); "Re-login ANE" abre
+  Brave solo si hace falta. Suite: **274 tests** (264 + 10 `test_seed_ats`).
+- **O3 ATS CR directorio versionado (commit `a9083a7`)**: 122 tableros
+  (Workday, Greenhouse, Ashby, Lever, Recruitee, Workable, SuccessFactors) en
+  `src/jobpulse_v15/seeds/*.json` (idempotente, `site seed-cr` / `init-sources
+  --ats-cr` / botón "Importar directorio ATS (CR)" en Fuentes). Verificado:
+  primer job Workday/Intel scrapeado hoy.
+- Embeddings verificados funcionales y **DORMIDOS** por decisión del usuario
+  (data-first) — ver gotchas 13-14.
+- Pendiente O8: O8.1 categorías borrador (`tools/categorias_borrador.py`),
+  prueba de humo del usuario, confirmar default retención (6 meses propuesto),
+  smoke de herencia con republicación real de ANE (requiere marcar
+  `reviewed`/`applied` primero).
