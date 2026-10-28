@@ -223,6 +223,12 @@ python -m pytest tests/ -q
   activo; los fetchers existen pero no han sido validados en producción salvo
   Workday. Siguiente paso: ejecutar `run_scrapes.py` o UI "Corrida" con los
   sitios ATS habilitados y confirmar ingesta sin errores en los 7 proveedores.
+  - **Sub-objetivo O3.x — Gestión de tableros ATS en Configuración**: los 122
+    tableros se registran como sitios normales (`source_sites`); la ventana
+    **Fuentes** (accesible desde la pestaña Configuración) ya permite
+    **activar/pausar individualmente** cada tablero, filtrar por plataforma,
+    y ver su estado. Esto permite desactivar los que fallen o sean ruidosos
+    sin tocar código ni BD a mano.
 - Embeddings verificados funcionales y **DORMIDOS** por decisión del usuario
   (data-first) — ver gotchas 13-14.
 - Pendiente O8: O8.1 categorías borrador (`tools/categorias_borrador.py`),
