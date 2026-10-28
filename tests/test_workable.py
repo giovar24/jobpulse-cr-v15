@@ -27,74 +27,103 @@ class TestWorkableFetcher(unittest.TestCase):
             "site_config": {"country_query": "Costa Rica"},
         }
 
-    def test_fetch_maps_public_board_response_to_ingestion_format(self):
-        posting = {
-            "shortcode": "A1B2C3",
-            "title": "Software Engineer",
-            "url": "https://apply.workable.com/acme/j/A1B2C3/",
-            "published_on": "2026-10-20T10:30:00+00:00",
-            "description": "<p>Build <b>reliable</b> systems.</p>",
-            "requirements": "<p>Fluent English required.</p>",
-            "type": "Full-time",
-            "telecommuting": False,
-            "location": {
-                "city": "San Jose",
-                "region": "San Jose",
-                "country": "Costa Rica",
-            },
-        }
-        with patch.object(
-            self.fetcher, "_request_json", return_value={"jobs": [posting]}
-        ) as request:
+    def test_fetch_maps_markdown_board_response_to_ingestion_format(self):
+        # Mock the main jobs.md table
+        list_md = """# Acme — All Open Positions
+
+| Title | Department | Location | Type | Salary | Posted | Details |
+|-------|-----------|----------|------|--------|--------|---------|
+| Software Engineer | Engineering | San Jose, Costa Rica (Remote) | Full-time | — | 2026-10-20 | [View](https://apply.workable.com/acme/jobs/view/A1B2C3.md) |
+"""
+        # Mock the detail page
+        detail_md = """# Software Engineer
+
+> Acme · San Jose, Costa Rica (Remote) · Full-time · Posted 2026-10-20
+
+**Workplace:** remote
+
+**Department:** Engineering
+
+## Description
+
+**About the Role**
+
+Build **reliable** systems.
+
+## Requirements
+
+Fluent English required.
+
+## Apply
+
+[Apply at Acme](https://apply.workable.com/acme/j/A1B2C3/apply)
+
+---
+Powered by [Workable](https://www.workable.com)
+"""
+
+        def mock_request_text(url):
+            if url.endswith("/jobs.md"):
+                return list_md
+            elif "/jobs/view/" in url:
+                return detail_md
+            raise AssertionError(f"Unexpected URL: {url}")
+
+        with patch.object(self.fetcher, "_request_text", side_effect=mock_request_text):
             offers = self.fetcher.fetch(self.site)
 
-        request.assert_called_once_with(
-            "https://apply.workable.com/api/v1/accounts/acme/jobs?details=true"
-        )
         self.assertEqual(len(offers), 1)
         self.assertEqual(offers[0]["source_job_id"], "A1B2C3")
         self.assertEqual(offers[0]["job"]["job_id"], "workable-acme-A1B2C3")
         self.assertEqual(offers[0]["job"]["company"], "Acme")
-        self.assertEqual(
-            offers[0]["job"]["location_raw"], "San Jose, San Jose, Costa Rica"
-        )
-        self.assertEqual(offers[0]["job"]["work_mode"], "unknown")
+        self.assertEqual(offers[0]["job"]["location_raw"], "San Jose, Costa Rica (Remote)")
+        self.assertEqual(offers[0]["job"]["work_mode"], "remote")
         self.assertEqual(offers[0]["job"]["employment_type"], "Full-time")
         self.assertEqual(offers[0]["job"]["date_published"], "2026-10-20")
-        self.assertEqual(
-            offers[0]["job"]["description_raw"],
-            "Build reliable systems. Fluent English required.",
-        )
-        self.assertEqual(offers[0]["raw_payload"], posting)
+        self.assertIn("Build reliable systems", offers[0]["job"]["description_raw"])
+        self.assertIn("Fluent English required", offers[0]["job"]["description_raw"])
 
     def test_fetch_filters_countries_deduplicates_and_counts_manual_skips(self):
-        postings = [
-            {
-                "shortcode": 1,
-                "title": "Analyst Costa Rica",
-                "location": {"city": "Toronto", "country": "Canada"},
-            },
-            {
-                "shortcode": 2,
-                "title": "Engineer",
-                "telecommuting": True,
-                "location": {"city": "Remote", "country": "Costa Rica"},
-            },
-            {
-                "shortcode": 2,
-                "title": "Duplicate",
-                "location": {"city": "San Jose", "country": "Costa Rica"},
-            },
-        ]
-        with patch.object(
-            self.fetcher, "_request_json", return_value={"jobs": postings}
-        ):
-            offers = self.fetcher.fetch(self.site, skip_source_job_ids={"2"})
+        list_md = """# Acme — All Open Positions
 
-        self.assertEqual([offer["source_job_id"] for offer in offers], ["1"])
-        self.assertEqual(offers.jobs_skipped, 1)
+| Title | Department | Location | Type | Salary | Posted | Details |
+|-------|-----------|----------|------|--------|--------|---------|
+| Analyst Toronto | Finance | Toronto, Canada | Full-time | — | 2026-10-20 | [View](https://apply.workable.com/acme/jobs/view/JOB1.md) |
+| Engineer | Engineering | Remote, Costa Rica | Full-time | — | 2026-10-20 | [View](https://apply.workable.com/acme/jobs/view/JOB2.md) |
+| Duplicate | Engineering | San Jose, Costa Rica | Full-time | — | 2026-10-20 | [View](https://apply.workable.com/acme/jobs/view/JOB2.md) |
+"""
+        detail_md = """# Job
 
-    def test_fetch_rejects_untrusted_urls_and_malformed_payloads(self):
+> Acme · Remote, Costa Rica · Full-time · Posted 2026-10-20
+
+**Workplace:** remote
+
+## Description
+
+Description here.
+
+## Requirements
+
+Requirements here.
+"""
+
+        call_count = [0]
+        def mock_request_text(url):
+            call_count[0] += 1
+            if url.endswith("/jobs.md"):
+                return list_md
+            elif "/jobs/view/" in url:
+                return detail_md
+            raise AssertionError(f"Unexpected URL: {url}")
+
+        with patch.object(self.fetcher, "_request_text", side_effect=mock_request_text):
+            offers = self.fetcher.fetch(self.site, skip_source_job_ids={"JOB2"})
+
+        # JOB1 (Toronto) filtered out by country; JOB2 skipped by skip_source_job_ids; JOB3 duplicate of JOB2
+        self.assertEqual([offer["source_job_id"] for offer in offers], [])
+        self.assertEqual(offers.jobs_skipped, 1)  # JOB2 skipped
+
+    def test_fetch_rejects_untrusted_urls(self):
         for url in (
             "http://apply.workable.com/acme",
             "https://example.com/acme",
@@ -104,17 +133,12 @@ class TestWorkableFetcher(unittest.TestCase):
             with self.subTest(url=url), self.assertRaises(ValueError):
                 self.fetcher.fetch({**self.site, "base_url": url})
 
-        invalid_responses = (
-            {},
-            {"jobs": "not-a-list"},
-            {"jobs": [None]},
-            {"jobs": [{"shortcode": 1}]},
-        )
-        for response in invalid_responses:
-            with self.subTest(response=response), patch.object(
-                self.fetcher, "_request_json", return_value=response
-            ), self.assertRaises(WorkableFetchError):
-                self.fetcher.fetch(self.site)
+    def test_fetch_handles_malformed_table_gracefully(self):
+        # Empty or malformed table returns empty offers
+        list_md = "No table here"
+        with patch.object(self.fetcher, "_request_text", return_value=list_md):
+            offers = self.fetcher.fetch(self.site)
+        self.assertEqual(len(offers), 0)
 
     def test_workable_cli_imports_single_site(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -133,7 +157,7 @@ class TestWorkableFetcher(unittest.TestCase):
             )
             offer = {
                 "source_job_id": "A1B2C3",
-                "source_url": "https://apply.workable.com/acme/j/A1B2C3/",
+                "source_url": "https://apply.workable.com/acme/jobs/view/A1B2C3.md",
                 "job": {
                     "job_id": "workable-acme-A1B2C3",
                     "title": "Software Engineer",

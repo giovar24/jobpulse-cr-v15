@@ -192,25 +192,27 @@ python -m pytest tests/ -q
   primero; si sugieren < 5 facts se ofrece el pase IA (aviso de privacidad
   si el motor del `.env` es externo; progreso no-modal; datos llegan a
   `_DialogoRevision` para revisión antes de guardar).
-- **BD: 912 jobs** (ANE 332, Workday 282, Harvie 192, Indeed 36, CINDE 17,
-  Greenhouse 13, Ashby 12, Recruitee 11, LinkedIn 9, SuccessFactors 7,
-  Procomer 1). Republicaciones ANE curadas: 7 `dismissed` + `dup_of` al nuevo.
-  Enriquecimiento: 273 requisitos extraídos; ~127 jobs sin `job_analysis`;
-  skills/languages/city/region con huecos recuperables.
+- **BD: 927 jobs** (ANE 332, Workday 282, Harvie 192, Workable 15, Indeed 36,
+  CINDE 17, Greenhouse 13, Ashby 12, Recruitee 11, LinkedIn 9,
+  SuccessFactors 7, Procomer 1). Republicaciones ANE curadas: 7 `dismissed`
+  + `dup_of` al nuevo. Enriquecimiento: 273 requisitos extraídos;
+  ~127 jobs sin `job_analysis`; skills/languages/city/region con huecos
+  recuperables.
 - Perfil: 48 facts (editor CV en `ui_perfil.py`; datos reales ya cargados;
   `value_code='portfolio'` reservado). 4 CVs en `data/usuario/cv/` (pruebas).
 - **O7 UI-first completo (2026-10-28, commit `28ef1f2`)**: flujo **scrape →
   analizar (reglas) → IA → comparar perfil** en un click (checkbox en Corrida).
   "Enriquecer" = IA bajo demanda (validado E2E); "Re-login ANE" = Brave auto.
-  Suite: **275 tests** (264 + 10 `test_seed_ats` + 1 Harvie/Recruitee fixes).
+  Suite: **276 tests** (264 + 10 `test_seed_ats` + Harvie/Recruitee/Workable fixes).
 - **O3 ATS CR directorio versionado (commit `a9083a7`)**: 122 tableros
   (Workday, Greenhouse, Ashby, Lever, Recruitee, Workable, SuccessFactors) en
   `src/jobpulse_v15/seeds/*.json` + botón "Importar directorio ATS (CR)".
   Primer job Workday/Intel scrapeado.
-- **Objetivo O3 — Scraping masivo ATS**: **6/7 plataformas validadas** (76/122
-  sitios OK: Workday, Greenhouse, Ashby, Lever, Recruitee, SuccessFactors).
-  **Workable pendiente** (API cambiada a `jobs.md` — requiere reescritura fetcher).
-  Script `run_ats_scrapes.py` listo para barrido masivo.
+- **Objetivo O3 — Scraping masivo ATS**: **7/7 plataformas validadas** (83/122
+  sitios con jobs CR: Workday 51, Greenhouse 8, Ashby 7, Lever 3, Recruitee 3,
+  SuccessFactors 4, **Workable 7**). Workable fetcher reescrito para formato
+  `jobs.md` markdown (commit actual). Script `run_ats_scrapes.py` listo para
+  barrido masivo.
 - **Nueva fuente O3: Harvie (commit `3355c7c`)** — `harvie.py` + sitio
   `harvie-cr` registrado. API JSON `https://heyharvie.com/api/candidate/jobs`
   (paginado), 192 jobs CR importados (Lagar, Grupo El Lagar, Grupo Sur Química,

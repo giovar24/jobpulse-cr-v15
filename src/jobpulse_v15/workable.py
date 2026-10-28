@@ -1,22 +1,26 @@
-"""Adaptador para la API publica de tableros Workable."""
+"""Adaptador para la API publica de tableros Workable (formato jobs.md).
 
-from html import unescape
-from html.parser import HTMLParser
-import json
+Workable cambi� su API: ahora expone las vacantes en formato Markdown
+en `https://apply.workable.com/{token}/jobs.md` con una tabla.
+Cada fila tiene un enlace "Details" a la p�gina de detalle (tamb�en .md).
+"""
+
+from __future__ import annotations
+
+import logging
 import re
-from datetime import datetime, timezone
 from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote, urlsplit
 from urllib.request import Request, urlopen
 
+from jobpulse_v15.ingestion import IngestionError
 
-_BOARD_TOKEN = re.compile(r"^[A-Za-z0-9_-]+$")
-_HTML_BLOCKS = {"br", "div", "li", "p", "section", "tr", "ul", "ol", "h1", "h2", "h3"}
+logger = logging.getLogger("jobpulse.workable")
 
 
-class WorkableFetchError(RuntimeError):
-    """La API Workable devolvio una respuesta no valida o un error HTTP."""
+class WorkableFetchError(IngestionError):
+    """Error al consultar tablero Workable."""
 
 
 class WorkableOffers(list[dict[str, Any]]):
@@ -29,33 +33,10 @@ class WorkableOffers(list[dict[str, Any]]):
         self.jobs_skipped = jobs_skipped
 
 
-class _TextParser(HTMLParser):
-    def __init__(self) -> None:
-        super().__init__(convert_charrefs=True)
-        self.parts: list[str] = []
-
-    def handle_starttag(
-        self, tag: str, attrs: list[tuple[str, str | None]]
-    ) -> None:
-        _ = attrs
-        if tag.casefold() in _HTML_BLOCKS:
-            self.parts.append(" ")
-
-    def handle_endtag(self, tag: str) -> None:
-        if tag.casefold() in _HTML_BLOCKS:
-            self.parts.append(" ")
-
-    def handle_data(self, data: str) -> None:
-        self.parts.append(data)
-
-    def text(self) -> str:
-        return " ".join(" ".join(self.parts).split())
-
-
 class WorkableFetcher:
-    """Consulta un tablero Workable y adapta sus vacantes al formato v1.5."""
+    """Consulta un tablero Workable (formato jobs.md) y adapta sus vacantes al formato v1.5."""
 
-    def __init__(self, *, timeout: float = 20.0) -> None:
+    def __init__(self, *, timeout: float = 30.0) -> None:
         if timeout <= 0:
             raise ValueError("timeout debe ser mayor que cero.")
         self.timeout = timeout
@@ -74,89 +55,55 @@ class WorkableFetcher:
         if not isinstance(country_query, str) or not country_query.strip():
             raise ValueError("country_query debe contener texto.")
 
-        url = (
-            "https://apply.workable.com/api/v1/accounts/"
-            f"{quote(token, safe='')}/jobs?details=true"
-        )
-        payload = self._request_json(url)
-        postings = payload.get("jobs")
-        if not isinstance(postings, list):
-            raise WorkableFetchError("La respuesta Workable no contiene jobs.")
+        # 1. Obtener lista principal (jobs.md)
+        list_url = f"https://apply.workable.com/{token}/jobs.md"
+        logger.debug("Workable: solicitando lista %s", list_url)
+        list_md = self._request_text(list_url)
 
+        # 2. Parsear tabla markdown
+        jobs = self._parse_jobs_table(list_md, token)
+        if not jobs:
+            logger.info("Workable %s: no se encontraron vacantes en la tabla", token)
+            return WorkableOffers([], jobs_skipped=0)
+
+        # 3. Para cada job, obtener detalle y filtrar por pa�s
         offers = []
         skipped = 0
         seen_ids: set[str] = set()
         skipped_ids = skip_source_job_ids or set()
-        for index, posting in enumerate(postings):
-            if not isinstance(posting, dict):
-                raise WorkableFetchError(
-                    f"El anuncio Workable {index} no es un objeto."
-                )
-            source_job_id = self._required_text(posting.get("shortcode"), index, "id")
+
+        for job in jobs:
+            source_job_id = job["source_job_id"]
             if source_job_id in seen_ids:
                 continue
-            title = self._optional_text(posting.get("title"))
-            if title is None:
-                raise WorkableFetchError(
-                    f"El anuncio Workable {source_job_id!r} no informa titulo."
-                )
-            seen_ids.add(source_job_id)
 
-            location_data = posting.get("location")
-            location = (
-                self._optional_text(location_data.get("city"))
-                if isinstance(location_data, dict)
-                else None
-            )
-            country = (
-                self._optional_text(location_data.get("country"))
-                if isinstance(location_data, dict)
-                else None
-            )
-            searchable = " ".join(part for part in (title, location, country) if part)
+            title = job["title"]
+            location_raw = job["location_raw"]
+            detail_url = job["detail_url"]
+
+            searchable = " ".join(filter(None, [title, location_raw]))
             if country_query.casefold() not in searchable.casefold():
                 continue
+
+            if source_job_id in seen_ids:
+                continue
+
+            seen_ids.add(source_job_id)
+
             if source_job_id in skipped_ids:
                 skipped += 1
                 continue
 
-            location_parts = [
-                value
-                for value in (
-                    location,
-                    self._optional_text(location_data.get("region"))
-                    if isinstance(location_data, dict)
-                    else None,
-                    country,
-                )
-                if value
-            ]
-            location_raw = ", ".join(location_parts) or None
+            # 4. Obtener detalle del job
+            detail_md = self._request_text(detail_url)
+            description, requirements, work_mode, employment_type, published = self._parse_job_detail(detail_md)
 
-            description = self._html_to_text(
-                self._optional_text(posting.get("description")) or ""
-            )
-            requirements = self._html_to_text(
-                self._optional_text(posting.get("requirements")) or ""
-            )
-            combined = " ".join(
-                part for part in (description, requirements) if part
-            )
+            combined = " ".join(part for part in (description, requirements) if part)
 
-            published = self._optional_text(posting.get("published_on"))
-            work_mode = "unknown"
-            telecommuting = posting.get("telecommuting")
-            if telecommuting is True:
-                work_mode = "remote"
-
-            job_url = (
-                self._optional_text(posting.get("url"))
-                or f"https://apply.workable.com/{token}/j/{source_job_id}/"
-            )
             offers.append(
                 {
                     "source_job_id": source_job_id,
-                    "source_url": job_url,
+                    "source_url": detail_url,
                     "source_updated_at": published,
                     "job": {
                         "job_id": f"workable-{token}-{source_job_id}",
@@ -168,23 +115,174 @@ class WorkableFetcher:
                         "location_raw": location_raw,
                         "country": self._optional_text(site.get("country")),
                         "work_mode": work_mode,
-                        "employment_type": self._optional_text(
-                            posting.get("type")
-                        ),
-                        "date_published": (
-                            published[:10]
-                            if published
-                            and not published[:10].isdigit()
-                            else None
-                        ),
+                        "employment_type": employment_type,
+                        "date_published": published[:10] if published and len(published) >= 10 else None,
                         "posting_language": "undetermined",
                         "posting_language_origin": "unknown",
                         "description_raw": combined or None,
                     },
-                    "raw_payload": posting,
+                    "raw_payload": job,
                 }
             )
+
         return WorkableOffers(offers, jobs_skipped=skipped)
+
+    # --- Parsing ---
+
+    def _parse_jobs_table(self, markdown: str, token: str) -> list[dict[str, Any]]:
+        """Parsea la tabla markdown de jobs.md.
+
+        Formato esperado:
+        | Title | Department | Location | Type | Salary | Posted | Details |
+        |-------|-----------|----------|------|--------|--------|---------|
+        | Job Title | Dept | Country (Remote) | Full-time | ... | 2026-10-27 | [View](url) |
+        """
+        jobs = []
+
+        # Encontrar l�neas de la tabla (despu�s del header y separator)
+        lines = markdown.split("\n")
+        in_table = False
+        for line in lines:
+            line = line.strip()
+            if line.startswith("| Title |") or line.startswith("| Title|"):
+                in_table = True
+                continue
+            if in_table and line.startswith("|---") or line.startswith("| ---"):
+                continue
+            if in_table and line.startswith("|"):
+                # Parsear fila
+                cells = [c.strip() for c in line.split("|")[1:-1]]  # quitar vac�os al inicio/final
+                if len(cells) >= 7:
+                    title = cells[0]
+                    department = cells[1]
+                    location = cells[2]
+                    job_type = cells[3]
+                    salary = cells[4]
+                    posted = cells[5]
+                    details_cell = cells[6]
+
+                    # Extraer URL del enlace [View](url)
+                    url_match = re.search(r"\[View\]\(([^)]+)\)", details_cell)
+                    detail_url = url_match.group(1) if url_match else None
+                    if not detail_url:
+                        continue
+
+                    # El source_job_id viene de la URL del detalle
+                    # Formato: https://apply.workable.com/{token}/jobs/view/{id}.md
+                    id_match = re.search(r"/view/([A-Za-z0-9]+)\.md", detail_url)
+                    source_job_id = id_match.group(1) if id_match else detail_url
+
+                    jobs.append({
+                        "source_job_id": source_job_id,
+                        "title": title,
+                        "department": department,
+                        "location_raw": location,
+                        "job_type": job_type,
+                        "salary": salary,
+                        "posted": posted,
+                        "detail_url": detail_url,
+                    })
+
+            elif in_table and not line.startswith("|"):
+                # Fin de la tabla
+                break
+
+        return jobs
+
+    def _parse_job_detail(self, markdown: str) -> tuple[str | None, str | None, str, str | None, str | None]:
+        """Parsea la p�gina de detalle del job (markdown).
+
+        Retorna: (description, requirements, work_mode, employment_type, published_date)
+        """
+        description = None
+        requirements = None
+        work_mode = "unknown"
+        employment_type = None
+        published = None
+
+        # work_mode desde l�nea "Workplace: remote/hybrid/on-site"
+        wm_match = re.search(r"(?i)\*\*Workplace:\*\*\s*(\w+)", markdown)
+        if wm_match:
+            wm = wm_match.group(1).lower()
+            if wm == "remote":
+                work_mode = "remote"
+            elif wm == "hybrid":
+                work_mode = "hybrid"
+            elif wm in ("on-site", "onsite"):
+                work_mode = "onsite"
+
+        # employment_type desde l�nea de header o Type
+        # Header: "> Company · Location · Full-time · Posted date"
+        type_match = re.search(r">\s*[^·]+\s·\s*[^·]+\s·\s*([^·]+)\s·\s*Posted", markdown)
+        if type_match:
+            employment_type = type_match.group(1).strip()
+        else:
+            # Buscar en l�nea Type de la tabla del listado (ya no disponible aqu�)
+            pass
+
+        # published date
+        pub_match = re.search(r"Posted\s+(\d{4}-\d{2}-\d{2})", markdown)
+        if pub_match:
+            published = pub_match.group(1)
+
+        # Description y Requirements - buscar secciones ## Description y ## Requirements
+        # Workable usa ## Description y ## Requirements como headers
+        desc_match = re.search(r"## Description\s*\n(.*?)(?:\n## |\n---|\Z)", markdown, re.DOTALL | re.IGNORECASE)
+        if desc_match:
+            description = self._md_to_text(desc_match.group(1))
+
+        req_match = re.search(r"## Requirements\s*\n(.*?)(?:\n## |\n---|\Z)", markdown, re.DOTALL | re.IGNORECASE)
+        if req_match:
+            requirements = self._md_to_text(req_match.group(1))
+
+        # Fallback: si no hay headers, tomar todo el contenido
+        if not description and not requirements:
+            # Remover header metadata lines
+            content = re.sub(r"^>.*\n", "", markdown, flags=re.MULTILINE)
+            content = re.sub(r"^\*\*.*?\*\*\s*.*\n", "", content, flags=re.MULTILINE)
+            content = content.strip()
+            if content:
+                description = self._md_to_text(content)
+
+        return description, requirements, work_mode, employment_type, published
+
+    @staticmethod
+    def _md_to_text(md: str) -> str:
+        """Convierte markdown simple a texto plano."""
+        if not md:
+            return ""
+        # Remover links [text](url) -> text
+        md = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", md)
+        # Remover bold/italic
+        md = re.sub(r"\*\*([^*]+)\*\*", r"\1", md)
+        md = re.sub(r"\*([^*]+)\*", r"\1", md)
+        # Remover headers
+        md = re.sub(r"^#+\s*", "", md, flags=re.MULTILINE)
+        # Remover horizontal rules
+        md = re.sub(r"^---+\s*$", "", md, flags=re.MULTILINE)
+        # Normalizar whitespace
+        return " ".join(md.split())
+
+    # --- HTTP ---
+
+    def _request_text(self, url: str) -> str:
+        request = Request(
+            url,
+            headers={"Accept": "text/markdown,text/plain,*/*", "User-Agent": "JobPulse-CR/1.5"},
+        )
+        try:
+            with urlopen(request, timeout=self.timeout) as response:
+                return response.read().decode("utf-8")
+        except HTTPError as exc:
+            raise WorkableFetchError(
+                f"Workable respondio HTTP {exc.code} para {url}."
+            ) from exc
+        except (URLError, TimeoutError, OSError, UnicodeDecodeError) as exc:
+            raise WorkableFetchError(
+                f"No se pudo consultar Workable {url}: {exc}"
+            ) from exc
+
+    # --- Helpers ---
 
     @staticmethod
     def _board_token(value: Any) -> str:
@@ -200,57 +298,12 @@ class WorkableFetcher:
         ):
             raise ValueError("La URL debe apuntar a un tablero HTTPS de Workable.")
         parts = [part for part in parsed.path.split("/") if part]
-        if not parts or not _BOARD_TOKEN.fullmatch(parts[0]):
+        if not parts or not re.fullmatch(r"^[A-Za-z0-9_-]+$", parts[0]):
             raise ValueError(
                 "La URL Workable no contiene un token de tablero valido."
             )
         return parts[0]
 
-    def _request_json(self, url: str) -> dict[str, Any]:
-        request = Request(
-            url,
-            headers={"Accept": "application/json", "User-Agent": "JobPulse-CR/1.5"},
-        )
-        try:
-            with urlopen(request, timeout=self.timeout) as response:
-                payload = json.loads(response.read().decode("utf-8"))
-        except HTTPError as exc:
-            raise WorkableFetchError(
-                f"Workable respondio HTTP {exc.code}."
-            ) from exc
-        except (
-            URLError,
-            TimeoutError,
-            OSError,
-            UnicodeDecodeError,
-            json.JSONDecodeError,
-        ) as exc:
-            raise WorkableFetchError(
-                f"No se pudo consultar Workable: {exc}"
-            ) from exc
-        if not isinstance(payload, dict):
-            raise WorkableFetchError("La respuesta Workable debe ser un objeto.")
-        return payload
-
-    @classmethod
-    def _html_to_text(cls, value: str) -> str:
-        parser = _TextParser()
-        parser.feed(unescape(value))
-        return parser.text()
-
     @staticmethod
     def _optional_text(value: Any) -> str | None:
         return value.strip() if isinstance(value, str) and value.strip() else None
-
-    @classmethod
-    def _required_text(cls, value: Any, index: int, field: str) -> str:
-        if isinstance(value, bool) or not isinstance(value, (str, int)):
-            raise WorkableFetchError(
-                f"El anuncio Workable {index} no informa un {field} valido."
-            )
-        text = str(value).strip()
-        if not text:
-            raise WorkableFetchError(
-                f"El anuncio Workable {index} no informa un {field} valido."
-            )
-        return text
