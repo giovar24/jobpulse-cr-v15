@@ -3,12 +3,15 @@
 from html import unescape
 from html.parser import HTMLParser
 import json
+import logging
 import re
 from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit
 from urllib.request import Request, urlopen
 
+
+logger = logging.getLogger("jobpulse.recruitee")
 
 _BOARD_TOKEN = re.compile(r"^[A-Za-z0-9_-]+$")
 _HTML_BLOCKS = {"br", "div", "li", "p", "section", "tr", "ul", "ol", "h1", "h2", "h3"}
@@ -87,30 +90,41 @@ class RecruiteeFetcher:
         skipped_ids = skip_source_job_ids or set()
         for index, posting in enumerate(postings):
             if not isinstance(posting, dict):
-                raise RecruiteeFetchError(
-                    f"El anuncio Recruitee {index} no es un objeto."
-                )
-            source_job_id = self._required_text(posting.get("id"), index, "id")
+                logger.warning("Recruitee: postings[%d] no es objeto; omitido.", index)
+                continue
+            source_job_id_raw = posting.get("id")
+            if source_job_id_raw is None:
+                logger.warning("Recruitee: postings[%d] sin id; omitido.", index)
+                continue
+            source_job_id = str(source_job_id_raw).strip()
+            if not source_job_id:
+                logger.warning("Recruitee: postings[%d] id vacio; omitido.", index)
+                continue
             if source_job_id in seen_ids:
                 continue
-            title = self._optional_text(posting.get("position"))
+            title = self._optional_text(posting.get("title"))
             if title is None:
-                raise RecruiteeFetchError(
-                    f"El anuncio Recruitee {source_job_id!r} no informa titulo."
+                logger.warning(
+                    "Recruitee: %s sin titulo (title); omitido.", source_job_id
                 )
+                continue
             seen_ids.add(source_job_id)
 
             location = self._optional_text(posting.get("location"))
             locations = posting.get("locations") or []
-            if not isinstance(locations, list) or any(
-                not isinstance(item, str) for item in locations
-            ):
-                raise RecruiteeFetchError(
-                    f"El anuncio Recruitee {source_job_id!r} tiene locations invalidos."
-                )
-            location_names = [
-                value for item in locations if (value := self._optional_text(item))
-            ]
+            if not isinstance(locations, list):
+                locations = []
+            location_names = []
+            for item in locations:
+                if isinstance(item, dict):
+                    # locations es lista de objetos: extraer 'name' o 'city'
+                    name = item.get("name") or item.get("city")
+                    if name:
+                        location_names.append(str(name).strip())
+                elif isinstance(item, str):
+                    val = item.strip()
+                    if val:
+                        location_names.append(val)
             searchable = " ".join((title, location, *location_names))
             if country_query.casefold() not in searchable.casefold():
                 continue
