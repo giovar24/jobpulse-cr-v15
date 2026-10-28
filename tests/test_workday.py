@@ -95,6 +95,29 @@ class TestWorkdayFetcher(unittest.TestCase):
         self.assertEqual(request.call_args_list[0].kwargs["payload"]["searchText"],
                          "Costa Rica")
 
+    def test_fetch_skips_malformed_listings_without_losing_the_board(self):
+        """Un anuncio malformado (sin externalPath, p.ej. promocional) no mata
+        el barrido del tablero: se omite con aviso y el resto se procesa
+        (bug real de HPE 2026-10-28: jobPostings[6] sin externalPath)."""
+        with patch.object(
+            self.fetcher,
+            "_request_json",
+            side_effect=[
+                {
+                    "jobPostings": [
+                        self.posting(),
+                        "no-soy-un-objeto",
+                        {"title": "Anuncio sin externalPath"},
+                        self.posting(),
+                    ]
+                },
+                self.detail(),
+            ],
+        ):
+            offers = self.fetcher.fetch(self.site, pages=1)
+        self.assertEqual(len(offers), 1)
+        self.assertEqual(offers[0]["source_job_id"], "JR1234567")
+
     def test_fetch_normalizes_province_only_location_without_inventing_city(self):
         with patch.object(
             self.fetcher,

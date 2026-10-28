@@ -3,6 +3,7 @@
 from html.parser import HTMLParser
 from http.client import HTTPException
 import json
+import logging
 import re
 import time
 import unicodedata
@@ -10,6 +11,9 @@ from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote, unquote, urlsplit
 from urllib.request import Request, urlopen
+
+
+logger = logging.getLogger("jobpulse.workday")
 
 
 PAGE_SIZE = 20
@@ -277,14 +281,20 @@ class WorkdayFetcher:
                 break
             for index, posting in enumerate(postings):
                 if not isinstance(posting, dict):
-                    raise WorkdayFetchError(
-                        f"jobPostings[{index}] no es un objeto."
+                    # Anuncio promocional u entrada malformada: se omite y no
+                    # mata el barrido del tablero completo.
+                    logger.warning(
+                        "Workday: jobPostings[%d] no es objeto; omitido.", index
                     )
+                    continue
                 external_path = self._optional_text(posting.get("externalPath"))
                 if not external_path:
-                    raise WorkdayFetchError(
-                        f"jobPostings[{index}] no contiene externalPath."
+                    logger.warning(
+                        "Workday: jobPostings[%d] sin externalPath (%r); omitido.",
+                        index,
+                        posting.get("title"),
                     )
+                    continue
                 postings_by_path[external_path] = posting
             if len(postings) < PAGE_SIZE:
                 break
