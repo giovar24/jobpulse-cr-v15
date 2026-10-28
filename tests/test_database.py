@@ -1,4 +1,4 @@
-import sqlite3
+﻿import sqlite3
 import sys
 import tempfile
 import unittest
@@ -20,9 +20,9 @@ class TestDatabaseMigrations(unittest.TestCase):
         self.temp_dir.cleanup()
 
     def test_initializes_schema_and_is_idempotent(self):
-        self.assertEqual(self.database.initialize(), 7)
-        self.assertEqual(self.database.schema_version(), 7)
-        self.assertEqual(self.database.initialize(), 7)
+        self.assertEqual(self.database.initialize(), 8)
+        self.assertEqual(self.database.schema_version(), 8)
+        self.assertEqual(self.database.initialize(), 8)
 
         with self.database.connection() as connection:
             tables = {
@@ -71,7 +71,7 @@ class TestDatabaseMigrations(unittest.TestCase):
                 connection.execute("PRAGMA integrity_check").fetchone()[0], "ok"
             )
             self.assertEqual(
-                connection.execute("PRAGMA user_version").fetchone()[0], 7
+                connection.execute("PRAGMA user_version").fetchone()[0], 8
             )
             self.assertEqual(
                 connection.execute(
@@ -103,7 +103,7 @@ class TestDatabaseMigrations(unittest.TestCase):
         self.assertTrue(report["ok"])
         self.assertEqual(report["integrity_check"], ["ok"])
         self.assertEqual(report["foreign_key_violations"], [])
-        self.assertEqual(report["schema_version"], 7)
+        self.assertEqual(report["schema_version"], 8)
         with self.assertRaises(FileNotFoundError):
             Database(Path(self.temp_dir.name) / "missing.db").check_integrity()
 
@@ -182,7 +182,7 @@ class TestDatabaseMigrations(unittest.TestCase):
                 """
             )
 
-        self.assertEqual(self.database.initialize(), 7)
+        self.assertEqual(self.database.initialize(), 8)
         with self.database.connection() as connection:
             fact = connection.execute(
                 """
