@@ -192,46 +192,34 @@ python -m pytest tests/ -q
   primero; si sugieren < 5 facts se ofrece el pase IA (aviso de privacidad
   si el motor del `.env` es externo; progreso no-modal; datos llegan a
   `_DialogoRevision` para revisión antes de guardar).
-- **BD: 396 jobs** (ANE 332 = 120 lote 25-10 + 120 lote 26-10 + 92 lote 27-10;
-  Indeed 36; CINDE 17; LinkedIn 9; Procomer 1; Workday/Intel 1 — primer scrape
-  E2E del directorio ATS). Republicaciones ANE curadas:
-  - 7 `dismissed` (4 de O5.4 + 3 intermedias 27-10) con nota + `dup_of` al nuevo.
-  - 3 cadenas confirmadas: descripción 100% idéntica, solo fecha movida (23→26→27).
-  - 2 grupos con descripción DIFERENTE (Montacarguista, otro) = plazas múltiples,
-    quedan para revisión manual (`quality duplicates`).
-  - O8.2 `dup_of` + `skip_automatic` en `user_job_state` listo; herencia solo
-    dispara contra `reviewed`/`applied` manuales (aún 0).
-  Enriquecimiento: 273 requisitos extraídos; 127 jobs sin `job_analysis`
-  (lote nuevo + ATS); skills/languages/city/region con huecos recuperables.
-- Perfil: 48 facts (editor CV en `ui_perfil.py`; datos personales y resumen
-  reales ya cargados; `value_code='portfolio'` reservado). Los 4 CVs en
-  `data/usuario/cv/` son material de pruebas (mismo CV en ES/EN).
+- **BD: 912 jobs** (ANE 332, Workday 282, Harvie 192, Indeed 36, CINDE 17,
+  Greenhouse 13, Ashby 12, Recruitee 11, LinkedIn 9, SuccessFactors 7,
+  Procomer 1). Republicaciones ANE curadas: 7 `dismissed` + `dup_of` al nuevo.
+  Enriquecimiento: 273 requisitos extraídos; ~127 jobs sin `job_analysis`;
+  skills/languages/city/region con huecos recuperables.
+- Perfil: 48 facts (editor CV en `ui_perfil.py`; datos reales ya cargados;
+  `value_code='portfolio'` reservado). 4 CVs en `data/usuario/cv/` (pruebas).
 - **O7 UI-first completo (2026-10-28, commit `28ef1f2`)**: flujo **scrape →
-  analizar (reglas) → IA → comparar perfil** en un click desde la UI.
-  Checkbox **"Flujo completo (analizar → IA → comparar perfil)"** en el
-  diálogo de Corrida; el botón "Enriquecer" arranca el servidor IA bajo
-  demanda (validado E2E: subió → pase → se apagó solo); "Re-login ANE" abre
-  Brave solo si hace falta. Suite: **274 tests** (264 + 10 `test_seed_ats`).
+  analizar (reglas) → IA → comparar perfil** en un click (checkbox en Corrida).
+  "Enriquecer" = IA bajo demanda (validado E2E); "Re-login ANE" = Brave auto.
+  Suite: **275 tests** (264 + 10 `test_seed_ats` + 1 Harvie/Recruitee fixes).
 - **O3 ATS CR directorio versionado (commit `a9083a7`)**: 122 tableros
   (Workday, Greenhouse, Ashby, Lever, Recruitee, Workable, SuccessFactors) en
-  `src/jobpulse_v15/seeds/*.json` (idempotente, `site seed-cr` / `init-sources
-  --ats-cr` / botón "Importar directorio ATS (CR)" en Fuentes). Verificado:
-  primer job Workday/Intel scrapeado hoy.
-- **Objetivo O3 — Scraping masivo ATS**: barrer **todos los 122 tableros** del
-  directorio (7 fetchers: workday, greenhouse, ashby, lever, recruitee,
-  workable, successfactors) en una corrida. El directorio ya está sembrado y
-  activo; los fetchers existen pero no han sido validados en producción salvo
-  Workday. Siguiente paso: ejecutar `run_scrapes.py` o UI "Corrida" con los
-  sitios ATS habilitados y confirmar ingesta sin errores en los 7 proveedores.
-  - **Sub-objetivo O3.x — Gestión de tableros ATS en Configuración**: los 122
-    tableros se registran como sitios normales (`source_sites`); la ventana
-    **Fuentes** (accesible desde la pestaña Configuración) ya permite
-    **activar/pausar individualmente** cada tablero, filtrar por plataforma,
-    y ver su estado. Esto permite desactivar los que fallen o sean ruidosos
-    sin tocar código ni BD a mano.
-- Embeddings verificados funcionales y **DORMIDOS** por decisión del usuario
-  (data-first) — ver gotchas 13-14.
-- Pendiente O8: O8.1 categorías borrador (`tools/categorias_borrador.py`),
-  prueba de humo del usuario, confirmar default retención (6 meses propuesto),
-  smoke de herencia con republicación real de ANE (requiere marcar
-  `reviewed`/`applied` primero).
+  `src/jobpulse_v15/seeds/*.json` + botón "Importar directorio ATS (CR)".
+  Primer job Workday/Intel scrapeado.
+- **Objetivo O3 — Scraping masivo ATS**: **6/7 plataformas validadas** (76/122
+  sitios OK: Workday, Greenhouse, Ashby, Lever, Recruitee, SuccessFactors).
+  **Workable pendiente** (API cambiada a `jobs.md` — requiere reescritura fetcher).
+  Script `run_ats_scrapes.py` listo para barrido masivo.
+- **Nueva fuente O3: Harvie (commit `3355c7c`)** — `harvie.py` + sitio
+  `harvie-cr` registrado. API JSON `https://heyharvie.com/api/candidate/jobs`
+  (paginado), 192 jobs CR importados (Lagar, Grupo El Lagar, Grupo Sur Química,
+  etc.). `work_mode` detectado via campo `workplace` (on-site/remote/hybrid).
+- **elempleo.com/cr/** — analizado: **requiere browser automation** (Playwright).
+  No hay API JSON pública; HTML renderizado client-side con JS pesado
+  (NewRelic, GTM, Prebid). Igual que ANE/Indeed/LinkedIn.
+- Sub-objetivo O3.x — Gestión tableros en Configuración/Fuentes: activar/pausar
+  individual, filtrar por plataforma.
+- Embeddings verificados funcionales y **DORMIDOS** (data-first) — gotchas 13-14.
+- Pendiente O8: O8.1 categorías borrador, prueba de humo usuario, confirmar
+  retención 6m, smoke herencia ANE (requiere marcar `reviewed`/`applied`).
