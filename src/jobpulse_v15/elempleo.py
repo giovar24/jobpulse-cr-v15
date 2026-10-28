@@ -14,7 +14,12 @@ from typing import Any, Dict, List, Optional
 
 from playwright.async_api import BrowserContext, Page
 
-from jobpulse_v15.location_utils import normalize_cr_location
+from jobpulse_v15.location_utils import (
+    normalize_cr_location,
+    normalize_work_mode,
+    normalize_employment_type,
+    extract_date_from_source_updated,
+)
 
 logger = logging.getLogger("jobpulse.elempleo")
 
@@ -185,6 +190,14 @@ class ElempleoFetcher:
                         if country_query.casefold() not in searchable.casefold():
                             continue
 
+                        # Normalizar campos estándar
+                        location_norm = normalize_cr_location(location_raw)
+                        work_mode = normalize_work_mode(detail_data.get("work_mode"))
+                        employment_type = normalize_employment_type(detail_data.get("employment_type"))
+                        date_published = extract_date_from_source_updated(
+                            detail_data.get("date"), detail_data.get("date")
+                        )
+
                         offers.append({
                             "source_job_id": source_job_id,
                             "source_url": detail_url,
@@ -195,15 +208,22 @@ class ElempleoFetcher:
                                 "company": company or site.get("company_name", ""),
                                 "location_raw": location_raw,
                                 "country": "CR",
-                                "work_mode": detail_data.get("work_mode", "unknown"),
-                                "employment_type": detail_data.get("employment_type"),
-                                "date_published": detail_data.get("date"),
-                                "expires_at": None,
+                                "region": location_norm.get("region"),
+                                "city": location_norm.get("city"),
+                                "work_mode": work_mode,
+                                "employment_type": employment_type,
+                                "schedule": None,
                                 "posting_language": "es",
                                 "posting_language_origin": "source",
+                                "date_published": date_published,
+                                "expires_at": None,
+                                "salary_raw": detail_data.get("salary", ""),
+                                "salary_min": None,
+                                "salary_max": None,
+                                "salary_currency": None,
+                                "salary_period": None,
                                 "description_raw": detail_data.get("description", ""),
                                 "requirements_raw": detail_data.get("requirements", ""),
-                                "salary_raw": detail_data.get("salary", ""),
                             },
                             "raw_payload": {"detail_url": detail_url, **detail_data},
                         })
