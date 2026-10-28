@@ -45,6 +45,7 @@ class WorkableFetcher:
         self,
         site: dict[str, Any],
         *,
+        pages: int | None = None,
         skip_source_job_ids: set[str] | None = None,
     ) -> WorkableOffers:
         token = self._board_token(site.get("base_url"))
