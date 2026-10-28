@@ -1,6 +1,7 @@
 """Acceso a catalogos de sitios y vacantes estructuradas de v1.5."""
 
 import json
+import re
 from collections.abc import Mapping, Sequence
 from datetime import date
 import math
@@ -8,6 +9,7 @@ import unicodedata
 from typing import Any
 from urllib.parse import urlparse
 
+from jobpulse_v15 import ciclo_vida
 from jobpulse_v15.db import Database
 
 
@@ -1164,6 +1166,61 @@ class Repository:
             )
             return cursor.rowcount == 1
 
+    def estados_para_herencia(self, desde_iso: str) -> list[dict[str, Any]]:
+        """Estados manuales heredables (reviewed/applied) dentro de la ventana.
+
+        O8: `desde_iso` es la frontera UTC en formato CURRENT_TIMESTAMP de
+        SQLite (`ciclo_vida.corte_de_ventana`). Devuelve los insumos del
+        matching de republicaciones: id del original, estado, compania y
+        descripcion original. dismissed/archived NO aparecen: al
+        republicarse el puesto, el usuario vuelve a verlo.
+        """
+        self._required_text(desde_iso, "desde_iso")
+        if not re.fullmatch(r"\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}", desde_iso):
+            raise ValueError("desde_iso debe ser 'YYYY-MM-DD HH:MM:SS' (UTC).")
+        with self.database.connection() as connection:
+            rows = connection.execute(
+                """
+                SELECT u.job_id AS original_job_id,
+                       u.user_status AS estado_herencia,
+                       u.company_snapshot,
+                       j.description_raw AS description_original
+                FROM user_job_state AS u
+                JOIN jobs AS j ON j.job_id = u.job_id
+                WHERE u.user_status IN ('reviewed', 'applied')
+                  AND u.skip_automatic = 1
+                  AND u.updated_at >= ?
+                ORDER BY u.updated_at DESC
+                """,
+                (desde_iso,),
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    def marcar_dup_of(self, job_id: str, original_job_id: str) -> bool:
+        """Marca una republicacion como copia del original (O8).
+
+        UPDATE auditable: nunca fusiona ni borra datos. Requiere que el
+        original exista y sea distinto de la copia.
+        """
+        self._required_text(job_id, "job_id")
+        self._required_text(original_job_id, "original_job_id")
+        if job_id.strip() == original_job_id.strip():
+            raise ValueError("Un puesto no puede ser dup_of de si mismo.")
+        with self.database.connection() as connection:
+            original = connection.execute(
+                "SELECT 1 FROM jobs WHERE job_id = ?",
+                (original_job_id.strip(),),
+            ).fetchone()
+            if original is None:
+                raise ValueError(
+                    f"La vacante original {original_job_id!r} no existe."
+                )
+            cursor = connection.execute(
+                "UPDATE jobs SET dup_of = ? WHERE job_id = ?",
+                (original_job_id.strip(), job_id.strip()),
+            )
+            return cursor.rowcount == 1
+
     def record_application(
         self,
         job_id: str,
@@ -1535,6 +1592,8 @@ class Repository:
         published_to: str | None = None,
         salary_at_least: float | None = None,
         salary_at_most: float | None = None,
+        solo_vigentes: bool = False,
+        ventana_retencion_meses: int | None = None,
     ) -> list[dict[str, Any]]:
         """Consulta empleos por filtros SQL y requisitos del analisis vigente.
 
@@ -1543,8 +1602,19 @@ class Repository:
         La revision incluye campos normalizados esenciales faltantes, vacantes
         sin analisis o con analisis parcial/error y categorias desconocidas o
         ambiguas.
+
+        O8 ciclo de vida: `solo_vigentes=True` oculta las vencidas/pasadas de
+        ventana (port de `purge_expired` de v1.x, pero OCULTANDO, no
+        borrando); `ventana_retencion_meses` define la ventana (None ->
+        default de `ciclo_vida`).
         """
         limit = self._positive_int(limit, "limit")
+        if not isinstance(solo_vigentes, bool):
+            raise ValueError("solo_vigentes debe ser booleano.")
+        if ventana_retencion_meses is not None:
+            ventana_retencion_meses = self._positive_int(
+                ventana_retencion_meses, "ventana_retencion_meses"
+            )
         if not isinstance(requirements, Sequence) or isinstance(
             requirements, (str, bytes)
         ):
@@ -1697,6 +1767,37 @@ class Repository:
                 "AND (j.salary_min IS NULL OR j.salary_min <= ?)"
             )
             params.append(salary_at_most)
+        if solo_vigentes:
+            # O8: port de purge_expired (v1.x) como condicion de OCULTACION.
+            # Vencida: expires_at con fecha ISO < hoy. Sin vencimiento:
+            # date_published < corte (hoy - N meses). Sin fecha legible:
+            # TTL por first_seen_at < corte. Una fecha ilegible en
+            # expires_at deja el puesto vigente (mismo criterio de v1.x).
+            # substr(...,1,10) normaliza date y datetime al dia ISO.
+            meses = (
+                ventana_retencion_meses
+                if ventana_retencion_meses is not None
+                else ciclo_vida.DEFAULT_RETENCION_PUESTOS
+            )
+            hoy_iso = date.today().isoformat()
+            corte_iso = ciclo_vida.corte_de_retencion(meses)
+            conditions.append(
+                "NOT COALESCE("
+                "(substr(j.expires_at, 1, 10) GLOB "
+                "'[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]' "
+                "AND substr(j.expires_at, 1, 10) < ?) "
+                "OR (NULLIF(trim(coalesce(j.expires_at, '')), '') IS NULL "
+                "AND substr(j.date_published, 1, 10) GLOB "
+                "'[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]' "
+                "AND substr(j.date_published, 1, 10) < ?) "
+                "OR (NULLIF(trim(coalesce(j.expires_at, '')), '') IS NULL "
+                "AND (NULLIF(trim(coalesce(j.date_published, '')), '') IS NULL "
+                "OR substr(j.date_published, 1, 10) NOT GLOB "
+                "'[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]') "
+                "AND substr(j.first_seen_at, 1, 10) < ?)"
+                ", 0)"
+            )
+            params.extend([hoy_iso, corte_iso, corte_iso])
 
         levels_placeholders = ",".join("?" for _ in requirement_levels)
         for requirement in normalized_requirements:
