@@ -156,21 +156,44 @@ class ElempleoFetcher:
 
                 for card in cards:
                     try:
-                        # URL del detalle
-                        data_url = await card.get_attribute("data-url")
+                        # El data-url está en el div interno .js-area-bind.area-bind
+                        inner = await card.query_selector(".js-area-bind.area-bind")
+                        if not inner:
+                            continue
+                        data_url = await inner.get_attribute("data-url")
                         if not data_url:
                             continue
                         detail_url = data_url if data_url.startswith("http") else f"https://www.elempleo.com{data_url}"
 
-                        # Título
-                        title_el = await card.query_selector("h2.item-title.ee-mod a.js-offer-title")
-                        title = _limpiar(await title_el.inner_text()) if title_el else ""
+                        # Título y empresa vienen en datalayertag (JSON en atributo)
+                        datalayer = await inner.get_attribute("datalayertag")
+                        title = ""
+                        company = ""
+                        if datalayer:
+                            import json
+                            try:
+                                dl = json.loads(datalayer)
+                                products = dl.get("ecommerce", {}).get("click", {}).get("products", [])
+                                if products:
+                                    p = products[0]
+                                    title = p.get("name", "").strip()
+                                    company = p.get("brand", "").strip()
+                                    # brand a veces es "elempleo", buscar dimension7
+                                    if company == "elempleo":
+                                        company = p.get("dimension7", "").strip()
+                            except Exception:
+                                pass
+
+                        # Fallback: extraer del DOM si datalayer falló
+                        if not title:
+                            title_el = await card.query_selector("h2.item-title.ee-mod a.js-offer-title")
+                            title = _limpiar(await title_el.inner_text()) if title_el else ""
                         if not title:
                             continue
 
-                        # Empresa
-                        company_el = await card.query_selector(".item-company a")
-                        company = _limpiar(await company_el.inner_text()) if company_el else ""
+                        if not company:
+                            company_el = await card.query_selector(".item-company a")
+                            company = _limpiar(await company_el.inner_text()) if company_el else ""
 
                         # source_job_id desde la URL
                         source_job_id = self._extract_job_id(detail_url)
@@ -270,7 +293,7 @@ class ElempleoFetcher:
         return False
 
     async def _fetch_detail(self, ctx: BrowserContext, detail_url: str) -> Dict[str, Any]:
-        """Navega a la página de detalle y extrae información completa."""
+        """Navega a la página de detalle y extrae información completa del body text."""
         page = await ctx.new_page()
         data = {
             "location": "",
@@ -285,123 +308,96 @@ class ElempleoFetcher:
             await page.goto(detail_url, wait_until="domcontentloaded", timeout=self.timeout * 1000)
             await page.wait_for_timeout(2000)
 
-            # Título (verificación)
-            title_el = await page.query_selector("h1")
-            if title_el:
-                _limpiar(await title_el.inner_text())
+            # Obtener todo el texto de la página para extraer con regex
+            body_text = await page.inner_text("body")
 
-            # Empresa
-            company_el = await page.query_selector('[class*="company"] a') or await page.query_selector('[class*="company"]')
-            if company_el:
-                _limpiar(await company_el.inner_text())
-
-            # Ubicación - buscar en varios selectores
-            loc_selectors = [
-                '[class*="location"]',
-                '[class*="ubicacion"]',
-                '.job-location',
-                '[data-testid="location"]',
+            # 1. Ubicación - buscar provincia/cantón en el cuerpo
+            location_patterns = [
+                r"\b(San José|Alajuela|Cartago|Heredia|Guanacaste|Limón|Puntarenas)\b",
+                r"\b(San Jose|Limon)\b",
             ]
-            for sel in loc_selectors:
-                el = await page.query_selector(sel)
-                if el:
-                    text = _limpiar(await el.inner_text())
-                    if text:
-                        data["location"] = text
-                        break
-
-            # Modalidad de trabajo
-            mode_selectors = [
-                '[class*="modalidad"]',
-                '[class*="work-mode"]',
-                '[class*="tipo-contrato"]',
-                '[class*="tipo-trabajo"]',
-            ]
-            for sel in mode_selectors:
-                el = await page.query_selector(sel)
-                if el:
-                    text = _limpiar(await el.inner_text()).lower()
-                    if "remoto" in text or "remote" in text:
-                        data["work_mode"] = "remote"
-                    elif "hibrido" in text or "híbrido" in text or "hybrid" in text:
-                        data["work_mode"] = "hybrid"
-                    elif "presencial" in text or "on-site" in text or "onsite" in text:
-                        data["work_mode"] = "onsite"
+            for pattern in location_patterns:
+                m = re.search(pattern, body_text, re.IGNORECASE)
+                if m:
+                    data["location"] = m.group(1).title()
                     break
 
-            # Tipo de empleo
-            type_selectors = [
-                '[class*="tipo-empleo"]',
-                '[class*="employment-type"]',
-                '[class*="tipo-contrato"]',
-                '[class*="jornada"]',
-            ]
-            for sel in type_selectors:
-                el = await page.query_selector(sel)
-                if el:
-                    data["employment_type"] = _limpiar(await el.inner_text())
-                    break
+            # 2. Salario - buscar patrón monetario costarricense
+            salary_match = re.search(r"[¢$]\s*[\d\.,]+\s*(?:a|hasta)\s*[\d\.,]+\s*(?:mil|millón|millones)?", body_text)
+            if not salary_match:
+                salary_match = re.search(r"[¢$]\s*[\d\.,]+\s*(?:mil|millón|millones)?", body_text)
+            if salary_match:
+                data["salary"] = _limpiar(salary_match.group(0))
 
-            # Fecha de publicación
-            date_selectors = [
-                '[class*="fecha"]',
-                '[class*="date"]',
-                '[class*="publicado"]',
-                '[class*="posted"]',
-            ]
-            for sel in date_selectors:
-                el = await page.query_selector(sel)
-                if el:
-                    text = _limpiar(await el.inner_text())
-                    parsed = _parse_date_relative(text)
-                    if parsed:
-                        data["date"] = parsed
-                    break
+            # 3. Fecha de publicación - "Publicado 28 Oct 2026"
+            date_match = re.search(r"Publicado\s+(\d{1,2}\s+\w+\s+\d{4})", body_text, re.IGNORECASE)
+            if date_match:
+                data["date"] = self._parse_date_es(date_match.group(1))
 
-            # Descripción
-            desc_selectors = [
-                '[class*="description"]',
-                '[class*="detalle"]',
-                '.job-description',
-                '.oferta-detalle',
-            ]
-            for sel in desc_selectors:
-                el = await page.query_selector(sel)
-                if el:
-                    html = await el.inner_html()
-                    data["description"] = self._html_to_text(html)
-                    break
+            # 4. Modalidad de trabajo - buscar palabras clave en el cuerpo
+            body_lower = body_text.lower()
+            if "remoto" in body_lower or "remote" in body_lower or "teletrabajo" in body_lower:
+                data["work_mode"] = "remote"
+            elif "hibrido" in body_lower or "híbrido" in body_lower or "hybrid" in body_lower or "mixto" in body_lower:
+                data["work_mode"] = "hybrid"
+            elif "presencial" in body_lower or "on-site" in body_lower or "onsite" in body_lower or "en sitio" in body_lower:
+                data["work_mode"] = "onsite"
 
-            # Requisitos
-            req_selectors = [
-                '[class*="requisito"]',
-                '[class*="requirement"]',
-                '.requisitos',
-            ]
-            for sel in req_selectors:
-                el = await page.query_selector(sel)
-                if el:
-                    html = await el.inner_html()
-                    data["requirements"] = self._html_to_text(html)
-                    break
+            # 5. Tipo de empleo - buscar en el cuerpo
+            if "contrato indefinido" in body_lower:
+                data["employment_type"] = "Full-time"
+            elif "contrato definido" in body_lower or "tiempo determinado" in body_lower:
+                data["employment_type"] = "Contract"
+            elif "medio tiempo" in body_lower or "part time" in body_lower or "part-time" in body_lower:
+                data["employment_type"] = "Part-time"
+            elif "tiempo completo" in body_lower or "full time" in body_lower or "full-time" in body_lower:
+                data["employment_type"] = "Full-time"
 
-            # Salario
-            salary_selectors = [
-                '[class*="salary"]',
-                '[class*="salario"]',
-                '[class*="remuneracion"]',
-            ]
-            for sel in salary_selectors:
-                el = await page.query_selector(sel)
-                if el:
-                    data["salary"] = _limpiar(await el.inner_text())
-                    break
+            # 6. Descripción - buscar entre "Descripción general" y siguiente sección
+            desc_match = re.search(r"Descripción general\s*(.*?)(?:\n\s*(?:Habilidades|Requisitos|Competencias|Datos|$))", body_text, re.DOTALL | re.IGNORECASE)
+            if desc_match:
+                data["description"] = _limpiar(desc_match.group(1))
+
+            # 7. Requisitos - buscar entre "Requisitos" y siguiente sección
+            req_match = re.search(r"Requisitos\s*(.*?)(?:\n\s*(?:Competencias|Datos|Habilidades|Descripción|$))", body_text, re.DOTALL | re.IGNORECASE)
+            if req_match:
+                data["requirements"] = _limpiar(req_match.group(1))
 
         except Exception as e:
             logger.warning("Elempleo error en detalle %s: %s", detail_url, e)
         finally:
             await page.close()
         return data
+
+    @staticmethod
+    def _parse_date_es(txt: str) -> Optional[str]:
+        """Convierte '28 Oct 2026' -> '2026-10-28'."""
+        if not txt:
+            return None
+        txt = txt.strip()
+        months = {
+            "ene": 1, "enero": 1,
+            "feb": 2, "febrero": 2,
+            "mar": 3, "marzo": 3,
+            "abr": 4, "abril": 4,
+            "may": 5, "mayo": 5,
+            "jun": 6, "junio": 6,
+            "jul": 7, "julio": 7,
+            "ago": 8, "agosto": 8,
+            "sep": 9, "septiembre": 9, "set": 9,
+            "oct": 10, "octubre": 10,
+            "nov": 11, "noviembre": 11,
+            "dic": 12, "diciembre": 12,
+        }
+        m = re.search(r"(\d{1,2})\s+(\w+)\s+(\d{4})", txt, re.IGNORECASE)
+        if m:
+            day = int(m.group(1))
+            month_str = m.group(2).lower()[:3]
+            year = int(m.group(3))
+            month = months.get(month_str)
+            if month:
+                return f"{year:04d}-{month:02d}-{day:02d}"
+        return None
 
     @staticmethod
     def _html_to_text(html: str) -> str:
