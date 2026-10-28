@@ -18,6 +18,7 @@ import tkinter as tk
 from tkinter import messagebox, ttk
 from typing import Any, Dict, Optional
 
+from jobpulse_v15 import ciclo_vida
 from jobpulse_v15.credenciales import (
     credencial,
     lista_sitios_login,
@@ -146,10 +147,15 @@ class ConfigurationWindow:
         self.notebook.add(self.tab_ui, text="\U0001F3A8 UI / Apariencia")
         self._build_ui_tab()
 
-        # Pesta\u00f1a 4: Scraping
+        # Pestaña 4: Scraping
         self.tab_scrape = ttk.Frame(self.notebook, padding=10)
         self.notebook.add(self.tab_scrape, text="\U0001F50D Scraping")
         self._build_scrape_tab()
+
+        # Pesta\u00f1a 5: Vacantes (ciclo de vida, O8)
+        self.tab_vacantes = ttk.Frame(self.notebook, padding=10)
+        self.notebook.add(self.tab_vacantes, text="\U0001F4CB Vacantes")
+        self._build_vacantes_tab()
 
         # Botones inferiores
         btn_frame = ttk.Frame(main_frame)
@@ -659,6 +665,66 @@ class ConfigurationWindow:
         )
 
     # ============================================================
+    # Pesta\u00f1a 5: Vacantes (ciclo de vida, O8)
+    # ============================================================
+    def _build_vacantes_tab(self) -> None:
+        """Selector de ventana de republicaciones y retencion (O8).
+
+        Los valores viven en ui_config.json via ciclo_vida.preferencias()/
+        guardar_preferencias(); aqui solo se editan."""
+        frame = ttk.LabelFrame(
+            self.tab_vacantes,
+            text="Ciclo de vida de vacantes (O8)",
+            padding=10,
+        )
+        frame.pack(fill="both", expand=True)
+        frame.columnconfigure(1, weight=1)
+
+        meses = [str(m) for m in ciclo_vida.MESES_PERMITIDOS]
+
+        ttk.Label(
+            frame, text="Ventana de republicaciones (meses):"
+        ).grid(row=0, column=0, sticky="w", pady=4)
+        self.vac_ventana_var = tk.StringVar(
+            value=str(ciclo_vida.DEFAULT_VENTANA_REPUBLICACIONES)
+        )
+        ventana_box = ttk.Combobox(
+            frame,
+            textvariable=self.vac_ventana_var,
+            values=meses,
+            state="readonly",
+            width=6,
+        )
+        ventana_box.grid(row=0, column=1, sticky="w", padx=(6, 0), pady=4)
+
+        ttk.Label(
+            frame, text="Retencion de puestos (meses):"
+        ).grid(row=1, column=0, sticky="w", pady=4)
+        self.vac_retencion_var = tk.StringVar(
+            value=str(ciclo_vida.DEFAULT_RETENCION_PUESTOS)
+        )
+        retencion_box = ttk.Combobox(
+            frame,
+            textvariable=self.vac_retencion_var,
+            values=meses,
+            state="readonly",
+            width=6,
+        )
+        retencion_box.grid(row=1, column=1, sticky="w", padx=(6, 0), pady=4)
+
+        explicacion = (
+            "Ventana de republicaciones: una republicacion de un puesto que ya\n"
+            "marcaste (revisado/aplicado) hereda ese estado y queda oculta\n"
+            "mientras el estado tenga menos de esta ventana (ancla: fecha del\n"
+            "estado). Fuera de la ventana entra como vacante nueva.\n\n"
+            "Retencion de puestos: en el tablero se ocultan las vacantes\n"
+            "vencidas o publicadas hace mas de esta ventana (nunca se borran)."
+        )
+        ttk.Label(frame, text=explicacion, justify="left").grid(
+            row=2, column=0, columnspan=2, sticky="w", pady=(10, 0)
+        )
+
+    # ============================================================
     # Carga / Guardado de configuraciones
     # ============================================================
     def _load_all_settings(self) -> None:
@@ -676,6 +742,15 @@ class ConfigurationWindow:
         self.ui_font_size_var.set(ui_cfg.get("font_size", 10))
         self.ui_save_geom_var.set(ui_cfg.get("save_geometry", True))
         self.ui_confirm_exit_var.set(ui_cfg.get("confirm_exit", True))
+
+        # Vacantes / ciclo de vida (O8, desde archivo con defaults seguros)
+        prefs = ciclo_vida.preferencias()
+        self.vac_ventana_var.set(
+            str(prefs[ciclo_vida.CLAVE_VENTANA_REPUBLICACIONES])
+        )
+        self.vac_retencion_var.set(
+            str(prefs[ciclo_vida.CLAVE_RETENCION_PUESTOS])
+        )
 
         # Scraping (valores por defecto razonables)
         self.scrape_port_var.set(9222)
@@ -740,12 +815,23 @@ class ConfigurationWindow:
             messagebox.showerror("Error al guardar IA (.env)", str(exc), parent=self.window)
             return
         try:
-            _save_ui_config({
+            # Load-merge-update-save: _save_ui_config SOBREESCRIBE el dict
+            # completo; sin el merge se pierden claves escritas por otros
+            # modulos (O8: ciclo_vida guarda 2 claves en el mismo archivo).
+            ui_cfg = _load_ui_config()
+            ui_cfg.update({
                 "theme": self.ui_theme_var.get(),
                 "font_size": self.ui_font_size_var.get(),
                 "save_geometry": self.ui_save_geom_var.get(),
                 "confirm_exit": self.ui_confirm_exit_var.get(),
+                ciclo_vida.CLAVE_VENTANA_REPUBLICACIONES: int(
+                    self.vac_ventana_var.get()
+                ),
+                ciclo_vida.CLAVE_RETENCION_PUESTOS: int(
+                    self.vac_retencion_var.get()
+                ),
             })
+            _save_ui_config(ui_cfg)
         except Exception as exc:
             messagebox.showerror("Error al guardar UI", str(exc), parent=self.window)
             return

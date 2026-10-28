@@ -24,6 +24,8 @@ from jobpulse_v15.candidate_profile import (
     CandidateProfileImport,
     extract_candidate_profile,
 )
+from jobpulse_v15 import ciclo_vida
+from jobpulse_v15.ciclo_vida import preferencias as preferencias_ciclo_vida
 from jobpulse_v15.cinde import CindeFetcher
 from jobpulse_v15.db import Database
 from jobpulse_v15.exports import (
@@ -829,6 +831,12 @@ class JobPulseWindow:
                 salary_at_most=self._optional_float(
                     self.salary_at_most_var.get(), "Salario hasta"
                 ),
+                # O8: tablero muestra solo vacantes vigentes (vencidas/
+                # fuera de ventana ocultas, nunca borradas).
+                solo_vigentes=True,
+                ventana_retencion_meses=preferencias_ciclo_vida()[
+                    ciclo_vida.CLAVE_RETENCION_PUESTOS
+                ],
             )
             comparisons = self.repository.compare_jobs_to_candidate_profile(jobs)
             compatibility_filter = PROFILE_COMPATIBILITY_FILTERS[

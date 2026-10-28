@@ -4,11 +4,15 @@ import asyncio
 import hashlib
 import inspect
 import json
+import logging
 import sqlite3
 from collections.abc import Callable, Mapping, Sequence
 from typing import Any
 
+from jobpulse_v15 import ciclo_vida
 from jobpulse_v15.repository import Repository
+
+logger = logging.getLogger("jobpulse_v15.ingestion")
 
 
 class IngestionError(RuntimeError):
@@ -95,6 +99,18 @@ class IngestionService:
                 )
                 if is_new_source_record:
                     created += 1
+                    # O8: si es republicacion de un puesto ya marcado
+                    # (reviewed/applied), hereda el estado manual y nace
+                    # oculta. Best-effort: un fallo aqui no puede romper
+                    # la corrida de ingesta.
+                    try:
+                        ciclo_vida.evaluar_herencia(self.repository, offer["job"])
+                    except Exception as exc:  # pragma: no cover - defensivo
+                        logger.warning(
+                            "Herencia de republicacion fallo para %s: %s",
+                            offer["job"].get("job_id"),
+                            exc,
+                        )
                 else:
                     duplicates += 1
         except (sqlite3.Error, ValueError) as exc:
