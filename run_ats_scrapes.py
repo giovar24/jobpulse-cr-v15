@@ -18,6 +18,7 @@ from typing import Any, Callable, Mapping, Sequence
 from jobpulse_v15.ashby import AshbyFetcher
 from jobpulse_v15.db import Database
 from jobpulse_v15.greenhouse import GreenhouseFetcher
+from jobpulse_v15.harvie import HarvieFetcher
 from jobpulse_v15.ingestion import IngestionService, IngestionError
 from jobpulse_v15.lever import LeverFetcher
 from jobpulse_v15.recruitee import RecruiteeFetcher
@@ -29,6 +30,7 @@ from jobpulse_v15.workday import WorkdayFetcher
 FETCHER_MAP = {
     "ashby": AshbyFetcher,
     "greenhouse": GreenhouseFetcher,
+    "harvie": HarvieFetcher,
     "lever": LeverFetcher,
     "recruitee": RecruiteeFetcher,
     "successfactors": SuccessFactorsFetcher,
@@ -36,7 +38,7 @@ FETCHER_MAP = {
     "workday": WorkdayFetcher,
 }
 
-PLATFORM_ORDER = ["workday", "greenhouse", "ashby", "lever", "recruitee", "workable", "successfactors"]
+PLATFORM_ORDER = ["workday", "greenhouse", "ashby", "lever", "recruitee", "workable", "successfactors", "harvie"]
 
 
 def build_fetcher(platform: str):

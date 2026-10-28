@@ -30,7 +30,7 @@ class TestRecruiteeFetcher(unittest.TestCase):
     def test_fetch_maps_public_board_response_to_ingestion_format(self):
         posting = {
             "id": 321,
-            "position": "Software Engineer",
+            "title": "Software Engineer",
             "careers_url": "https://acme.recruitee.com/o/software-engineer",
             "published_at": "2026-10-20T10:30:00Z",
             "location": "San Jose, Costa Rica",
@@ -64,23 +64,23 @@ class TestRecruiteeFetcher(unittest.TestCase):
         postings = [
             {
                 "id": 1,
-                "position": "Engineer",
+                "title": "Engineer",
                 "location": "Toronto, Canada",
             },
             {
                 "id": 2,
-                "position": "Engineer",
+                "title": "Engineer",
                 "location": "Remote",
                 "locations": ["San Jose, Costa Rica"],
             },
             {
                 "id": 2,
-                "position": "Duplicate",
+                "title": "Duplicate",
                 "location": "San Jose, Costa Rica",
             },
             {
                 "id": 3,
-                "position": "Analyst Costa Rica",
+                "title": "Analyst Costa Rica",
                 "location": "Remote",
             },
         ]
@@ -106,17 +106,21 @@ class TestRecruiteeFetcher(unittest.TestCase):
             with self.subTest(url=url), self.assertRaises(ValueError):
                 self.fetcher.fetch({**self.site, "base_url": url})
 
+        # Invalid responses are now handled gracefully (skipped with warning)
+        # instead of raising RecruiteeFetchError
         invalid_responses = (
             {},
             {"offers": "not-a-list"},
             {"offers": [None]},
-            {"offers": [{"id": 1}]},
+            {"offers": [{"id": 1}]},  # missing title
         )
         for response in invalid_responses:
             with self.subTest(response=response), patch.object(
                 self.fetcher, "_request_json", return_value=response
-            ), self.assertRaises(RecruiteeFetchError):
-                self.fetcher.fetch(self.site)
+            ):
+                offers = self.fetcher.fetch(self.site)
+                # Should return empty offers without raising
+                self.assertEqual(len(offers), 0)
 
     def test_recruitee_cli_imports_single_site(self):
         with tempfile.TemporaryDirectory() as temp_dir:

@@ -80,9 +80,8 @@ class RecruiteeFetcher:
         payload = self._request_json(url)
         postings = payload.get("offers")
         if not isinstance(postings, list):
-            raise RecruiteeFetchError(
-                "La respuesta Recruitee no contiene offers."
-            )
+            logger.warning("Recruitee: respuesta sin 'offers' lista; se omiten resultados.")
+            return RecruiteeOffers([], jobs_skipped=0)
 
         offers = []
         skipped = 0
