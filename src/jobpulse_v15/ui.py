@@ -94,6 +94,22 @@ PROFILE_COMPATIBILITY_FILTERS = {
     "Sin analisis": "not_analyzed",
     "Sin requisitos obligatorios": "no_required",
 }
+
+
+def elegir_filtro_compatibilidad(conteo) -> str:
+    """Etiqueta de compatibilidad para el paso 4 del flujo completo.
+
+    Muestra 'Coinciden requisitos obligatorios' solo si algo lo cumple; si no,
+    'Cualquiera' (todos los vigentes) para no dejar la grilla vacía.
+
+    Contexto: `candidate_profile_status` exige ``analysis_status == 'complete'``
+    para devolver ``matched`` y el analizador marca ``partial`` ante cualquier
+    categoría unknown/ambigua (conservador por diseño), así que en BD reales
+    ``matched`` suele ser 0.
+    """
+    if conteo.get("matched"):
+        return "Coinciden requisitos obligatorios"
+    return "Cualquiera"
 JOB_REVIEW_REASON_LABELS = {
     "missing_company": "Empresa no registrada",
     "missing_country": "Pais no registrado",
@@ -2067,16 +2083,74 @@ class JobPulseWindow:
                             "(ver motivo arriba).\n"
                         )
 
-                # Paso 4: comparar con el perfil y mostrar las que coinciden
+                # Paso 4: comparar con el perfil y mostrar vacantes vigentes.
+                # El filtro NO se hardcodea: hoy 'matched' exige análisis
+                # 'complete' y 370/447 son 'partial' (conservador por diseño),
+                # así que filtrar 'Coinciden' a ciegas dejaba la grilla vacía.
                 _log("\n=== PASO 4: comparar con el perfil ===\n")
                 dialog.after(
                     0, lambda: status_var.set("Comparando con el perfil...")
                 )
+                ventana = preferencias_ciclo_vida()[
+                    ciclo_vida.CLAVE_RETENCION_PUESTOS
+                ]
+                vigentes = self.repository.search_jobs(
+                    limit=500,
+                    sort_by="last_seen",
+                    solo_vigentes=True,
+                    ventana_retencion_meses=ventana,
+                )
+                total_bd = self.repository.search_jobs(
+                    limit=2000, sort_by="last_seen", solo_vigentes=False
+                )
+                ocultos = len(total_bd) - len(vigentes)
+                comparaciones = (
+                    self.repository.compare_jobs_to_candidate_profile(vigentes)
+                )
+                conteo: dict[str, int] = {}
+                for job in vigentes:
+                    estado = self.repository.candidate_profile_status(
+                        comparaciones[job["job_id"]]
+                    )
+                    conteo[estado] = conteo.get(estado, 0) + 1
+                inverso = {
+                    valor: etiqueta
+                    for etiqueta, valor in PROFILE_COMPATIBILITY_FILTERS.items()
+                }
+                # Si no hay 'matched' se muestran TODOS los vigentes (el usuario
+                # quiere ver los puestos vigentes) y se explica cómo refinar.
+                etiqueta = elegir_filtro_compatibilidad(conteo)
+                elegido = PROFILE_COMPATIBILITY_FILTERS[etiqueta]
+                _log(
+                    f"Vacantes vigentes: {len(vigentes)} de {len(total_bd)} en BD"
+                    + (f" ({ocultos} ocultas por fecha de publicación fuera "
+                       f"de la ventana de {ventana} meses)" if ocultos else "")
+                    + " | compatibilidad: "
+                    + ", ".join(
+                        f"{inverso.get(k, k)}={v}"
+                        for k, v in sorted(conteo.items(), key=lambda x: -x[1])
+                    )
+                    + "\n"
+                )
+                if not conteo.get("matched"):
+                    _log(
+                        "Ninguna vacante en 'Coinciden requisitos "
+                        "obligatorios': ese estado exige análisis completo y "
+                        "las reglas marcan 'partial' cuando hay categorías "
+                        "unknown/ambiguas (conservador por diseño).\n"
+                    )
+                    if conteo.get("no_required"):
+                        _log(
+                            f"Pista: {conteo['no_required']} vacantes no tienen "
+                            "requisitos obligatorios — combo "
+                            "'Sin requisitos obligatorios' para verlas.\n"
+                        )
+                _log(f"Filtro aplicado: {etiqueta} (todos los vigentes).\n"
+                     if elegido is None
+                     else f"Filtro aplicado: {etiqueta}.\n")
                 dialog.after(
                     0,
-                    lambda: self.profile_compatibility_var.set(
-                        "Coinciden requisitos obligatorios"
-                    ),
+                    lambda e=etiqueta: self.profile_compatibility_var.set(e),
                 )
                 dialog.after(0, self.search_jobs)
                 if veredicto is None:
@@ -2087,9 +2161,11 @@ class JobPulseWindow:
                     estado_ia = f"IA {veredicto['estado']} ⚠️"
                 dialog.after(
                     0,
-                    lambda s=estado_ia: status_var.set(f"Flujo completo — {s}"),
+                    lambda s=estado_ia, e=etiqueta: status_var.set(
+                        f"Flujo completo — {s} | filtro: {e}"
+                    ),
                 )
-                _log("Mostrando vacantes que coinciden con tu perfil.\n")
+                _log(f"Mostrando vacantes vigentes con filtro '{etiqueta}'.\n")
                 _log(f"=== FLUJO COMPLETO TERMINADO ({estado_ia}) ===\n")
             except Exception as e:
                 _log(f"\nERROR en el flujo: {e}\n")

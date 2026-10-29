@@ -203,8 +203,8 @@ python -m pytest tests/ -q
 - **O7 UI-first completo (2026-10-28, commit `28ef1f2`)**: flujo **scrape →
   analizar (reglas) → IA → comparar perfil** en un click (checkbox en Corrida).
   "Enriquecer" = IA bajo demanda (validado E2E); "Re-login ANE" = Brave auto.
-  Suite: **289 tests** (264 + 10 `test_seed_ats` + Harvie/Recruitee/Workable
-  fixes + 13 `test_ia_estado`).
+  Suite: **293 tests** (264 + 10 `test_seed_ats` + Harvie/Recruitee/Workable
+  fixes + 13 `test_ia_estado` + 4 `test_elegir_filtro`).
 - **Veredicto del enriquecimiento (`ia_estado.py`, 2026-10-29)**: el flujo ya no
   "asume" que la IA terminó — mide la BD antes/después del pase y decide:
   `evaluar_ia()` → `completado` | `parcial` | `sin_trabajo` (OK) vs `atascado`
@@ -214,6 +214,17 @@ python -m pytest tests/ -q
   botón "Enriquecer" muestran el estado en el diálogo).
   Separar huecos **recuperables** vs desc. basura (`<200` chars) es clave: la
   basura no cuenta como fallo de la IA.
+- **Grilla del paso 4 vacía — resuelto (2026-10-29)**: el paso 4 filtraba
+  `matched` a ciegas y **`matched` suele ser 0 en BD real**: 370/447 análisis
+  son `partial` (el analizador marca `unknown`/`ambiguous` y el repo exige
+  `complete` para `matched` → `needs_review`). Ahora
+  `ui.elegir_filtro_compatibilidad(conteo)` usa `matched` si existe y si no
+  **muestra todos los vigentes**, explicando en el diálogo la distribución.
+  Ojo con **`solo_vigentes` (O8)**: oculta publicaciones con `date_published`
+  fuera de la ventana de 6 meses aunque se hayan scrapeado hoy (447 → 423 en
+  la BD del 29-10, 24 ocultas por fecha vieja de Workday/Indeed).
+  El guard de `analysis_status` está en `analysis.py:334` y
+  `repository.candidate_profile_status` (línea ~2522).
 - **CLI end-to-end `run_full_flow.py`** (raíz del fork): scrape → reglas →
   IA → resumen con veredicto; `--only-scrape`, `--no-notify`. Los monitores
   ad-hoc (`status_ia.py`, `vigilar_enriquecimiento.py`) son desechables: usar

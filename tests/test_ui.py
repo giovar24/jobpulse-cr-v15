@@ -23,6 +23,7 @@ from jobpulse_v15.ui import (
     ApplicationTrackingWindow,
     JobPulseWindow,
     SourceManagerWindow,
+    elegir_filtro_compatibilidad,
     format_job_detail,
     format_job_review_reasons,
     format_job_review_summary,
@@ -2160,6 +2161,31 @@ class TestManualJobStateUI(unittest.TestCase):
         ]
         self.assertIn("aun no tiene un analisis", texts[0].get("1.0", "end"))
         dialogs[0].destroy()
+
+
+class TestElegirFiltroCompatibilidad(unittest.TestCase):
+    """Paso 4 del flujo: el filtro no puede dejarte la grilla vacia."""
+
+    def test_usa_matched_cuando_algo_coincide(self):
+        conteo = {"matched": 3, "needs_review": 300, "no_required": 142}
+        self.assertEqual(
+            elegir_filtro_compatibilidad(conteo),
+            "Coinciden requisitos obligatorios",
+        )
+
+    def test_sin_matched_muestra_todos_los_vigentes(self):
+        # BD real (2026-10-29): matched=0 porque 370/447 analisis son 'partial'
+        conteo = {"needs_review": 300, "no_required": 142, "not_registered": 5}
+        self.assertEqual(elegir_filtro_compatibilidad(conteo), "Cualquiera")
+
+    def test_conteo_vacio_no_revienta(self):
+        self.assertEqual(elegir_filtro_compatibilidad({}), "Cualquiera")
+
+    def test_no_infiere_matched_con_cero(self):
+        self.assertNotEqual(
+            elegir_filtro_compatibilidad({"matched": 0}),
+            "Coinciden requisitos obligatorios",
+        )
 
 
 if __name__ == "__main__":
