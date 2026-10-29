@@ -203,7 +203,27 @@ python -m pytest tests/ -q
 - **O7 UI-first completo (2026-10-28, commit `28ef1f2`)**: flujo **scrape →
   analizar (reglas) → IA → comparar perfil** en un click (checkbox en Corrida).
   "Enriquecer" = IA bajo demanda (validado E2E); "Re-login ANE" = Brave auto.
-  Suite: **276 tests** (264 + 10 `test_seed_ats` + Harvie/Recruitee/Workable fixes).
+  Suite: **289 tests** (264 + 10 `test_seed_ats` + Harvie/Recruitee/Workable
+  fixes + 13 `test_ia_estado`).
+- **Veredicto del enriquecimiento (`ia_estado.py`, 2026-10-29)**: el flujo ya no
+  "asume" que la IA terminó — mide la BD antes/después del pase y decide:
+  `evaluar_ia()` → `completado` | `parcial` | `sin_trabajo` (OK) vs `atascado`
+  (0 progreso con huecos recuperables) | `fallido` (`error` de `pase_completo`).
+  La BD manda sobre las stats de `pase_completo`. Integrado en
+  `run_full_flow.py` (exit 0/1 + toast ✅/⚠️) y en la UI (paso 3 del flujo y
+  botón "Enriquecer" muestran el estado en el diálogo).
+  Separar huecos **recuperables** vs desc. basura (`<200` chars) es clave: la
+  basura no cuenta como fallo de la IA.
+- **CLI end-to-end `run_full_flow.py`** (raíz del fork): scrape → reglas →
+  IA → resumen con veredicto; `--only-scrape`, `--no-notify`. Los monitores
+  ad-hoc (`status_ia.py`, `vigilar_enriquecimiento.py`) son desechables: usar
+  `python -X utf8 -c "from jobpulse_v15.ia_estado import snapshot_enriquecimiento as s; print(s())"`
+  para un chequeo puntual.
+- **`clean_run.py`** (raíz del fork): limpia TODO lo scrapeado para una corrida
+  de prueba limpia — jobs, runs, análisis, requisitos, `field_status`,
+  source_records, snapshots + VACUUM; **conserva** perfil (facts) y config
+  (sites/plataformas). Requiere argumento literal `SI` (corre no-interactivo):
+  `.\.venv\Scripts\python.exe -X utf8 clean_run.py SI`.
 - **O3 ATS CR directorio versionado (commit `a9083a7`)**: 122 tableros
   (Workday, Greenhouse, Ashby, Lever, Recruitee, Workable, SuccessFactors) en
   `src/jobpulse_v15/seeds/*.json` + botón "Importar directorio ATS (CR)".

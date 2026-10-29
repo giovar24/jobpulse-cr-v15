@@ -2010,6 +2010,7 @@ class JobPulseWindow:
         import asyncio
 
         from jobpulse_v15 import ia_enrichment as iae
+        from jobpulse_v15 import ia_estado as ie
         from jobpulse_v15.ia_servidor import asegurar_servidor, servidor_arriba
 
         def _log(texto: str) -> None:
@@ -2018,6 +2019,7 @@ class JobPulseWindow:
 
         def _run() -> None:
             servidor = None
+            veredicto = None
             try:
                 # Paso 2: limpieza/extracción con reglas en TODOS los pendientes
                 _log("\n=== PASO 2: análisis por reglas ===\n")
@@ -2041,16 +2043,29 @@ class JobPulseWindow:
                 dialog.after(0, lambda: status_var.set("Enriqueciendo (IA)..."))
                 if not iae.get_ia_client():
                     _log("IA no configurada (Configuración → IA); paso omitido.\n")
+                    veredicto = None
                 else:
                     if servidor_arriba():
                         _log("Servidor IA ya activo (no se toca).\n")
                     else:
                         servidor = asegurar_servidor(on_log=_log)
+                    antes = ie.snapshot_enriquecimiento()
+                    _log(
+                        f"Snapshot antes: jobs={antes.get('total', 0)} | "
+                        f"críticos pend={antes.get('criticos_pendientes_rec', 0)} | "
+                        f"secundarios pend={antes.get('secundarios_pendientes_rec', 0)}\n"
+                    )
                     r = asyncio.run(iae.pase_completo(on_event=_log))
-                    if "error" in r:
-                        _log(f"ERROR IA: {r['error']}\n")
-                    else:
-                        _log("Enriquecimiento IA completado.\n")
+                    import time as _time
+                    _time.sleep(2)  # deja asentar los últimos INSERTs
+                    despues = ie.snapshot_enriquecimiento()
+                    veredicto = ie.evaluar_ia(antes, despues, r)
+                    _log(ie.resumen_linea(veredicto) + "\n")
+                    if not veredicto["ok"]:
+                        _log(
+                            "⚠️ El enriquecimiento NO completó su trabajo "
+                            "(ver motivo arriba).\n"
+                        )
 
                 # Paso 4: comparar con el perfil y mostrar las que coinciden
                 _log("\n=== PASO 4: comparar con el perfil ===\n")
@@ -2064,9 +2079,18 @@ class JobPulseWindow:
                     ),
                 )
                 dialog.after(0, self.search_jobs)
-                dialog.after(0, lambda: status_var.set("Flujo completo terminado"))
+                if veredicto is None:
+                    estado_ia = "IA omitida"
+                elif veredicto["ok"]:
+                    estado_ia = f"IA {veredicto['estado']}"
+                else:
+                    estado_ia = f"IA {veredicto['estado']} ⚠️"
+                dialog.after(
+                    0,
+                    lambda s=estado_ia: status_var.set(f"Flujo completo — {s}"),
+                )
                 _log("Mostrando vacantes que coinciden con tu perfil.\n")
-                _log("=== FLUJO COMPLETO TERMINADO ===\n")
+                _log(f"=== FLUJO COMPLETO TERMINADO ({estado_ia}) ===\n")
             except Exception as e:
                 _log(f"\nERROR en el flujo: {e}\n")
                 dialog.after(0, lambda: status_var.set("Error en el flujo"))
@@ -2090,6 +2114,7 @@ class JobPulseWindow:
         import asyncio
 
         from jobpulse_v15 import ia_enrichment as iae
+        from jobpulse_v15 import ia_estado as ie
         from jobpulse_v15.ia_servidor import asegurar_servidor, servidor_arriba
 
         dialog = tk.Toplevel(self.root)
@@ -2142,12 +2167,33 @@ class JobPulseWindow:
                 else:
                     servidor = asegurar_servidor(on_log=_log)
                 dialog.after(0, lambda: info_var.set("Enriqueciendo..."))
+                antes = ie.snapshot_enriquecimiento()
+                _log(
+                    f"Snapshot antes: jobs={antes.get('total', 0)} | "
+                    f"críticos pend={antes.get('criticos_pendientes_rec', 0)} | "
+                    f"secundarios pend={antes.get('secundarios_pendientes_rec', 0)}"
+                )
                 r = asyncio.run(iae.pase_completo(on_event=_log))
-                if "error" in r:
-                    _log(f"ERROR: {r['error']}")
-                    dialog.after(0, lambda: status_var.set("Terminó con error"))
+                import time as _time
+                _time.sleep(2)  # deja asentar los últimos INSERTs
+                despues = ie.snapshot_enriquecimiento()
+                veredicto = ie.evaluar_ia(antes, despues, r)
+                _log(ie.resumen_linea(veredicto))
+                if veredicto["ok"]:
+                    dialog.after(
+                        0,
+                        lambda s=veredicto["estado"]: status_var.set(
+                            f"Completado ({s})"
+                        ),
+                    )
                 else:
-                    dialog.after(0, lambda: status_var.set("Completado"))
+                    _log("⚠️ Revisa el motivo: el enriquecimiento no avanzó.")
+                    dialog.after(
+                        0,
+                        lambda s=veredicto["estado"]: status_var.set(
+                            f"Terminó con problemas ({s})"
+                        ),
+                    )
             except Exception as e:
                 _log(f"ERROR: {e}")
                 dialog.after(0, lambda: status_var.set("Error"))
