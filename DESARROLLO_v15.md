@@ -26,7 +26,7 @@
 | **CV Parsing** | `cv2profile.py` + `reporte_cv.py` (PDF→perfil Harvard/ATS completo) | Editor harvard-ats-v1 (`ui_perfil.py`) + reglas + **pase IA `cv_ia.py`** (E2E Gemma/Gemini, integrado al asistente de import) | ✅ Gap cerrado (O6.2) |
 | **Auth/Session** | `core/browser_manager.py` + `hacer_login.py` + `credenciales.py` + `providers/login/` | ✅ FASE 3 completa: `browser_manager` + `credenciales` (keyring) + `providers/login/auto_login.py` + `browser_sites.py` | Cerrado |
 | **Scheduler** | `recordatorio.py` + `jobpulse.cmd` (login + recordatorio Windows) | Parcial: launcher `jobpulse-v15.bat` (venv + IA + Brave CDP + UI); sin recordatorio | Gap medio |
-| **Tests** | 7 unitarios (texto, dedupe, gate) | 17 suites / 217 tests + 46 subtests (pytest, python del sistema) | v1_5 **mejor cobertura** |
+| **Tests** | 7 unitarios (texto, dedupe, gate) | 25 suites / 324 tests + 44 subtests (pytest, python del sistema) | v1_5 **mejor cobertura** |
 | **UI** | Streamlit (`app.py`) legacy + Tkinter (`ui.py`) completa | Tkinter (`ui.py`) completa (filtros, edición, seguimiento, perfil, calidad, duplicados, admin fuentes) | Similares |
 
 ---
@@ -118,7 +118,7 @@ def fetch(self, site: dict, *, pages: int, search_text: str | None,
 | `recordatorio.py` | Portado | Login startup + recordatorio Windows (Task Scheduler) |
 | `jobpulse-v15.cmd` | Nuevo | Launcher UI + corrida con un clic |
 
-### OBJETIVOS O1–O10 (lista canónica, estado al 2026-10-28)
+### OBJETIVOS O1–O10 (lista canónica, estado al 2026-10-29)
 
 > Cada handoff de sesión lleva su copia de esta tabla con el estado al cierre.
 
@@ -129,7 +129,7 @@ def fetch(self, site: dict, *, pages: int, search_text: str | None,
 | **O3** Fetchers ATS huérfanos | Validar los 7 fetchers ATS (workday, greenhouse, ashby, lever, recruitee, workable, successfactors) con tableros reales | ⏳ no iniciado |
 | **O4** Calibración gate-vs-IA | Pearson/Spearman/MAE + umbral sugerido (`ia_calibracion.py`) | ⏳ depende de O1+O2 |
 | **O5** Higiene de datos | O5.1 ✅ auditoría/huecos · O5.3 re-barrido de los ~14-19 jobs con descripción basura (login-wall) · **O5.4 ✅ CERRADO (2026-10-27)**: análisis por **huella de descripción** (en ANE el título+empresa NO es identidad — "Confidencial"); solo 4/120 del lote 26-10 eran republicaciones → **las 4 viejas marcadas `dismissed` con nota** (parejas 121034/121185, 121026/121184, 121025/121183, 120958/121094), las nuevas quedan activas; grupos misma-empresa+misma-ciudad (INAMU ×3, SALESLAND ×2) = **plazas múltiples, decisión del usuario, intactos**; multi-sede (INAMU 8 ciudades, HIPERMASCOTAS 2 tiendas) = vacantes reales | 🟢 solo queda O5.3 |
-| **O6** Perfil del candidato | O6.1 editor ✅ · O6.2 capa IA de CVs + integración UI ✅ · O6.3 matching afinado (niveles/CEFR/work_authorization) · O6.4 dedupe semántico del perfil (slugs ES/EN del mismo hecho: normalizar al importar vs. decidir en diálogo — pendiente decisión del usuario) | 🟢 en curso |
+| **O6** Perfil del candidato | O6.1 editor ✅ · O6.2 capa IA de CVs + integración UI ✅ · **O6.3 matching afinado (niveles/CEFR) ✅ CERRADO (2026-10-29)** — ver bloque "O6.3 — Matching (Paso 5)" más abajo · O6.4 dedupe semántico del perfil (slugs ES/EN del mismo hecho: normalizar al importar vs. decidir en diálogo — pendiente decisión del usuario) | 🟢 O6.1/O6.2/O6.3 cerrados · O6.4 pendiente decisión |
 | **O7** Operación UI-first (servidores bajo demanda) | La app arranca/detiene lo que necesita; el usuario no toca CLI ni launchers | ✅ **completo (2026-10-27)** |
 | **O8** Ciclo de vida de la vacante | Plan previo del usuario (recordado 2026-10-27; formalizado tras investigar el estado real del código). **O8.1 categorías de puestos** ❌ no existe ningún campo (hoy solo hay categorías de REQUISITOS: education/experience/language/license/skill) → taxonomía nueva (migración 00N) editable en UI, sugerencia IA opcional (decisión 27-10: el AGENTE genera el borrador desde los 295 jobs con `tools/categorias_borrador.py`; el usuario corrige después) · **O8.2 recurrentes y aplicadas ocultas por defecto (decisión del usuario 27-10, refinada con ejemplo Concentrix)**: ⚠️ **ESTABA RESUELTO en v1.x (tombstones + `dup_of`, ver sub-diseño) y NO se portó**; hoy la republicación nace con ID nuevo y el estado manual del ID viejo NO se arrastra. Diseño aprobado: **matching por compañía + huella de descripción** (el título NO como criterio primario — O5.4 demostró falsos: 13 coincidencias solo-título NO eran republicaciones y grupos mismo-título eran plazas distintas). Al INGERIR una copia nueva que coincida (huella exacta o ratio ≥ ~0.92) con una ya marcada reviewed/applied → **la copia hereda el estado manual automáticamente** (nace oculta + nota de herencia con el ID origen; datos intactos — regla de repo actualizada 27-10: duplicado EXACTO = auto, patrón de v1.x; dudoso = manual). Margen incierto (ratio medio) → `quality duplicates` (dedupe conservador intacto). Opt-in en UI para mostrar repetidas/ya aplicadas; marcar aplicado = SIEMPRE manual. Y la ocultación NO es perpetua: **ventana temporal definida por el usuario en la pestaña de Configuración** (selector 1/2/3/6 meses, etc. — decisión del usuario 27-10; ancla = `updated_at` del estado del original): la copia solo hereda el estado (y queda oculta) si el estado del original tiene MENOS de la ventana; si el original ya la supera, la copia entra como vacante NUEVA (nuevo ciclo, re-aplicable). Default DECIDIDO por el usuario (27-10): **3 meses** (persistencia en `ui_config.json`, pestaña nueva "Vacantes" de Configuración; selector 1/2/3/6/12) · **O8.3 registro de aplicados** ✅ YA EXISTE: estado "Aplicada" en el diálogo de estado (excluye de búsqueda por defecto vía skip_automatic) + tabla `applications` (planned → applied → recruiter_contact → interview → offer, con applied_at + next_action_at + notas) + diálogo Seguimiento por vacante · **O8.4 de-baja automática por tiempo** ⚠️ **EXISTÍA en v1.x (`purge_expired`, ver sub-diseño) y NO se portó**: en v1.5 la búsqueda no filtra por edad ni vigencia (`expires_at` SOLO ANE lo llena; `gate.es_vigente` dormido sin callers) → portar como **OCULTAR, no borrar** (v1.x borraba filas): vencidas por `expires_at`, sin vencimiento → fuera de la ventana de publicación, sin fecha legible → TTL por `created_at`; ventana configurable en la MISMA pestaña "Vacantes" (decisión 27-10; default propuesto: 6 meses) | 🔵 diseñado 27-10 — implementación = portación de v1.x |
 | **O9** Optimización de UI | Ajustes de interfaz pedidos por el usuario y siempre pospuestos — alcances por definir (después de O2-redefinido) | ⏳ placeholder |
@@ -143,7 +143,59 @@ def fetch(self, site: dict, *, pages: int, search_text: str | None,
 - **O7.4 Re-login ANE desde la UI** ✅ — botón "Re-login ANE" en el diálogo de Corrida; lógica en `jobpulse_v15.ane_login.py` (paquete); `login_ane.py` queda como wrapper CLI que abre/cierra Brave solo si hace falta.
 - **Criterio de éxito** ✅ — abrir la app → "Ejecutar barrido" → "Enriquecer" → cerrar. Cero CLI, cero launcher obligatorio, cero `ECONNREFUSED 9222`.
 
-**O8 — sub-diseño (2026-10-27): PORTAR el mecanismo que v1.x ya tenía resuelto** (el usuario lo recordó e hizo revisar el código; hallazgo confirmado):
+**O6.3 — Matching de requisitos vs. perfil (Paso 5) — ✅ CERRADO 2026-10-29:**
+
+Módulo real: **`src/jobpulse_v15/matching.py`** (no scripts ad-hoc). Herramientas de
+verificación en la raíz: `run_paso5.py` (runner, `--dry` opcional),
+`evidencia_descartadas.py` (evidencia literal), `resumen_bloqueo.py` (resumen del
+bloqueo), `verificar_corridas.py` (trazabilidad). Evidencia completa versionada en
+`docs/PASO5_EVIDENCIA_2026-10-29.md`.
+
+- **Esquema**: migraciones `009`–`014` (concepto canónico + `job_match` + `corrida_id`
+  + columnas de conteo) y **`015_job_match_valida.sql`** (columna `valida` + índices).
+  `job_match` tiene PK `(job_id, corrida_id)`.
+- **Regla de corridas**: cada cambio de regla escribe una **corrida nueva**; las
+  anteriores quedan con `valida = 0`. Nunca se hace `UPDATE` in-place de una corrida
+  emitida (los `UPDATE` in-place de la sesión 29-10 morning corrompieron la
+  trazabilidad: por eso existen 5 corridas de 447 filas y solo la última es vigente).
+- **Precedencia de estados**: `descartada` (bloqueante confirmado) >
+  `revisar_a_mano` (universitario obligatorio NO confirmado) > `datos_insuficientes`
+  (cobertura < 0.60) > `revisar_a_mano` (otros faltantes) > `calificada`
+  (puntaje ≥ 0.80) > `baja_compatibilidad`. Umbrales **sin cambio** (0.60 / 0.80).
+- **Bloqueante educativo (regla acordada con el usuario)**: `descartada` solo si el
+  **texto completo** (`requirements_raw` + `description_raw`) confirma un título
+  universitario con `requirement_level='required'`, **sin negación y sin alternativa**.
+  En cualquier otro caso → `revisar_a_mano` con motivo `educacion_no_confirmada`.
+  "bachiller" NO es universitario en CR (es secundaria); "licenciatura" sí.
+  Negación: 30 chars antes / 45 después. Alternativa: 40 antes / 110 después + la
+  cláusula completa (viñeta/frase) y la cláusula siguiente.
+- **Motivos** (`PRIORIDAD_MOTIVOS`): `titulo_universitario_requerido` >
+  `educacion_no_confirmada` > `educacion_no_cumple` > `skill_faltante` >
+  `idioma_no_comparable` > `experiencia_no_verificable` > `licencia_no_comparable` >
+  `cobertura_insuficiente`.
+  `educacion_no_confirmada` = obligatorio que el texto NO confirma;
+  `educacion_no_cumple` = el perfil no alcanza el nivel pedido (requisito no
+  obligatorio: no bloquea, se deja para revisión).
+- **Corrida vigente `20261029_171039`** (447 vacantes): calificada 102 ·
+  revisar_a_mano 141 · sin_requisitos 141 · **descartada 32** ·
+  datos_insuficientes 31. De las 52 vacantes con requisito universitario
+  **obligatorio**: 32 confirmadas (descartada), 18 con alternativa, 1 con negación
+  ("No university degree required."), 1 sin término en el texto → las 20 últimas van
+  a `revisar_a_mano` (revisión manual pendiente, NO se revisaron todavía).
+- **Falsos descartes corregidos** (8, todos con evidencia literal): negación
+  ("No university degree required"), alternativas ("or its equivalent",
+  "Associate's or bachelor's degree", "Bachelor's degree or certification",
+  "equivalent practical experience may be considered", "or an equivalent
+  combination…", "or other technical/scientific experience"). Antes: 40 descartada
+  (corrida `160358`) → ahora 32.
+- **Tests**: `tests/test_matching.py` (31 casos, incluidos 11 regresiones con frases
+  literales de la BD) + `tests/test_database.py` (versión de esquema dinámica:
+  fallaba con `8` fijo desde la migración 009). Suite completa: **324 tests verdes**.
+
+**Pendiente del Paso 5**: revisar a mano las 20 `educacion_no_confirmada` (Paso 6) y
+después las decisiones/UI/export (Paso 7). **No** se han revisado todavía.
+
+**O8 — sub-diseño (2026-10-27): PORTAR el mecanismo que v1.x ya tenía resuelto** (el usuario lo recordó y hizo revisar el código; hallazgo confirmado):
 
 El ciclo de vida existía en el proyecto v1.x (`D:\Proyectos\jobpulse_cr`,
 congelado — solo leerlo) y NO se portó a v1.5:
@@ -281,8 +333,13 @@ Pendientes vivos (handoff vigente `docs/HANDOFF_SESION_2026-10-27.md`):
    "solo con requisitos obligatorios" + columna "Req."; motor semántico
    DORMIDO.
 5. **O6.3** (matching afinado) · **O6.4** (dedupe semántico del perfil:
-   slugs ES/EN — decidir import vs diálogo).
-6. Luego: **O9** (optimización de UI — alcances por definir), O3 (validar
+   slugs ES/EN — decidir import vs diálogo). **O6.3 ✅ cerrado 29-10**
+   (ver bloque "O6.3 — Matching (Paso 5)").
+6. **Paso 6/7 del matching**: revisión manual de las 20
+   `revisar_a_mano / educacion_no_confirmada` (corrida `20261029_171039`),
+   luego decisiones finales + UI + export. **No tocar los umbrales**
+   (cobertura 0.60 / puntaje 0.80) sin acuerdo explícito.
+7. Luego: **O9** (optimización de UI — alcances por definir), O3 (validar
    7 fetchers ATS), O4 (calibración — redefinir: sin gate semántico no
    tiene contra-qué comparar).
 
@@ -326,15 +383,58 @@ Pendientes vivos (handoff vigente `docs/HANDOFF_SESION_2026-10-27.md`):
 - **Config declarativa only**: No credenciales en `site_config`; credenciales en almacén local aparte (`credenciales.py`).
 - **Scrapers browser reciben `port`**: Separación de responsabilidades (browser manager ≠ fetcher).
 - **Health tracking por defecto**: 3 ceros = `review_required` (no desactiva solo).
+- **Matching: el bloqueante educativo se CONFIRMA en el texto, no se infiere**
+  (decisión del usuario, 2026-10-29): `descartada` exige evidencia literal de un
+  título universitario obligatorio **sin negación y sin alternativa**; si el texto
+  no lo confirma → `revisar_a_mano` (`educacion_no_confirmada`). Ante la duda,
+  `revisar_a_mano` (no se descarta por heurística).
+- **Matching: cada cambio de regla = una corrida nueva** en `job_match`
+  (`corrida_id` + `valida`), nunca `UPDATE` in-place de una corrida emitida.
 
 ---
 
-*Última actualización: 2026-10-27 (O7 completo: operación UI-first; verificación de la pila semántica O2)*
-*Próxima revisión: tras la prueba de humo del usuario y el pase de O1 (ver §5)*
+*Última actualización: 2026-10-29 (O6.3 matching / Paso 5 cerrado: bloqueante educativo validado con evidencia literal; corrida vigente `20261029_171039`)*
+*Próxima revisión: tras el Paso 6 (revisión manual de las 20 `educacion_no_confirmada`)*
 
 ---
 
-## 8. HISTORIAL DE CAMBIOS RECENTES
+## 8. HISTORIAL DE CAMBIOS RECIENTES
+
+### 2026-10-29 - O6.3 / Paso 5: matching de requisitos vs. perfil (modulo real + evidencia literal)
+
+**Implementado:**
+- **`src/jobpulse_v15/matching.py`** - modulo real del Paso 5 (carga desde BD,
+  evalua por vacante, escribe una **corrida nueva** en `job_match` e invalida las
+  previas con `valida = 0`). Sin datos del candidato hardcodeados: todo sale de
+  `candidate_profile_facts` + `concepto` (`MAX(nivel_orden)` para el nivel efectivo).
+- **`src/jobpulse_v15/migrations/015_job_match_valida.sql`** - columna `valida` +
+  indices (migracion numerada nueva; no se edito ninguna ya aplicada).
+- **`tests/test_matching.py`** - 31 casos, 11 de ellos regresiones con frases
+  literales copiadas de la BD real.
+- **`run_paso5.py`** (runner, `--dry` opcional), **`evidencia_descartadas.py`**,
+  **`resumen_bloqueo.py`**, **`verificar_corridas.py`** - verificacion reproducible.
+- **`docs/PASO5_EVIDENCIA_2026-10-29.md`** - evidencia literal de las 32
+  `descartada` y de las 20 `revisar_a_mano / educacion_no_confirmada`.
+- **Limpieza**: 75 scripts ad-hoc de la raiz eliminados (los `paso5_*.py` viejos
+  quedaron obsoletos al mover la logica a `src/`).
+- **Migraciones 009-014** (`concepto` canonico + `job_match` + `corrida_id` +
+  columnas de conteo) versionadas por primera vez en git.
+
+**Correccion del bloqueante educativo (falsos descartes -> `revisar_a_mano`):**
+- `linkedin-4483157697` - "No university degree required." (negacion pegada al termino).
+- `workday-Credit---Collections-Specialist--2_R232432` - "Associate's or bachelor's degree" (alternativa).
+- `workday-Instructional-Designer_R17971` - "Bachelor's degree or certification" (alternativa).
+- `workday-Security-Governance---Compliance-Specialist_2022361-1` - "equivalent practical experience may be considered" (alternativa en la clausula siguiente).
+- `workday-Cardiac-Specialist-II_R18282-1` - "or an equivalent combination of education and relevant experience" (alternativa).
+- `workday-Assistant-Director-of-Engineering_REQ10393409` - alternativa detectada en el texto.
+- `workday-Production-Supervisor-I_31163511` / `_31163518` - "or other technical/scientific experience" (alternativa en la clausula completa).
+
+**Resultado:** `descartada` 40 -> **32** (corridas `160358` -> `171039`); las 8
+corregidas pasan a `revisar_a_mano / educacion_no_confirmada`. Resto de estados
+identico (calificada 102 - sin_requisitos 141 - datos_insuficientes 31 -
+revisar_a_mano 141). Suite completa: **324 tests verdes** (se arreglo
+`tests/test_database.py`, que fijaba la version de esquema en `8` - ya fallaba
+desde la migracion 009). RECENTES
 
 ### 2026-10-24 — IA Externa: cliente OpenAI-compatible (`ia_api.py`) + `init-sources` completado
 

@@ -203,8 +203,22 @@ python -m pytest tests/ -q
 - **O7 UI-first completo (2026-10-28, commit `28ef1f2`)**: flujo **scrape →
   analizar (reglas) → IA → comparar perfil** en un click (checkbox en Corrida).
   "Enriquecer" = IA bajo demanda (validado E2E); "Re-login ANE" = Brave auto.
-  Suite: **293 tests** (264 + 10 `test_seed_ats` + Harvie/Recruitee/Workable
-  fixes + 13 `test_ia_estado` + 4 `test_elegir_filtro`).
+  Suite: **324 tests** (la base de 293 + `test_matching.py` 31; se arregló
+  `test_database.py` que fijaba la versión de esquema en `8`).
+- **O6.3 / Paso 5 — matching requisitos vs. perfil (2026-10-29) ✅**: módulo real
+  `src/jobpulse_v15/matching.py` (los `paso5_*.py` de la raíz están obsoletos);
+  migración `015_job_match_valida.sql` (columna `valida`); **cada cambio de regla
+  = una corrida NUEVA** en `job_match` (nunca UPDATE in-place). Regla acordada:
+  `descartada` solo si el texto completo confirma título universitario `required`
+  **sin negación y sin alternativa**; si no → `revisar_a_mano` +
+  `educacion_no_confirmada`. "bachiller" NO es universitario (en CR es
+  secundaria); "licenciatura" sí. Corrida vigente **`20261029_171039`**:
+  calificada 102 · revisar_a_mano 141 · sin_requisitos 141 · **descartada 32** ·
+  datos_insuficientes 31 (los 4 corridas previas quedan `valida=0`).
+  Evidencia literal: `docs/PASO5_EVIDENCIA_2026-10-29.md`.
+  Herramientas: `run_paso5.py` (`--dry`), `evidencia_descartadas.py`,
+  `resumen_bloqueo.py`, `verificar_corridas.py`.
+  **Pendiente: revisar a mano las 20 `educacion_no_confirmada` (Paso 6).**
 - **Veredicto del enriquecimiento (`ia_estado.py`, 2026-10-29)**: el flujo ya no
   "asume" que la IA terminó — mide la BD antes/después del pase y decide:
   `evaluar_ia()` → `completado` | `parcial` | `sin_trabajo` (OK) vs `atascado`
