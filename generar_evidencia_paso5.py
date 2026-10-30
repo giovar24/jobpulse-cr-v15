@@ -267,11 +267,14 @@ noconf = conn.execute(
     """SELECT m.job_id, j.title FROM job_match m JOIN jobs j ON j.job_id = m.job_id
        WHERE m.corrida_id=? AND m.motivo='educacion_no_confirmada'
        ORDER BY m.job_id""", (vigente,)).fetchall()
-L.append("## 5. Las %d `revisar_a_mano / educacion_no_confirmada` — por qué NO se descartan"
+L.append("## 5. Las %d `revisar_a_mano / educacion_no_confirmada` — por qué el MOTOR no las descarta"
          % len(noconf))
 L.append("")
 L.append("Son requisitos universitarios **obligatorios** que el TEXTO no confirma")
-L.append("(negación o alternativa). Van a revisión manual (Paso 7).")
+L.append("(negación o alternativa). Van a revisión manual y a la HOJA DE REVISIÓN")
+L.append("pendiente (`docs/PASO5_REVISION_PENDIENTES.md`): el estado es el del")
+L.append("**motor**; el veredicto humano queda ABIERTO hasta que una segunda")
+L.append("persona firme en esa hoja.")
 L.append("")
 for i, f in enumerate(noconf, 1):
     texto = texto_de(f["job_id"])
@@ -292,6 +295,10 @@ for i, f in enumerate(noconf, 1):
     if conf.segmento:
         L.append("")
         L.append("> %s" % conf.segmento.replace("\n", " "))
+        ctx = contexto(texto, conf.termino)
+        if ctx:
+            L.append(">")
+            L.append("> contexto: %s" % ctx)
     elif reqs:
         # Sin término universitario en el texto: la evidencia literal es la
         # cita del propio requisito (p. ej. 'Two year college degree or

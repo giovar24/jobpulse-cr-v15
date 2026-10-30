@@ -1106,10 +1106,13 @@ sin_requisitos         | sin_requisitos_mapeados                | 141
 >
 > contexto: ...ives. Also designs process improvements to reduce product cost, process cycle time and improved product quality. Qualifications/Responsibilities 2-4 years of experience in a highly regulated industry Bachelor’s degree in Engineering or a related field required. Intermediate English proficiency (B1), Experience leading projects and supporting cost-reduction and quality-improvement initiatives within producti...
 
-## 5. Las 19 `revisar_a_mano / educacion_no_confirmada` — por qué NO se descartan
+## 5. Las 19 `revisar_a_mano / educacion_no_confirmada` — por qué el MOTOR no las descarta
 
 Son requisitos universitarios **obligatorios** que el TEXTO no confirma
-(negación o alternativa). Van a revisión manual (Paso 7).
+(negación o alternativa). Van a revisión manual y a la HOJA DE REVISIÓN
+pendiente (`docs/PASO5_REVISION_PENDIENTES.md`): el estado es el del
+**motor**; el veredicto humano queda ABIERTO hasta que una segunda
+persona firme en esa hoja.
 
 ### 1. `linkedin-4483157697` — Technical Support Specialist (Tier 2)
 
@@ -1119,6 +1122,8 @@ Son requisitos universitarios **obligatorios** que el TEXTO no confirma
     - evidencia literal del requisito: > No university degree required.
 
 > No university degree required.
+>
+> contexto: ...lls. Ability to troubleshoot technical issues independently using a structured, evidence-based approach. Excellent written and verbal communication skills. Fluent English, both written and spoken. No university degree required. What We Offer Fully remote position. Monthly compensation of USD 1,400 – 1,600. Full-time schedule, Monday through Friday. 10 days of paid time off (PTO). U.S. holidays. Initial training an...
 
 ### 2. `workday-Accounting-Analyst---Temporary_J-020392` — Accounting Analyst – Temporary
 
@@ -1128,6 +1133,8 @@ Son requisitos universitarios **obligatorios** que el TEXTO no confirma
     - evidencia literal del requisito: > Minimum Qualifications Bachelor’s degree in Accounting, Finance, or a related field , or advanced university studies in Accounting.
 
 > Minimum Qualifications Bachelor’s degree in Accounting, Finance, or a related field , or advanced university studies in Accounting.
+>
+> contexto: ...ork at our office in AFZ, Heredia, on Mondays, Wednesdays, and Thursdays. Please note that additional office days may occasionally be required based on specific business needs. Minimum Qualifications Bachelor’s degree in Accounting, Finance, or a related field , or advanced university studies in Accounting. Minimum of 2 years of professional accounting experience. Practical knowledge of core accounting prin...
 
 ### 3. `workday-Assistant-Director-of-Engineering_REQ10393409` — Assistant Director of Engineering
 
@@ -1137,6 +1144,8 @@ Son requisitos universitarios **obligatorios** que el TEXTO no confirma
     - evidencia literal del requisito: > Required Qualifications Education Bachelor’s degree or technical degree in Mechanical Engineering, Electrical Engineering, Electromechanical Engineering, Industrial Maintenance, Facilities Management, Civil Engineering, or a related field.
 
 > Required Qualifications Education Bachelor’s degree or technical degree in Mechanical Engineering, Electrical Engineering, Electromechanical Engineering, Industrial Maintenance, Facilities Management, Civil Engineering, or a related field.
+>
+> contexto: ...rders and preventive maintenance compliance. Support the Director of Engineering in preparing operational reports, presentations, budgets, and technical analyses. 9. Required Qualifications Education Bachelor’s degree or technical degree in Mechanical Engineering, Electrical Engineering, Electromechanical Engineering, Industrial Maintenance, Facilities Management, Civil Engineering, or a related field. Prof...
 
 ### 4. `workday-Associate--Repair-III_R-118081` — Associate, Repair III
 
@@ -1158,6 +1167,8 @@ Son requisitos universitarios **obligatorios** que el TEXTO no confirma
     - evidencia literal del requisito: > Required Qualifications Bachelor Degree, engineering, science or closely related discipline is desired, or equivalent technical.
 
 > Required Qualifications Bachelor Degree, engineering, science or closely related discipline is desired, or equivalent technical.
+>
+> contexto: ...w product introductions to achieve agreed upon launch dates with targeted launch inventory levels while developing and implementing plans that minimize phase out obsolescence. Required Qualifications Bachelor Degree, engineering, science or closely related discipline is desired, or equivalent technical. 5 +years of experience in Progressively responsible experience in purchasing/commodity management. 3 ye...
 
 ### 6. `workday-Cardiac-Specialist-II_R18282-1` — Cardiac Specialist II
 
@@ -1167,6 +1178,8 @@ Son requisitos universitarios **obligatorios** que el TEXTO no confirma
     - evidencia literal del requisito: > What We Look For Bachelor's degree, ECG certification, or an equivalent combination of education and relevant experience required.
 
 > What We Look For Bachelor's degree, ECG certification, or an equivalent combination of education and relevant experience required.
+>
+> contexto: ...ecks, and quality management activities to maintain data integrity. Create, maintain, and improve workflow documentation, training materials, tracking logs, and procedural documents. What We Look For Bachelor's degree, ECG certification, or an equivalent combination of education and relevant experience required. Minimum of 2 to 3 years of experience processing cardiac safety data in a core laboratory, clini...
 
 ### 7. `workday-Clinical-Project-Manager_R18034-1` — Clinical Project Manager
 
@@ -1176,6 +1189,8 @@ Son requisitos universitarios **obligatorios** que el TEXTO no confirma
     - evidencia literal del requisito: > What We Look For Bachelor’s degree required or equivalent experience;
 
 > What We Look For Bachelor’s degree required or equivalent experience
+>
+> contexto: ...of submissions and final deliverables Perform supervisory responsibilities, as applicable, including hiring, onboarding, performance management, and approval of time and attendance. What We Look For Bachelor’s degree required or equivalent experience; degrees in life sciences, pharmacy, nursing, or a related healthcare field are strongly preferred Previous project management or leadership experience in the...
 
 ### 8. `workday-Creative-Execution-Manager--CrM-_261002442` — Creative Execution Manager (CrM)
 
@@ -1185,6 +1200,8 @@ Son requisitos universitarios **obligatorios** que el TEXTO no confirma
     - evidencia literal del requisito: > Required Licensing/Registration: Series 7, Series 63 Education: Bachelors/University degree or equivalent experience This job description provides a high-level review of the types of work performed.
 
 > Required Licensing/Registration: Series 7, Series 63 Education: Bachelors/University degree or equivalent experience This job description provides a high-level review of the types of work performed.
+>
+> contexto: ..., presentation and project management skills. Ability to work well under tight deadlines in a fast-paced and team-oriented environment. Required Licensing/Registration: Series 7, Series 63 Education: Bachelors/University degree or equivalent experience This job description provides a high-level review of the types of work performed. Other job-related duties may be assigned as required. --------------------...
 
 ### 9. `workday-Credit---Collections-Specialist--2_R232432` — Credit & Collections Specialist
 
@@ -1194,6 +1211,8 @@ Son requisitos universitarios **obligatorios** que el TEXTO no confirma
     - evidencia literal del requisito: > Responsibilities Manage and collect accounts receivable for an assigned portfolio of B2B customers Monitor customer aging and enforce credit terms and limits using ERP and A/R systems (SAP, Esker or similar) Review credit applications and evaluate customer creditworthiness using credit bureaus and references Approve new customer credit limits within assigned authority and prepare recommendations for higher limits Place accounts on credit hold , issue final notices, and recommend escalation to third-party collections when necessary Collaborate closely with Sales Representatives to resolve past-due balances and communicate account status changes Maintain accurate documentation of all collection and credit activities in the system Research and resolve discrepancies such as short pays, deductions, overpayments, and unapplied cash Support credit memo requests and payment arrangements with appropriate approvals Ensure customer master data is accurate and up to date Deliver excellent customer service to both internal and external partners Participate in special projects and additional duties as assigned Required Associate’s or bachelor’s degree in business, Finance, or a related field 1–2 years of experience in B2B credit, collections, or accounts receivable Excellent communication skills in English (B2+ or higher) and ability to collaborate across functions and geographies.
 
 > ...ter data is accurate and up to date Deliver excellent customer service to both internal and external partners Participate in special projects and additional duties as assigned Required Associate’s or bachelor’s degree in business, Finance, or a related field 1–2 years of experience in B2B credit, collections, or accounts receivable Excellent communication skills in English (B2+ or higher) and abil...
+>
+> contexto: ...ter data is accurate and up to date Deliver excellent customer service to both internal and external partners Participate in special projects and additional duties as assigned Required Associate’s or bachelor’s degree in business, Finance, or a related field 1–2 years of experience in B2B credit, collections, or accounts receivable Excellent communication skills in English (B2+ or higher) and ability to col...
 
 ### 10. `workday-HPE---Professional-Sales-HIT--Compute-and-Hybrid-Cloud-_R-116879` — HPE - Professional Sales HIT (Compute and Hybrid Cloud)
 
@@ -1203,6 +1222,8 @@ Son requisitos universitarios **obligatorios** que el TEXTO no confirma
     - evidencia literal del requisito: > A four year college degree (or additional experience in a related field) and 3 years functional experience including a minimum 1 year position specific experience.
 
 > A four year college degree (or additional experience in a related field) and 3 years functional experience including a minimum 1 year position specific experience.
+>
+> contexto: ...overall accuracy. General proficiency with various tools, systems, and procedures required to accomplish the job. May need to consult with Senior/Specialist staff members on some technical issues. A four year college degree (or additional experience in a related field) and 3 years functional experience including a minimum 1 year position specific experience....
 
 ### 11. `workday-Instructional-Designer_R17971` — Instructional Designer – Hybrid
 
@@ -1212,6 +1233,8 @@ Son requisitos universitarios **obligatorios** que el TEXTO no confirma
     - evidencia literal del requisito: > What We Look For Hybrid Work Availability: Candidates must be available to work in a hybrid setting, including regular on-site presence as required Bachelor's degree or certification in Learning and Development, Education, Business, or a related field.
 
 > What We Look For Hybrid Work Availability: Candidates must be available to work in a hybrid setting, including regular on-site presence as required Bachelor's degree or certification in Learning and Development, Education, Business, or a related field.
+>
+> contexto: ...fice participation and effective remote engagement. What We Look For Hybrid Work Availability: Candidates must be available to work in a hybrid setting, including regular on-site presence as required Bachelor's degree or certification in Learning and Development, Education, Business, or a related field. 2+ years of experience in a corporate training, learning and development, or instructional design role. P...
 
 ### 12. `workday-Principal-Cybersecurity-Engineer_R0007423` — Principal Cybersecurity Engineer
 
@@ -1221,6 +1244,8 @@ Son requisitos universitarios **obligatorios** que el TEXTO no confirma
     - evidencia literal del requisito: > Required Qualifications: · Bachelor’s degree in Computer Science, Information Security, or a related field, or equivalent professional experience.
 
 > Bachelor’s degree in Computer Science, Information Security, or a related field, or equivalent professional experience.
+>
+> contexto: ...heduled searches, and lookup- generating pipelines — to support threat detection, compliance reporting, and operational dashboards for the Windows and endpoint environment. Required Qualifications: · Bachelor’s degree in Computer Science, Information Security, or a related field, or equivalent professional experience. · 8+ years of progressive experience in information security or systems engineering, with...
 
 ### 13. `workday-Production-Supervisor-I_31163511` — Production Supervisor I
 
@@ -1232,6 +1257,8 @@ Son requisitos universitarios **obligatorios** que el TEXTO no confirma
     - evidencia literal del requisito: > Execute and monitor continuous improvement processes to increase quality, reduce cost and improve overall team productivity in own production line Required Qualifications 80% completeness of a bachelor’s degree program from a four-year college or university in Business Administration, Engineering or other technical/scientific experience.
 
 > Execute and monitor continuous improvement processes to increase quality, reduce cost and improve overall team productivity in own production line Required Qualifications 80% completeness of a bachelor’s degree program from a four-year college or university in Business Administration, Engineering or other technical/scientific experience.
+>
+> contexto: ...ation. Execute and monitor continuous improvement processes to increase quality, reduce cost and improve overall team productivity in own production line Required Qualifications 80% completeness of a bachelor’s degree program from a four-year college or university in Business Administration, Engineering or other technical/scientific experience. 0-2 years supervisory experience. Preferably in a medical devic...
 
 ### 14. `workday-Production-Supervisor-I_31163518` — Production Supervisor I
 
@@ -1243,6 +1270,8 @@ Son requisitos universitarios **obligatorios** que el TEXTO no confirma
     - evidencia literal del requisito: > Execute and monitor continuous improvement processes to increase quality, reduce cost and improve overall team productivity in own production line Required Qualifications 80% completeness of a bachelor’s degree program from a four-year college or university in Business Administration, Engineering or other technical/scientific experience.
 
 > Execute and monitor continuous improvement processes to increase quality, reduce cost and improve overall team productivity in own production line Required Qualifications 80% completeness of a bachelor’s degree program from a four-year college or university in Business Administration, Engineering or other technical/scientific experience.
+>
+> contexto: ...ation. Execute and monitor continuous improvement processes to increase quality, reduce cost and improve overall team productivity in own production line Required Qualifications 80% completeness of a bachelor’s degree program from a four-year college or university in Business Administration, Engineering or other technical/scientific experience. 0-2 years supervisory experience. Preferably in a medical devic...
 
 ### 15. `workday-Sales-Specialist_R-117581` — Sales Specialist
 
@@ -1252,6 +1281,8 @@ Son requisitos universitarios **obligatorios** que el TEXTO no confirma
     - evidencia literal del requisito: > A four year college degree (or additional experience in a related field) and 3 years functional experience including a minimum 1 year position specific experience.
 
 > A four year college degree (or additional experience in a related field) and 3 years functional experience including a minimum 1 year position specific experience.
+>
+> contexto: ...overall accuracy. General proficiency with various tools, systems, and procedures required to accomplish the job. May need to consult with Senior/Specialist staff members on some technical issues. A four year college degree (or additional experience in a related field) and 3 years functional experience including a minimum 1 year position specific experience....
 
 ### 16. `workday-Security-Governance---Compliance-Specialist_2022361-1` — Security Governance & Compliance Specialist
 
@@ -1261,6 +1292,8 @@ Son requisitos universitarios **obligatorios** que el TEXTO no confirma
     - evidencia literal del requisito: > Minimum Qualifications Bachelor’s degree plus 5+ years of experience in technical compliance, security, risk, audit, or a related field;
 
 > Minimum Qualifications Bachelor’s degree plus 5+ years of experience in technical compliance, security, risk, audit, or a related field
+>
+> contexto: ...AI/ML systems, including their secure use, configuration, and governance. Contribute to the ongoing evolution of scalable, AI centric, automation-forward compliance processes. Minimum Qualifications Bachelor’s degree plus 5+ years of experience in technical compliance, security, risk, audit, or a related field; equivalent practical experience may be considered. Direct experience supporting or leading audit...
 
 ### 17. `workday-Security-Governance---Compliance-Specialist_2023168-1` — Security Governance & Compliance Specialist
 
@@ -1270,6 +1303,8 @@ Son requisitos universitarios **obligatorios** que el TEXTO no confirma
     - evidencia literal del requisito: > Must-have Qualifications Bachelor's degree or equivalent work experience required.
 
 > Must-have Qualifications Bachelor's degree or equivalent work experience required.
+>
+> contexto: ...organizational objectives. Lead difficult conversations professionally and apply judgment to assess criticality and prioritize efforts in alignment with organizational goals. Must-have Qualifications Bachelor's degree or equivalent work experience required. Professional certification(s) such as GIAC, CISSP, CRISC, CISM, CISA, ISO 27001 Lead Implementer/Auditor, CCSK, CCSP, etc. 3-5 + years performing hands-...
 
 ### 18. `workday-Senior-Client-Services-Executive_R2025-244318` — Senior Client Services Executive
 
@@ -1279,6 +1314,8 @@ Son requisitos universitarios **obligatorios** que el TEXTO no confirma
     - evidencia literal del requisito: > must be able to take active measures to solve problems and commit to a high level of service · Effective time management and ability to multi-task in a fast-paced environment · Superior written and spoken communication skills in English Required Experience and Qualifications: · Experience in customer service · Minimum Bachelor’s degree or its equivalent · Strong MS Office/computer skills
 
 > Minimum Bachelor’s degree or its equivalent
+>
+> contexto: ...and ability to multi-task in a fast-paced environment · Superior written and spoken communication skills in English Required Experience and Qualifications: · Experience in customer service · Minimum Bachelor’s degree or its equivalent · Strong MS Office/computer skills...
 
 ### 19. `workday-TnF-Manager-Systems---Software_1214477-2` — TnF Manager Systems / Software
 
@@ -1288,6 +1325,8 @@ Son requisitos universitarios **obligatorios** que el TEXTO no confirma
     - evidencia literal del requisito: > Education and Experience Required: Bachelor's or Master's degree in Computer Science, Computer/Electronics Engineering, Information Systems, or equivalent.
 
 > Education and Experience Required: Bachelor's or Master's degree in Computer Science, Computer/Electronics Engineering, Information Systems, or equivalent.
+>
+> contexto: ...t and stakeholders. Encourages continuous improvement, innovation, and cost savings through in-house solutions that reduce reliance on external tools and equipment. Education and Experience Required: Bachelor's or Master's degree in Computer Science, Computer/Electronics Engineering, Information Systems, or equivalent. Typically 8+ years of software engineering experience, including at least 2–3 years leadi...
 
 ## 6. Medición AMPLIADA de `educacion_no_cumple` (43 casos)
 

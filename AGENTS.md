@@ -243,9 +243,15 @@ python -m pytest tests/ -q
   substring de `requirements_raw`/`description_raw`) → **112 verificaciones, 0
   fallos**.
   Herramientas: `run_paso5.py` (`--dry`), `evidencia_descartadas.py`,
-  `resumen_bloqueo.py`, `verificar_corridas.py`, `verificar_evidencia.py`.
+  `resumen_bloqueo.py`, `verificar_corridas.py`, `verificar_evidencia.py`,
+  `generar_revision_pendientes.py`.
   Suite: **358 tests** (`test_matching.py` = 65 casos).
-  **Pendiente: aplicar a mano las 19 `educacion_no_confirmada` (Paso 7).**
+  **Pendiente: las 19 `educacion_no_confirmada` quedan ABIERTAS** — el veredicto
+  previo era del autor de la regla (sesgo) y se descarta; la firma una segunda
+  persona con `docs/PASO5_REVISION_PENDIENTES.md` (texto completo, sin
+  veredictos) y antes hay que decidir 3 reglas de negocio con fuente
+  ("advanced university studies" / "two year college degree" / "80 % de la
+  carrera"). NO registrar en `job_match_decision` hasta esa firma.
 - **Veredicto del enriquecimiento (`ia_estado.py`, 2026-10-29)**: el flujo ya no
   "asume" que la IA terminó — mide la BD antes/después del pase y decide:
   `evaluar_ia()` → `completado` | `parcial` | `sin_trabajo` (OK) vs `atascado`

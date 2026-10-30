@@ -353,17 +353,33 @@ python -m pytest tests/ -q
 
 ## Pendiente inmediato
 
-1. **Paso 7 — revisión y registro de las 19 `revisar_a_mano / educacion_no_confirmada`**
-   (corrida `20261029_205348`): el análisis de por qué no se descartan ya está
-   hecho (listado + frase literal en `docs/PASO5_EVIDENCIA_2026-10-29.md` §5).
-   **Proceso acordado (2026-10-29): revisar cada una con su frase literal, decidir
-   (queda en `revisar_a_mano` o es bloqueo real) y REGISTRAR la decisión en una
-   tabla nueva (p. ej. `job_match_decision`, migración numerada) que el Paso 7
-   lee; si el registro cambia estados, escribirlo como CORRIDA NUEVA — nunca
-   `UPDATE` in-place sobre una corrida emitida** (eso rompería la trazabilidad de
-   `valida`).
-2. **Paso 7 — decisiones finales + UI + export** de los resultados de
-   `job_match` (hoy la UI no lee `job_match`).
+1. **Paso 5 — las 19 `revisar_a_mano / educacion_no_confirmada` quedan ABIERTAS
+   (NO revisadas)** (corrida `20261029_205348`):
+   - La revisión previa la hizo **el autor de la regla** → su veredicto
+     ("ninguna bloquea") se **DESCARTA por sesgo**: no es una segunda opinión.
+   - La hoja de revisión para una **segunda persona** ya está generada con el
+     texto completo y **sin veredictos**: `docs/PASO5_REVISION_PENDIENTES.md`
+     (por `generar_revision_pendientes.py`).
+   - **3 decisiones de negocio pendientes** (decidirlas con fuente, no por
+     impulso): (a) ¿"or advanced university studies" cuenta como educación
+     universitaria? (afecta `workday-Accounting-Analyst---Temporary_J-020392`);
+     (b) ¿"two year college degree"/"associate degree" es universitario en CR?
+     el código trata 2 años como NO universitario, pero un técnico superior
+     universitario sí lo es (afecta `workday-Associate--Repair-III_R-118081`);
+     (c) ¿un bachillerato PARCIAL (80 % de la carrera) cuenta como requisito
+     cumplido? el módulo no lo define (afecta los dos
+     `workday-Production-Supervisor-I_*`).
+   - Solo son "no bloqueo" **inmediatos** (los que el usuario dio por claros, y
+     aun así queda la firma de la segunda persona): negación explícita
+     (`linkedin-4483157697`), "Bachelor's degree **or equivalent work
+     experience** required" (`workday-Security-Governance—Compliance-Specialist_2023168-1`)
+     y "…or equivalent" al final de la enumeración
+     (`workday-TnF-Manager-Systems---Software_1214477-2`).
+2. **Paso 7 — tabla de decisiones + UI + export**: NO registrar las 19 como
+   "no bloqueo" hasta terminar el punto 1. `job_match_decision` (migración
+   numerada) con decisiones firmadas (veredicto, criterio, revisor, fecha) que
+   el Paso 7 lee; si el registro cambia estados, **corrida nueva** — nunca
+   `UPDATE` in-place sobre una corrida emitida.
 3. **No tocar los umbrales** (cobertura 0.60 / puntaje 0.80) sin acuerdo explícito.
 4. **No pushear sin confirmación del usuario**: antes, confirmar la suite en la
    rama exacta, verificar que no se sube nada de `fork-v15` y decidir si el push

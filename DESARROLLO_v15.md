@@ -258,9 +258,13 @@ bloqueo), `verificar_corridas.py` (trazabilidad). Evidencia completa versionada 
   `tests/test_database.py` (versión de esquema dinámica:
   fallaba con `8` fijo desde la migración 009). Suite completa: **358 tests verdes**.
 
-**Pendiente del Paso 5**: solo la **aplicación manual** de las 19
-`revisar_a_mano / educacion_no_confirmada` (el análisis de por qué no se descartan ya
-está hecho) y después las decisiones/UI/export (Paso 7).
+**Pendiente del Paso 5**: las 19 `revisar_a_mano / educacion_no_confirmada`
+quedan **ABIERTAS**: el veredicto previo era del autor de la regla (sesgo) y se
+descarta; la revisión la firma una segunda persona con el texto completo
+(`docs/PASO5_REVISION_PENDIENTES.md`, sin veredictos) y antes hay que decidir 3
+reglas de negocio (advanced university studies / two year college / 80 % de la
+carrera). Después: tabla `job_match_decision` + decisiones finales + UI + export
+(Paso 7).
 
 **O8 — sub-diseño (2026-10-27): PORTAR el mecanismo que v1.x ya tenía resuelto** (el usuario lo recordó y hizo revisar el código; hallazgo confirmado):
 
@@ -472,11 +476,20 @@ Pendientes vivos (handoff vigente `docs/HANDOFF_SESION_2026-10-27.md`):
   educativo, la dimensión NO es verificable → `revisar_a_mano` con
   `educacion_no_verificable` (nunca descartar por falta de información).
 - **Paso 7: las decisiones manuales NUNCA se aplican in-place sobre `job_match`**
-  (decisión del usuario, 2026-10-29): revisar cada vacante con su frase literal,
-  decidir (queda en `revisar_a_mano` o es bloqueo real) y **registrar** la decisión
-  en una tabla nueva (p. ej. `job_match_decision`, con migración numerada) que el
+  (decisión del usuario, 2026-10-29): revisar cada vacante con su frase literal
+  en el **texto completo** y **sin conclusiones previas**, decidir (queda en
+  `revisar_a_mano` o es bloqueo real) y **registrar** la decisión en una tabla
+  nueva (p. ej. `job_match_decision`, con migración numerada) que el
   Paso 7 lea; si el registro cambia los estados, se escribe con **corrida nueva**
   (`valida=1`), nunca `UPDATE` sobre una corrida emitida.
+  **La revisión la firma una SEGUNDA persona** (no el autor de la regla): la
+  revisión previa de las 19 la hizo el autor y su veredicto ("ninguna bloquea")
+  quedó descartado por sesgo. Hoja de revisión (texto completo, sin veredictos):
+  `docs/PASO5_REVISION_PENDIENTES.md` (por `generar_revision_pendientes.py`).
+  **3 decisiones de negocio pendientes con fuente**: "advanced university
+  studies" / "two year college degree (técnico superior universitario)" / "80 %
+  de la carrera" — se decidieron como universitario o no ANTES de firmar los
+  veredictos.
 
 ---
 
