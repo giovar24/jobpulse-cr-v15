@@ -227,10 +227,11 @@ python -m pytest tests/ -q
   `pursuing` → "no cumple" (bloquea con el motivo propio); perfil SIN NINGÚN
   hecho educativo → "no verificable" → `revisar_a_mano` + `educacion_no_verificable`
   (nunca descartar por falta de información).
-  Corrida vigente **`20261029_205348`**: calificada 102 · revisar_a_mano 141
-  (19 `educacion_no_confirmada` + 57 `educacion_no_cumple` + 11 skill + 4 exp. +
-  3 licencia) · sin_requisitos 141 · **descartada 80** (56 título + 24 en curso) ·
-  datos_insuficientes 30 (las 6 corridas previas quedan `valida=0`).
+  Corrida vigente **`20261029_205348`** (sumas verificadas por GROUP BY estado =
+  447): calificada 102 · revisar_a_mano **94** (19 `educacion_no_confirmada` +
+  57 `educacion_no_cumple` + 11 skill + 4 exp. + 3 licencia) · sin_requisitos 141 ·
+  **descartada 80** (56 título + 24 en curso) · datos_insuficientes 30 (las 6
+  corridas previas quedan `valida=0`).
   **Medición ampliada a 43 casos** de `educacion_no_cumple` (estrato A = las 13
   promovidas; estrato B = 30 sistemáticas) revisados a mano: 26/43 ≈ 60 % eran
   bloqueos reales (la muestra inicial daba 5/10 = 50 %) → **la regla se sostiene,

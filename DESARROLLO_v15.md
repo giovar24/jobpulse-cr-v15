@@ -213,7 +213,7 @@ bloqueo), `verificar_corridas.py` (trazabilidad). Evidencia completa versionada 
   `educacion_no_cumple` = el perfil no alcanza el nivel pedido (requisito no
   obligatorio: no bloquea, se deja para revisión).
 - **Corrida vigente `20261029_205348`** (447 vacantes): calificada 102 ·
-  revisar_a_mano 141 (19 `educacion_no_confirmada` + 57 `educacion_no_cumple` +
+  revisar_a_mano 94 (19 `educacion_no_confirmada` + 57 `educacion_no_cumple` +
   11 `skill_faltante` + 4 `experiencia_no_verificable` + 3 `licencia_no_comparable`) ·
   sin_requisitos 141 · **descartada 80**
   (56 `titulo_universitario_requerido` + 24 `titulo_universitario_en_curso_requerido`) ·
@@ -471,6 +471,12 @@ Pendientes vivos (handoff vigente `docs/HANDOFF_SESION_2026-10-27.md`):
   si el perfil tiene hechos educativos; si el perfil NO tiene NINGÚN hecho
   educativo, la dimensión NO es verificable → `revisar_a_mano` con
   `educacion_no_verificable` (nunca descartar por falta de información).
+- **Paso 7: las decisiones manuales NUNCA se aplican in-place sobre `job_match`**
+  (decisión del usuario, 2026-10-29): revisar cada vacante con su frase literal,
+  decidir (queda en `revisar_a_mano` o es bloqueo real) y **registrar** la decisión
+  en una tabla nueva (p. ej. `job_match_decision`, con migración numerada) que el
+  Paso 7 lea; si el registro cambia los estados, se escribe con **corrida nueva**
+  (`valida=1`), nunca `UPDATE` sobre una corrida emitida.
 
 ---
 
@@ -521,7 +527,7 @@ Pendientes vivos (handoff vigente `docs/HANDOFF_SESION_2026-10-27.md`):
   queda en revisión).
 
 **Resultado (447 vacantes):** `descartada` 45 -> **80** (56 titulo requerido +
-24 estudiante activo); `revisar_a_mano` 141 (19 `educacion_no_confirmada` +
+24 estudiante activo); `revisar_a_mano` 94 (19 `educacion_no_confirmada` +
 57 `educacion_no_cumple` + 11 skill + 4 experiencia + 3 licencia);
 `calificada` 102 · `sin_requisitos` 141 · `datos_insuficientes` 30.
 Delta exacto vs. `183231`: **37 cambios** (36 nuevas `descartada` + 1 salida:
@@ -552,7 +558,7 @@ A2 → `revisar_a_mano / educacion_no_cumple`).
   facts (`candidato_universitario_en_curso()`).
 
 **Resultado (447 vacantes):** `descartada` 32 -> **45** (37 titulo requerido +
-8 estudiante activo); `revisar_a_mano` 141 (20 `educacion_no_confirmada` +
+8 estudiante activo); `revisar_a_mano` **128** (20 `educacion_no_confirmada` +
 90 `educacion_no_cumple` + 11 skill + 4 experiencia + 3 licencia);
 `calificada` 102 · `sin_requisitos` 141 · `datos_insuficientes` 31.
 Delta exacto: 13 entradas a `descartada` (con frase literal), 1 salida

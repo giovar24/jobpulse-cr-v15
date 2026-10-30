@@ -38,7 +38,7 @@ La sesión cerró el bloqueante en **tres rondas**:
    información).
 
 Corrida vigente **`20261029_205348`** (447 filas, `valida=1`; las 6 previas con
-`valida=0`): calificada 102 · revisar_a_mano 141 · sin_requisitos 141 ·
+`valida=0`): calificada 102 · revisar_a_mano **94** · sin_requisitos 141 ·
 **descartada 80** (56 título requerido + 24 estudiante activo) ·
 datos_insuficientes 30. Evidencia literal (80 descartadas + 19 por revisar + la
 medición de 43 casos) en `docs/PASO5_EVIDENCIA_2026-10-29.md`, generada por
@@ -184,7 +184,7 @@ Los 3 puntos que el usuario NO pudo dar por cerrados:
   "●"/"▪".
 
 **Resultado (447 vacantes):** `descartada` 45 → **80** (56 `titulo_universitario_requerido` +
-24 `titulo_universitario_en_curso_requerido`); `revisar_a_mano` 141 (19 `educacion_no_confirmada` +
+24 `titulo_universitario_en_curso_requerido`); `revisar_a_mano` **94** (19 `educacion_no_confirmada` +
 57 `educacion_no_cumple` + 11 skill + 4 experiencia + 3 licencia); `calificada` 102 ·
 `sin_requisitos` 141 · `datos_insuficientes` 30.
 Delta exacto vs. `183231`: **37 cambios** (36 nuevas `descartada` + 1 salida: A2 →
@@ -321,9 +321,10 @@ python -m pytest tests/ -q
 - **Corridas de `job_match`** (todas de 447 filas; solo la última es vigente):
   `132455` (50 `descartada`), `133621` (2), `160358` (40), `170343` (34),
   `171039` (32), `183231` (45), **`205348` (80 ← vigente, `valida=1`)**.
-- **Corrida vigente `20261029_205348`**: calificada 102 · revisar_a_mano 141
-  (19 `educacion_no_confirmada` + 57 `educacion_no_cumple` + 11 skill +
-  4 experiencia + 3 licencia) · sin_requisitos 141 · **descartada 80**
+- **Corrida vigente `20261029_205348`** (sumas verificadas por GROUP BY estado =
+  447): calificada 102 · revisar_a_mano **94** (19 `educacion_no_confirmada` +
+  57 `educacion_no_cumple` + 11 skill + 4 experiencia + 3 licencia) ·
+  sin_requisitos 141 · **descartada 80**
   (56 `titulo_universitario_requerido` + 24 `titulo_universitario_en_curso_requerido`) ·
   datos_insuficientes 30.
 - Las **19** `revisar_a_mano / educacion_no_confirmada` que quedan: son
@@ -352,13 +353,21 @@ python -m pytest tests/ -q
 
 ## Pendiente inmediato
 
-1. **Paso 7 — aplicar a mano las 19 `revisar_a_mano / educacion_no_confirmada`**
+1. **Paso 7 — revisión y registro de las 19 `revisar_a_mano / educacion_no_confirmada`**
    (corrida `20261029_205348`): el análisis de por qué no se descartan ya está
-   hecho (listado + frase literal en `docs/PASO5_EVIDENCIA_2026-10-29.md` §5);
-   falta la decisión humana (descartar o no) y el mecanismo para aplicarla.
+   hecho (listado + frase literal en `docs/PASO5_EVIDENCIA_2026-10-29.md` §5).
+   **Proceso acordado (2026-10-29): revisar cada una con su frase literal, decidir
+   (queda en `revisar_a_mano` o es bloqueo real) y REGISTRAR la decisión en una
+   tabla nueva (p. ej. `job_match_decision`, migración numerada) que el Paso 7
+   lee; si el registro cambia estados, escribirlo como CORRIDA NUEVA — nunca
+   `UPDATE` in-place sobre una corrida emitida** (eso rompería la trazabilidad de
+   `valida`).
 2. **Paso 7 — decisiones finales + UI + export** de los resultados de
    `job_match` (hoy la UI no lee `job_match`).
 3. **No tocar los umbrales** (cobertura 0.60 / puntaje 0.80) sin acuerdo explícito.
-4. Pendientes de siempre: O8 (ciclo de vida, plan de 7 pasos) · O5.3 (re-barrido
+4. **No pushear sin confirmación del usuario**: antes, confirmar la suite en la
+   rama exacta, verificar que no se sube nada de `fork-v15` y decidir si el push
+   va en un bloque o por partes.
+5. Pendientes de siempre: O8 (ciclo de vida, plan de 7 pasos) · O5.3 (re-barrido
    de las ~46 descripciones basura) · O2.1/O2.2 · O6.4 · O9 · O3 (83/122
    tableros con jobs) · O4 (redefinir).
