@@ -25,15 +25,29 @@ Reglas del bloqueante de educacion (acordadas con el usuario):
 * "or equivalent field of study / discipline / degree" NO es una via
   alternativa: sigue exigiendo un titulo universitario (misma nivel, otra
   carrera).
+* El ALCANCE de la negacion, del suavizador y de la obligatoriedad es el
+  GRUPO de terminos unidos por enumeracion ("Bachelor's or Master's degree"),
+  no la clausula completa: un "preferred" que pertenece al segundo titulo de
+  una enumeracion ("Bachelor's/University degree, Master's degree preferred")
+  no invalida al primero, pero si lo invalida cuando la enumeracion es
+  continua ("Bachelor's or Master's degree preferred").
 * Un requisito de ESTUDIANTE ACTIVO ("currently pursuing", "must be
   enrolled") es un criterio DISTINTO del titulo completado: se cumple solo si
   el perfil registra un hecho educativo ``education_status='pursuing'``; si no,
   el motivo es ``titulo_universitario_en_curso_requerido``.
+* SEMANTICA DE LA AUSENCIA DEL FACT (acordada 2026-10-29):
+  - El perfil registra hechos educativos y NINGUNO dice 'pursuing' -> se sabe
+    que la persona NO esta registrada como estudiante activo -> 'NO CUMPLE':
+    el requisito de estudiante activo BLOQUEA con su motivo propio.
+  - El perfil NO registra NINGUN hecho educativo -> la dimension educativa no
+    es verificable: NUNCA se descarta por falta de informacion; la vacante va
+    a ``revisar_a_mano`` con motivo ``educacion_no_verificable``.
 
 Precedencia de estados (definida en el plan del paso 5):
 
 1. ``descartada``          bloqueante universitario CONFIRMADO en el texto.
-2. ``revisar_a_mano``      requisito universitario obligatorio NO confirmado.
+2. ``revisar_a_mano``      requisito universitario obligatorio NO confirmado
+   (o education no verificable: el perfil no registra hechos educativos).
 3. ``datos_insuficientes`` cobertura < 0.60.
 4. ``revisar_a_mano``      otros requisitos no cumplidos.
 5. ``calificada``          puntaje >= 0.80.
@@ -71,6 +85,7 @@ ESTADO_BAJA_COMPATIBILIDAD = "baja_compatibilidad"
 MOTIVO_BLOQUEANTE = "titulo_universitario_requerido"
 MOTIVO_TITULO_EN_CURSO = "titulo_universitario_en_curso_requerido"
 MOTIVO_EDUCACION_NO_CONFIRMADA = "educacion_no_confirmada"
+MOTIVO_EDUCACION_NO_VERIFICABLE = "educacion_no_verificable"
 MOTIVO_EDUCACION_NO_CUMPLE = "educacion_no_cumple"
 MOTIVO_SKILL = "skill_faltante"
 MOTIVO_IDIOMA = "idioma_no_comparable"
@@ -89,6 +104,7 @@ PRIORIDAD_MOTIVOS = (
     MOTIVO_TITULO_EN_CURSO,
     MOTIVO_BLOQUEANTE,
     MOTIVO_EDUCACION_NO_CONFIRMADA,
+    MOTIVO_EDUCACION_NO_VERIFICABLE,
     MOTIVO_EDUCACION_NO_CUMPLE,
     MOTIVO_SKILL,
     MOTIVO_IDIOMA,
@@ -121,6 +137,7 @@ _TERMINO_UNIVERSIDAD_EXPLICITO = re.compile(
     r"|bachelor\s+of\s+(?:science|arts|engineering|business)\b"
     r"|licenciatura\b"
     r"|licenciado\b"
+    r"|bachiller(?:ato)?\s+universitari[oa]\b"
     r"|t[íi]tulo\s+universitario\b"
     r"|grado\s+universitario\b"
     r"|estudios\s+universitarios\b"
@@ -142,15 +159,36 @@ _PALABRA_DEGREE = re.compile(r"\bdegrees?\b", re.IGNORECASE)
 # Contextos que NO son titulo universitario.
 # OJO: "four year college degree" SI es universitario (solo se excluyen los
 # grados de dos anos / associate, que en CR equivalen a tecnico).
+# OJO 2: "bachiller/bachillerato" SIN "universitario" es SECUNDARIA en CR, pero
+# NO se filtra aqui: es el filtro por CONTEXTO de otro termino, y "Licenciatura o
+# bachillerato universitario" es un titulo universitario valido (si el filtro
+# lo alcanzara, mataria el "Licenciatura" de la misma clausula).
 _CONTEXTO_NO_UNIVERSIDAD = re.compile(
     r"(?:two|2)[\s-]?year\s+(?:college\s+)?degree"
     r"|associate\s+degree"
     r"|community\s+college"
     r"|high\s+school"
-    r"|bachiller(?:ato)?"
     r"|technical\s+school"
     r"|secondary\s+school"
     r"|educaci[óo]n\s+media",
+    re.IGNORECASE,
+)
+
+# Negacion DURA: el requisito universitario NO es obligatorio ("not
+# required", "no se requiere"). Se separa de los SUAVIZADORES ("preferred",
+# "deseable") porque cuando aparecen juntos manda la negacion dura
+# ("is preferred but not required" -> negacion, no preferencia).
+_NEGACION_DURA = re.compile(
+    r"\b(?:"
+    r"not\s+required"
+    r"|no\s+required"
+    r"|not\s+necessary"
+    r"|not\s+mandatory"
+    r"|not\s+obligatory"
+    r"|no\s+(?:se\s+)?requiere"
+    r"|no\s+requerid[oa]s?"
+    r"|no\s+requerido"
+    r")",
     re.IGNORECASE,
 )
 
@@ -202,6 +240,8 @@ _ALTERNATIVA = re.compile(
     r"|or\s+advanced\s+(?:university\s+)?(?:coursework|studies)\b"
     r"|or\s+university\s+(?:coursework|studies)\b"
     r"|or\s+(?:completing\s+)?coursework\s+(?:in|of|toward|towards)\b"
+    # "…; alternatively, 3+ years of relevant professional experience".
+    r"|\balternatively\b"
     r"|associate(?:['\u2019]s)?\s+or\s+bachelor"
     r"|o\s+experiencia\s+equivalente\b"
     r"|o\s+equivalente\b"
@@ -217,11 +257,15 @@ _ALTERNATIVA_ANIOS = re.compile(
 )
 
 # Alternativa que aparece en la clausula SIGUIENTE (caso real: "... related
-# field; equivalent practical experience may be considered.").
+# field; equivalent practical experience may be considered." y "...; alternatively,
+# 3+ years of relevant professional experience").
 _ALTERNATIVA_SIGUIENTE = re.compile(
     r"\bequivalent\b[^.]{0,40}\bexperience\b"
     r"|\bor\s+(?:its\s+|the\s+|an?\s+)?equivalent\b"
-    r"|\bexperience\s+(?:may\s+be|can\s+be)\s+considered\b",
+    r"|\bexperience\s+(?:may\s+be|can\s+be)\s+considered\b"
+    r"|\balternatively\b"
+    r"|\bor\s+(?:\d+|a|an|several|some|few)?\s*\+?\s*"
+    r"(?:years?|años?|anos?)\s+(?:of\s+|de\s+)?(?:related\s+)?experience\b",
     re.IGNORECASE,
 )
 
@@ -237,6 +281,25 @@ _EXCEPTO_EQUIVALENTE = re.compile(
     re.IGNORECASE,
 )
 
+# Enlazador de una enumeracion de titulos ("Bachelor's or Master's degree",
+# "Bachelor's/University degree"). Un suavizador o una negacion al final de la
+# enumeracion ("... or Master's degree preferred") alcanza a TODOS sus
+# miembros: por eso los terminos unidos asi se analizan como un GRUPO.
+_COORDINACION = re.compile(
+    r"^[\s,]*(?:or|and|&|y)\b"
+    r"|^[\s,]*\/"
+    r"|^[\s,]*o\b",
+    re.IGNORECASE,
+)
+
+# "What you need to bring", "What you'll need (Required)", "What you will need".
+_PATRON_WHAT_YOU_NEED = (
+    r"what\s+you(?:['\u2019]ll)?\s*(?:will\s+)?need"
+    r"(?:\s*\(\s*required\s*\))?"
+    r"(?:\s+to\s+\w+)?"
+    r"(?!\w)"
+)
+
 # Marcadores de OBLIGATORIEDAD dentro de la clausula del titulo.
 # Se separan en "antes" (encabezado de la seccion de requisitos) y "dentro"
 # (el propio requisito se declara exigido) para no confundir un encabezado
@@ -250,6 +313,13 @@ _OBLIGATORIEDAD_ANTES = re.compile(
     r"|\brequired\s*:"
     r"|\brequired\b"
     r"|\bqualifications\b"
+    r"|\b(?:job|role|further|key|minimum|basic)?\s*requirements\b"
+    r"|" + _PATRON_WHAT_YOU_NEED +
+    r"|\beducation\s*(?:&|and)\s*experience\b"
+    r"|\beducation\s*:"
+    r"|\bformaci[óo]n\s*:"
+    r"|\bcalificaciones\b"
+    r"|\bnecesitar[áa]s\s+las\s+siguientes\b"
     r"|\brequisitos\b"
     r"|\bse\s+requiere\b"
     r"|\bobligatorio\b"
@@ -263,6 +333,16 @@ _OBLIGATORIEDAD = re.compile(
     r"|\bmust\s+possess\b"
     r"|\b(?:is|are)\s+required\b"
     r"|\bdegree\s+or\s+above\b"
+    # "Bachelor's degree in ... discipline required" (la palabra 'required'
+    # cerca del TITULO, no de la experiencia).
+    r"|\b(?:degree|diploma|title|study|studies)\b[^.;]{0,40}\brequired\b"
+    # Perfil de ESTUDIANTE ACTIVO: la frase describe a quien la empresa
+    # quiere -> es una exigencia ("Active university student", "Students or
+    # recent graduates ... pursuing diplomas or degrees").
+    r"|\bactive\s+university\s+student\b"
+    r"|\buniversity\s+students\s+actively\s+enrolled\b"
+    r"|\bstudents\s+(?:or\s+recent\s+graduates\s+)?[^.;]{0,100}\bpursuing\b"
+    r"|\bcurrently\s+pursuing\b"
     r"|\bse\s+requiere\b"
     r"|\bobligatorio\b"
     r"|\brequerido\b",
@@ -287,9 +367,39 @@ _SUAVIZADOR = re.compile(
 _ENCABEZADO_REQUISITOS = re.compile(
     r"^\s*(?:"
     r"(?:required|minimum|basic|essential|preferred)?\s*qualifications?"
+    r"|(?:minimum|basic|required)?\s*(?:job|role|further|key)?\s*requirements?"
     r"|(?:minimum|basic|required)\s+(?:education\s+and\s+)?experience"
     r"|education\s*(?:and|&)\s*experience(?:\s+required)?"
-    r"|what\s+you\s+(?:will\s+)?need(?:\s*\(\s*required\s*\))?"
+    r"|" + _PATRON_WHAT_YOU_NEED + r"|education"
+    r"|requirements?"
+    r"|requisitos"
+    r"|required\s+education"
+    r")\s*[.:]?\s*$",
+    re.IGNORECASE,
+)
+
+# Encabezado de requisitos seguido de contenido ("Job Requirements: Active
+# university student ..."): el encabezado gobierna la clausula SIGUIENTE.
+_ENCABEZADO_REQUISITOS_INICIO = re.compile(
+    r"^\s*(?:"
+    r"(?:required|minimum|basic|essential|preferred)?\s*qualifications?"
+    r"|(?:job|role|further|key|minimum|basic)?\s*requirements?"
+    r"|education\s*(?:and|&)\s*experience"
+    r"|" + _PATRON_WHAT_YOU_NEED + r")\s*:",
+    re.IGNORECASE,
+)
+
+# Encabezado de la seccion de requisitos al FINAL de la clausula anterior
+# ("...under pressure ______ What you need to bring:" -> gobierna la clausula
+# siguiente). Acepta texto previo (subrayados, coletilla) antes del encabezado.
+_ENCABEZADO_REQUISITOS_FIN = re.compile(
+    r"(?:^|[\s\W_])(?:"
+    r"(?:required|minimum|basic|essential|preferred)?\s*qualifications?"
+    r"|(?:minimum|basic|required)?\s*(?:job|role|further|key)?\s*requirements?"
+    r"|(?:minimum|basic|required)\s+(?:education\s+and\s+)?experience"
+    r"|education\s*(?:and|&)\s*experience(?:\s+required)?"
+    r"|" + _PATRON_WHAT_YOU_NEED +
+    r"|education"
     r"|requirements?"
     r"|requisitos"
     r"|required\s+education"
@@ -312,8 +422,9 @@ _EN_CURSO = re.compile(
     re.IGNORECASE,
 )
 
-# Separadores de clausula: fin de linea, ';' y las vinetas de los portales.
-_SEPARADOR_CLAUSULA = re.compile(r"(?:\r?\n|[;·•])|(?<=[.!?])\s+")
+# Separadores de clausula: fin de linea, ';' y las vinetas de los portales
+# ('·', '•', '●', '▪').
+_SEPARADOR_CLAUSULA = re.compile(r"(?:\r?\n|[;·•●▪])|(?<=[.!?])\s+")
 
 
 @dataclass
@@ -459,22 +570,50 @@ def _tiene_alternativa(ventana: str) -> bool:
     return False
 
 
-def _analisis_clausula(clausula: str, posicion: int) -> tuple[bool, bool]:
-    """(obligatorio, suave) de la clausula que contiene el titulo.
+def _grupos_terminos(
+    texto: str,
+    candidatos: list[tuple[re.Match, bool]],
+    clausulas: list[tuple[str, int]],
+) -> list[list[tuple[re.Match, bool]]]:
+    """Agrupa los terminos unidos por una enumeracion ("or", "/", "y").
 
-    * ``obligatorio``: la clausula marca el requisito como exigido
+    "Bachelor's or Master's degree preferred" es UNA sola exigencia: el
+    suavizador ("preferred") alcanza a los dos terminos. En cambio
+    "Bachelor's/University degree, Master's degree preferred" son DOS
+    exigencias: la coma corta el alcance del suavizador.
+    """
+    grupos: list[list[tuple[re.Match, bool]]] = []
+    for match, explicito in candidatos:
+        if grupos:
+            anterior = grupos[-1][-1][0]
+            gap = texto[anterior.end(): match.start()]
+            misma_clausula = _indice_clausula(
+                clausulas, anterior.start()
+            ) == _indice_clausula(clausulas, match.start())
+            if misma_clausula and _COORDINACION.match(gap):
+                grupos[-1].append((match, explicito))
+                continue
+        grupos.append([(match, explicito)])
+    return grupos
+
+
+def _analisis_clausula(antes: str, ambito: str) -> tuple[bool, bool]:
+    """(obligatorio, suave) del grupo de terminos.
+
+    * ``obligatorio``: el ambito del grupo exige el titulo
       ("Required Qualifications", "Minimum Qualifications", "must have",
       "degree or above", "Requisitos", ...). El encabezado cuenta solo si
       aparece ANTES del termino: "3 years of experience required" al final de
       la misma clausula NO vuelve obligatorio un titulo que se menciona de
       paso.
-    * ``suave``: la clausula lo presenta como preferencia ("Preferred:
-      Bachelor's degree ..."), es decir NO obliga.
+    * ``suave``: el texto solo lo prefiere ("Preferred: Bachelor's degree ..."),
+      es decir NO obliga. Se evalua sobre el ambito del grupo, no sobre toda
+      la clausula (asi "Master's degree preferred" no vuelve suave al
+      "Bachelor's" de otra coma de la misma enumeracion).
     """
-    if _SUAVIZADOR.search(clausula):
+    if _SUAVIZADOR.search(ambito):
         return False, True
-    antes = clausula[:posicion] if posicion > 0 else ""
-    if _OBLIGATORIEDAD_ANTES.search(antes) or _OBLIGATORIEDAD.search(clausula):
+    if _OBLIGATORIEDAD_ANTES.search(antes) or _OBLIGATORIEDAD.search(ambito):
         return True, False
     return False, False
 
@@ -490,6 +629,11 @@ def confirmar_requisito_universitario(texto: str) -> ConfirmacionEducacion:
     Ventanas (acordadas): negacion 30 chars antes / 45 despues; alternativa
     40 antes / 110 despues. Ademas se revisa la clausula siguiente, donde los
     portales poner "equivalent practical experience may be considered".
+
+    El ALCANCE de la negacion, del suavizador y de la obligatoriedad es el
+    GRUPO de terminos unidos por enumeracion ("Bachelor's or Master's
+    degree"), no la clausula completa: asi un "preferred" que pertenece al
+    segundo titulo de una enumeracion no invalida al primero.
 
     Ademas clasifica la clausula del titulo:
     * ``obligatorio``: el texto exige el titulo (no solo lo sugiere);
@@ -508,7 +652,7 @@ def confirmar_requisito_universitario(texto: str) -> ConfirmacionEducacion:
         candidatos.append((match, False))
     candidatos.sort(key=lambda par: par[0].start())
 
-    confirmaciones: list[ConfirmacionEducacion] = []
+    validos: list[tuple[re.Match, bool]] = []
     for match, explicito in candidatos:
         inicio, fin = match.start(), match.end()
         entorno = texto[max(0, inicio - 60): fin + 60]
@@ -518,27 +662,94 @@ def confirmar_requisito_universitario(texto: str) -> ConfirmacionEducacion:
             cercano = texto[max(0, inicio - 40): fin + 40]
             if _es_titulo_empleo(cercano):
                 continue
+        validos.append((match, explicito))
 
-        antes = texto[max(0, inicio - VENTANA_NEGACION_ANTES): inicio]
-        despues = texto[fin: fin + VENTANA_NEGACION_DESPUES]
-        if (
-            _NEGACION.search(antes)
-            or _NEGACION.search(despues)
-            or _NEGACION_GRADO.search(antes)
-            or _NEGACION_GRADO.search(despues)
-            or _NEGACION_PEGADA.search(antes)
-        ):
+    grupos = _grupos_terminos(texto, validos, clausulas)
+
+    confirmaciones: list[ConfirmacionEducacion] = []
+    for indice_grupo, grupo in enumerate(grupos):
+        primero, ultimo = grupo[0][0], grupo[-1][0]
+        g_ini, g_fin = primero.start(), ultimo.end()
+        indice = _indice_clausula(clausulas, g_ini)
+        clausula_actual = clausulas[indice][0] if indice is not None else ""
+        inicio_clausula = clausulas[indice][1] if indice is not None else 0
+        fin_clausula = inicio_clausula + len(clausula_actual)
+
+        # Limites del ambito del grupo: la clausula, mas el grupo vecino.
+        limite_izq = inicio_clausula
+        if indice_grupo > 0:
+            limite_izq = max(limite_izq, grupos[indice_grupo - 1][-1][0].end())
+        limite_der = fin_clausula
+        if indice_grupo + 1 < len(grupos):
+            limite_der = min(limite_der, grupos[indice_grupo + 1][0][0].start())
+
+        antes_amplio = texto[limite_izq:g_ini]
+        ambito_completo = texto[limite_izq:limite_der]
+        if len(clausula_actual) > 400:
+            # Clausula muy larga (avisos sin separadores): el analisis se
+            # limita a una ventana alrededor del titulo para que una seccion
+            # lejana ("Preferred ...") no contamine al requisito.
+            ambito = texto[
+                max(limite_izq, g_ini - 200): min(limite_der, g_fin + 200)
+            ]
+        else:
+            ambito = ambito_completo
+        antes_ventana = texto[
+            max(limite_izq, g_ini - VENTANA_NEGACION_ANTES): g_ini
+        ]
+        despues_ventana = texto[
+            g_fin: min(limite_der, g_fin + VENTANA_NEGACION_DESPUES)
+        ]
+
+        # --- encabezado de la clausula anterior ---------------------------
+        # "Qualifications" / "Job Requirements: ..." gobiernan la clausula del
+        # titulo; si el encabezado es SUAVE ("Preferred Qualifications") NO
+        # obliga.
+        encabezado_anterior = ""
+        encabezado_texto = ""
+        if indice is not None and indice > 0:
+            encabezado_anterior = clausulas[indice - 1][0]
+            found = _ENCABEZADO_REQUISITOS_FIN.search(encabezado_anterior)
+            if found:
+                encabezado_texto = found.group(0)
+        es_encabezado = bool(encabezado_texto)
+
+        # --- negacion / suavizador (ALCANCE: el grupo) --------------------
+        negacion_dura = (
+            _NEGACION_DURA.search(antes_ventana)
+            or _NEGACION_DURA.search(despues_ventana)
+            or _NEGACION_GRADO.search(antes_ventana)
+            or _NEGACION_GRADO.search(despues_ventana)
+            or _NEGACION_PEGADA.search(antes_ventana)
+        )
+        if negacion_dura:
             if negativa is None:
                 negativa = ConfirmacionEducacion(
-                    False, match.group(0), _frase_de(texto, inicio), "negacion"
+                    False, primero.group(0), _frase_de(texto, g_ini), "negacion"
+                )
+            continue
+        suavizado = (
+            _NEGACION.search(antes_ventana)
+            or _NEGACION.search(despues_ventana)
+            or _SUAVIZADOR.search(antes_ventana)
+            or _SUAVIZADOR.search(despues_ventana)
+            or (es_encabezado and _SUAVIZADOR.search(encabezado_texto))
+        )
+        if suavizado:
+            if negativa is None:
+                negativa = ConfirmacionEducacion(
+                    False,
+                    primero.group(0),
+                    _frase_de(texto, g_ini),
+                    "suave",
+                    suave=True,
                 )
             continue
 
-        alt_antes = texto[max(0, inicio - VENTANA_ALTERNATIVA_ANTES): inicio]
-        alt_despues = texto[fin: fin + VENTANA_ALTERNATIVA_DESPUES]
-        ventana_alternativa = alt_antes + match.group(0) + alt_despues
-        indice = _indice_clausula(clausulas, inicio)
-        clausula_actual = clausulas[indice][0] if indice is not None else ""
+        # --- alternativa (conservadora: clause + grupo + siguiente) ------
+        alt_antes = texto[max(limite_izq, g_ini - VENTANA_ALTERNATIVA_ANTES): g_ini]
+        alt_despues = texto[g_fin: min(limite_der, g_fin + VENTANA_ALTERNATIVA_DESPUES)]
+        ventana_alternativa = alt_antes + primero.group(0) + alt_despues
         clausula_siguiente = ""
         if indice is not None and indice + 1 < len(clausulas):
             clausula_siguiente = clausulas[indice + 1][0]
@@ -549,35 +760,25 @@ def confirmar_requisito_universitario(texto: str) -> ConfirmacionEducacion:
         ):
             if negativa is None:
                 negativa = ConfirmacionEducacion(
-                    False, match.group(0), _frase_de(texto, inicio), "alternativa"
+                    False, primero.group(0), _frase_de(texto, g_ini), "alternativa"
                 )
             continue
 
-        # Zona de analisis: la clausula del titulo y, si la anterior es un
-        # ENCABEZADO de la seccion de requisitos, tambien esa (el encabezado
-        # obliga a lo que viene debajo).
-        if len(clausula_actual) > 400:
-            inicio_ventana = max(0, inicio - 120)
-            zona = texto[inicio_ventana: fin + 120]
-            posicion_zona = inicio - inicio_ventana
-        else:
-            zona = clausula_actual
-            posicion_zona = inicio - (clausulas[indice][1] if indice is not None else 0)
-            clausula_anterior = ""
-            if indice is not None and indice > 0:
-                clausula_anterior = clausulas[indice - 1][0]
-            if _ENCABEZADO_REQUISITOS.match(clausula_anterior):
-                zona = clausula_anterior + " " + zona
-                posicion_zona += len(clausula_anterior) + 1
-        obligatorio, suave = _analisis_clausula(zona, posicion_zona)
+        # --- obligatoriedad: la decide el TEXTO --------------------------
+        antes_obligacion = antes_amplio[-200:] if len(antes_amplio) > 200 else antes_amplio
+        obligatorio, suave = _analisis_clausula(antes_obligacion, ambito)
+        if es_encabezado and not obligatorio:
+            # El encabezado de la seccion de requisitos gobierna lo que
+            # viene debajo.
+            obligatorio = True
         confirmaciones.append(
             ConfirmacionEducacion(
                 True,
-                match.group(0),
-                _frase_de(texto, inicio),
+                primero.group(0),
+                _frase_de(texto, g_ini),
                 "confirmado",
                 obligatorio=obligatorio,
-                en_curso=bool(_EN_CURSO.search(zona)),
+                en_curso=bool(_EN_CURSO.search(ambito_completo)),
                 suave=suave,
             )
         )
@@ -764,6 +965,42 @@ class EvaluadorPaso5:
         return self.total_anos >= minimum
 
     # -- educacion --------------------------------------------------------
+    def tiene_hechos_educativos(self) -> bool:
+        """True si el perfil registra AL MENOS un hecho educativo."""
+        return bool(self.facts["education"])
+
+    def estado_educacion_en_curso(self, nivel_req: int) -> str:
+        """'cumple' | 'no_cumple' | 'no_verificable' para ESTUDIANTE ACTIVO.
+
+        Semantica acordada (2026-10-29):
+
+        * El perfil registra hechos educativos y ALGUNO dice
+          ``education_status='pursuing'``: se compara el nivel. Si alcanza el
+          nivel pedido -> 'cumple'; si no -> 'no_cumple'.
+        * El perfil registra hechos educativos y NINGUNO dice 'pursuing':
+          se sabe que la persona NO esta registrada como estudiante activo ->
+          'no_cumple' (MOTIVO_TITULO_EN_CURSO). Da igual que los hechos no
+          traigan ``education_status``: lo que decide es que NO haya un
+          'pursuing'.
+        * El perfil NO registra ningun hecho educativo: no se puede afirmar
+          que "no cumple" -> 'no_verificable' (MOTIVO_EDUCACION_NO_VERIFICABLE).
+        """
+        hechos = self.facts["education"]
+        if not hechos:
+            return "no_verificable"
+        pursuing = [f for f in hechos if f.get("education_status") == "pursuing"]
+        if pursuing:
+            niveles = [
+                self.nivel_concepto(f["codigo_canonico"], "education") for f in pursuing
+            ]
+            niveles = [n for n in niveles if n is not None]
+            if not niveles:
+                return "no_verificable"
+            return "cumple" if max(niveles) >= nivel_req else "no_cumple"
+        # Hay hechos educativos pero ninguno dice 'pursuing' -> 'no_cumple'
+        # (da igual que los hechos no traigan 'education_status').
+        return "no_cumple"
+
     def candidato_universitario_en_curso(self, nivel_req: int) -> bool:
         """True si el perfil registra un hecho educativo 'pursuing' suficiente.
 
@@ -771,13 +1008,7 @@ class EvaluadorPaso5:
         ("currently pursuing a Bachelor's degree"), que es un criterio
         DISTINTO del titulouniversitario completado.
         """
-        for fact in self.facts["education"]:
-            if fact.get("education_status") != "pursuing":
-                continue
-            nivel = self.nivel_concepto(fact["codigo_canonico"], "education")
-            if nivel is not None and nivel >= nivel_req:
-                return True
-        return False
+        return self.estado_educacion_en_curso(nivel_req) == "cumple"
 
     def evaluar_educacion(
         self, requisito: Requisito, texto: str
@@ -785,6 +1016,7 @@ class EvaluadorPaso5:
         """Devuelve (estado_requisito, confirmacion).
 
         estado_requisito: 'cumple' | 'faltante' | 'bloqueante' | 'no_confirmado'
+        | 'no_verificable'
 
         Regla (acordada 2026-10-29):
 
@@ -796,12 +1028,18 @@ class EvaluadorPaso5:
         * Un requisito de ESTUDIANTE ACTIVO ("currently pursuing", "must be
           enrolled") es un criterio DISTINTO del titulo completado: se cumple
           solo si el perfil registra un hecho educativo 'pursuing'.
+        * Si el perfil NO registra hechos educativos, la dimension educativa
+          NO es verificable: nunca se descarta por falta de informacion.
         """
         nivel_req = self.nivel_concepto(requisito.codigo_canonico, "education")
         if nivel_req is None:
             return "no_confirmado", None
         nivel_cand = self.nivel_candidato_educacion()
-        if nivel_cand is not None and nivel_cand >= nivel_req:
+        if nivel_cand is None:
+            # Sin hechos educativos (o sin nivel) NO se puede afirmar que el
+            # perfil no cumple: es 'no verificable', no 'no cumple'.
+            return "no_verificable", None
+        if nivel_cand >= nivel_req:
             return "cumple", None
         if nivel_req < NIVEL_UNIVERSITARIO:
             # El perfil no alcanza un nivel no universitario (p. ej. tecnico).
@@ -824,8 +1062,11 @@ class EvaluadorPaso5:
         en_curso = confirmacion.en_curso or requisito.education_status == "pursuing"
         if en_curso:
             confirmacion.en_curso = True
-            if self.candidato_universitario_en_curso(nivel_req):
+            estado_curso = self.estado_educacion_en_curso(nivel_req)
+            if estado_curso == "cumple":
                 return "cumple", confirmacion
+            if estado_curso == "no_verificable":
+                return "no_verificable", confirmacion
         return "bloqueante", confirmacion
 
     # -- evaluacion de una vacante ---------------------------------------
@@ -854,6 +1095,7 @@ class EvaluadorPaso5:
         motivos: list[str] = []
         bloqueante = False
         no_confirmado_educacion = False
+        no_verificable_educacion = False
         matched = faltante = no_v = nc = 0
 
         for req in requisitos:
@@ -878,6 +1120,12 @@ class EvaluadorPaso5:
                 elif estado_req == "no_confirmado":
                     ok = "no_confirmado"
                     no_confirmado_educacion = True
+                elif estado_req == "no_verificable":
+                    # El perfil no registra hechos educativos: no se puede
+                    # afirmar que no cumple -> va a revision manual.
+                    ok = "no_verificable"
+                    no_verificable_educacion = True
+                    motivos.append(MOTIVO_EDUCACION_NO_VERIFICABLE)
                 else:
                     ok = False
                     motivos.append(MOTIVO_EDUCACION_NO_CUMPLE)
@@ -917,7 +1165,7 @@ class EvaluadorPaso5:
 
         if bloqueante:
             estado = ESTADO_DESCARTADA
-        elif no_confirmado_educacion:
+        elif no_confirmado_educacion or no_verificable_educacion:
             estado = ESTADO_REVISAR
         elif cobertura < UMBRAL_COBERTURA:
             estado = ESTADO_DATOS_INSUFICIENTES

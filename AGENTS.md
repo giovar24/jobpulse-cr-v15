@@ -212,20 +212,39 @@ python -m pytest tests/ -q
   `descartada` solo si el TEXTO completo confirma título universitario **obligatorio**
   **sin negación y sin alternativa**; si no → `revisar_a_mano` +
   `educacion_no_confirmada`. "bachiller" NO es universitario (en CR es
-  secundaria); "licenciatura" sí. **La obligatoriedad la decide el TEXTO**
+  secundaria); "licenciatura" sí; **"bachillerato universitario" SÍ lo es**.
+  **La obligatoriedad la decide el TEXTO**
   ("Required/Minimum/Basic Qualifications", "must have", "degree or above"), no
   solo `requirement_level`; "Preferred" no bloquea. "or equivalent field of
   study" NO es vía alternativa; "or advanced coursework/university studies" SÍ.
-  **Estudiante activo** ("currently pursuing", "must be enrolled") es criterio
-  distinto → motivo `titulo_universitario_en_curso_requerido`.
-  Corrida vigente **`20261029_183231`**: calificada 102 · revisar_a_mano 141 ·
-  sin_requisitos 141 · **descartada 45** (37 título + 8 en curso) ·
-  datos_insuficientes 31 (las 5 corridas previas quedan `valida=0`).
+  **Alcance por GRUPO de enumeración**: "Bachelor's/University degree, Master's
+  degree preferred" EXIGE el bachelor's (la coma corta el "preferred");
+  "Bachelor's or Master's degree preferred" NO exige ninguno.
+  **Estudiante activo** ("currently pursuing", "must be enrolled", "active
+  university student") es criterio distinto → motivo
+  `titulo_universitario_en_curso_requerido`.
+  **Semántica de `education_status`**: perfil con hechos educativos y NINGUNO
+  `pursuing` → "no cumple" (bloquea con el motivo propio); perfil SIN NINGÚN
+  hecho educativo → "no verificable" → `revisar_a_mano` + `educacion_no_verificable`
+  (nunca descartar por falta de información).
+  Corrida vigente **`20261029_205348`**: calificada 102 · revisar_a_mano 141
+  (19 `educacion_no_confirmada` + 57 `educacion_no_cumple` + 11 skill + 4 exp. +
+  3 licencia) · sin_requisitos 141 · **descartada 80** (56 título + 24 en curso) ·
+  datos_insuficientes 30 (las 6 corridas previas quedan `valida=0`).
+  **Medición ampliada a 43 casos** de `educacion_no_cumple` (estrato A = las 13
+  promovidas; estrato B = 30 sistemáticas) revisados a mano: 26/43 ≈ 60 % eran
+  bloqueos reales (la muestra inicial daba 5/10 = 50 %) → **la regla se sostiene,
+  no estaba sobreajustada**; contra el ground truth manual acierta **43/43**.
   Evidencia literal: `docs/PASO5_EVIDENCIA_2026-10-29.md` (generado por
-  `generar_evidencia_paso5.py`).
+  `generar_evidencia_paso5.py`; §6 = la medición de 43 casos).
+  Verificación POR CONSULTA: `verificar_evidencia.py` (cada `descartada` y cada
+  `educacion_no_confirmada` + las 13 promovidas aparecen con frase literal que es
+  substring de `requirements_raw`/`description_raw`) → **112 verificaciones, 0
+  fallos**.
   Herramientas: `run_paso5.py` (`--dry`), `evidencia_descartadas.py`,
-  `resumen_bloqueo.py`, `verificar_corridas.py`.
-  **Pendiente: aplicar a mano las 20 `educacion_no_confirmada` (Paso 7).**
+  `resumen_bloqueo.py`, `verificar_corridas.py`, `verificar_evidencia.py`.
+  Suite: **358 tests** (`test_matching.py` = 65 casos).
+  **Pendiente: aplicar a mano las 19 `educacion_no_confirmada` (Paso 7).**
 - **Veredicto del enriquecimiento (`ia_estado.py`, 2026-10-29)**: el flujo ya no
   "asume" que la IA terminó — mide la BD antes/después del pase y decide:
   `evaluar_ia()` → `completado` | `parcial` | `sin_trabajo` (OK) vs `atascado`

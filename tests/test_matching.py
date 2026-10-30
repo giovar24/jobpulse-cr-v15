@@ -328,7 +328,10 @@ class TestCasosReales(unittest.TestCase):
         )
         resultado = matching.confirmar_requisito_universitario(texto)
         self.assertFalse(resultado.confirmada)
-        self.assertEqual(resultado.motivo, "negacion")
+        # El encabezado "Preferred Qualifications" es un SUAVIZADOR (el titulo
+        # solo se prefiere), no una negacion dura ("not required").
+        self.assertEqual(resultado.motivo, "suave")
+        self.assertTrue(resultado.suave)
 
     def test_preferred_lejos_del_titulo_queda_como_suave(self):
         """'Preferred' fuera de la ventana de negacion -> marca 'suave'."""
@@ -372,6 +375,188 @@ class TestCasosReales(unittest.TestCase):
         )
         resultado = matching.confirmar_requisito_universitario(texto)
         self.assertTrue(resultado.en_curso)
+
+    # -- regresiones de la medicion ampliada (43 casos, 2026-10-29) --------
+
+    def test_alternativamente_anos_de_experiencia_es_alternativa(self):
+        """Literal de la BD (workday-Accounts-Payable-Representative_J-020440).
+
+        'Minimum Qualifications Bachelor's degree coursework in Accounting ... and
+        1+ year of relevant experience; alternatively, 3+ years of relevant
+        professional experience' ofrece OTRA VIA -> NO se descarta.
+        """
+        texto = (
+            "Minimum Qualifications Bachelor's degree coursework in Accounting, "
+            "Finance, Business Administration, or a related discipline and 1+ year "
+            "of relevant experience; alternatively, 3+ years of relevant "
+            "professional experience in Accounts Payable or"
+        )
+        resultado = matching.confirmar_requisito_universitario(texto)
+        self.assertFalse(resultado.confirmada)
+        self.assertEqual(resultado.motivo, "alternativa")
+
+    def test_preferred_del_masters_no_alcanza_al_bachelors(self):
+        """Literal de la BD (workday-Data-Governance-Foundation-Lead-Analyst).
+
+        'Education: Bachelor's/University degree, Master's degree preferred' ->
+        el Bachelor's EXIGE y el Master's solo se prefiere: la coma corta el
+        alcance del 'preferred'.
+        """
+        texto = (
+            "Education: Bachelor's/University degree, Master's degree preferred"
+        )
+        resultado = matching.confirmar_requisito_universitario(texto)
+        self.assertTrue(resultado.confirmada)
+        self.assertTrue(resultado.obligatorio)
+        self.assertFalse(resultado.suave)
+
+    def test_preferred_al_final_de_una_enumeracion_si_alcanza_a_todos(self):
+        """Literal de la BD (workday-Commercial-Support-Specialist).
+
+        "Who you are: Bachelor's or Master's degree preferred in Business
+        Administration..." -> los DOS titulos son solo preferidos.
+        """
+        texto = (
+            "Who you are: Bachelor's or Master's degree preferred in Business "
+            "Administration, Finance, IT, or a related economics discipline."
+        )
+        resultado = matching.confirmar_requisito_universitario(texto)
+        self.assertTrue(resultado.suave)
+        self.assertFalse(resultado.obligatorio)
+
+    def test_bachillerato_universitario_es_titulo_universitario(self):
+        """Literal de la BD (workday-Analista-de-CPFR_887589).
+
+        'Licenciatura o bachillerato universitario en Administracion de Empresas'
+        -> ambos son titulos universitarios (en CR 'bachiller' a secas es
+        secundaria; 'bachillerato universitario' es universitario).
+        """
+        texto = (
+            "Para tener exito en este puesto, necesitaras las siguientes "
+            "calificaciones: Licenciatura o bachillerato universitario en "
+            "Administracion de Empresas, Ingenieria Industrial, Logistica, Supply "
+            "Chain o una carrera afin."
+        )
+        resultado = matching.confirmar_requisito_universitario(texto)
+        self.assertTrue(resultado.confirmada)
+        self.assertTrue(resultado.obligatorio)
+
+    def test_formacion_licenciatura_es_obligatorio(self):
+        """Literal de la BD (cinde-4898): 'Formacion: Licenciatura.'"""
+        texto = "Formacion: Licenciatura. Idiomas: Ingles-C1;Espanol-C2."
+        resultado = matching.confirmar_requisito_universitario(texto)
+        self.assertTrue(resultado.confirmada)
+        self.assertTrue(resultado.obligatorio)
+
+    def test_encabezado_job_requirements_gobierna_la_clausula_siguiente(self):
+        """Literal de la BD (cinde-4892): 'Job Requirements: Active university
+        student ...' gobierna 'Currently pursuing a Bachelor's degree ...'."""
+        texto = (
+            "Job Requirements: Active university student enrolled in an accredited "
+            "university in Costa Rica. Currently pursuing a Bachelor's degree in "
+            "one of the following (or related fields): o Computer Science o "
+            "Software Engineering o Data Science."
+        )
+        resultado = matching.confirmar_requisito_universitario(texto)
+        self.assertTrue(resultado.confirmada)
+        self.assertTrue(resultado.obligatorio)
+        self.assertTrue(resultado.en_curso)
+
+    def test_further_requirements_es_encabezado(self):
+        """Literal de la BD (workday-Digital-Campaign-Delivery-Associate)."""
+        texto = (
+            "Further requirements \u25cf Bachelor's degree in Marketing, Business, "
+            "Communications, or a related field. \u25cf Strong understanding of "
+            "digital marketing principles."
+        )
+        resultado = matching.confirmar_requisito_universitario(texto)
+        self.assertTrue(resultado.confirmada)
+        self.assertTrue(resultado.obligatorio)
+
+    def test_what_you_need_to_bring_es_encabezado(self):
+        """Literal de la BD (workday-Escalation-Engineer_1212930-2)."""
+        texto = (
+            "Calm decision-making under pressure ______________________ What you "
+            "need to bring: \u2022 Bachelor's degree in Engineering / Computer "
+            "Science / IT \u2022 2-4 years of experience"
+        )
+        resultado = matching.confirmar_requisito_universitario(texto)
+        self.assertTrue(resultado.confirmada)
+        self.assertTrue(resultado.obligatorio)
+
+    def test_role_requirements_es_encabezado(self):
+        """Literal de la BD (workday-Sales-Commercial-Manager_R-257732)."""
+        texto = (
+            "Role Requirements Bachelor's degree in Business Administration, "
+            "Marketing, Economics, Life Sciences, or a related field."
+        )
+        resultado = matching.confirmar_requisito_universitario(texto)
+        self.assertTrue(resultado.confirmada)
+        self.assertTrue(resultado.obligatorio)
+
+    def test_required_al_final_del_titulo_lo_hace_obligatorio(self):
+        """Literal de la BD (workday-Director--Manufacturing-Engineering).
+
+        'Education & Experience Bachelor's degree in ... discipline required;
+        master's degree or MBA preferred' -> el Bachelor's obliga; el 'preferred'
+        del MBA no lo alcanza.
+        """
+        texto = (
+            "Education & Experience Bachelor's degree in Manufacturing, Mechanical, "
+            "Electrical, Industrial, or a related Engineering discipline required; "
+            "master's degree or MBA preferred."
+        )
+        resultado = matching.confirmar_requisito_universitario(texto)
+        self.assertTrue(resultado.confirmada)
+        self.assertTrue(resultado.obligatorio)
+        self.assertFalse(resultado.suave)
+
+    def test_perfil_de_estudiante_activo_es_obligatorio(self):
+        """Literal de la BD (workday-Document-Control-Intern_1210991)."""
+        texto = (
+            "Job Description: Job Family Definition: Students or recent graduates "
+            "of college, university, or other accredited academic programs, "
+            "pursuing diplomas or degrees (Associate, Bachelor's, Master's, or PhD) "
+            "in any field."
+        )
+        resultado = matching.confirmar_requisito_universitario(texto)
+        self.assertTrue(resultado.confirmada)
+        self.assertTrue(resultado.obligatorio)
+        self.assertTrue(resultado.en_curso)
+
+    def test_university_students_actively_enrolled_es_obligatorio(self):
+        """Literal de la BD (workday-Intern---Bachelors-Tech_1214077)."""
+        texto = (
+            "Impact/Scope: University students actively enrolled in a "
+            "university/college/institution pursuing a Bachelor's degree in a "
+            "technical area of study."
+        )
+        resultado = matching.confirmar_requisito_universitario(texto)
+        self.assertTrue(resultado.confirmada)
+        self.assertTrue(resultado.obligatorio)
+        self.assertTrue(resultado.en_curso)
+
+    def test_what_youll_need_required_es_encabezado(self):
+        """Literal de la BD (workday-Senior-Director--Quality-Engineering)."""
+        texto = (
+            "What you'll need (Required): Bachelor's Degree in related field with "
+            "at least 10 years experience in engineering and leadership positions "
+            "in the medical device industry"
+        )
+        resultado = matching.confirmar_requisito_universitario(texto)
+        self.assertTrue(resultado.confirmada)
+        self.assertTrue(resultado.obligatorio)
+        self.assertFalse(resultado.suave)
+
+    def test_education_con_espacio_y_dos_puntos_es_encabezado(self):
+        """Literal de la BD (workday-US-Marketing-Governance)."""
+        texto = (
+            "Education : Bachelor's/University degree, Master's degree preferred"
+        )
+        resultado = matching.confirmar_requisito_universitario(texto)
+        self.assertTrue(resultado.confirmada)
+        self.assertTrue(resultado.obligatorio)
+        self.assertFalse(resultado.suave)
 
     def test_titulo_completado_no_es_estudiante_activo(self):
         texto = (
@@ -563,6 +748,104 @@ class TestEvaluadorPaso5(unittest.TestCase):
         evaluador = matching.EvaluadorPaso5(self.connection)
         resultado = evaluador.evaluar_job("job-11")
         self.assertNotEqual(resultado.estado, matching.ESTADO_DESCARTADA)
+
+
+class TestSemanticaEducationStatus(unittest.TestCase):
+    """Semantica de la AUSENCIA del fact 'pursuing' (acordada 2026-10-29).
+
+    * Perfil con hechos educativos y NINGUNO 'pursuing' -> 'no cumple': el
+      requisito de estudiante activo BLOQUEA (motivo propio).
+    * Perfil SIN NINGUN hecho educativo -> 'no verificable': NO bloquea, la
+      vacante va a 'revisar_a_mano' con motivo 'educacion_no_verificable'.
+    """
+
+    def setUp(self):
+        self.tmpdir = tempfile.TemporaryDirectory()
+        self.connection = _crear_base(self.tmpdir.name)
+        self.connection.commit()
+
+    def tearDown(self):
+        self.connection.close()
+        self.tmpdir.cleanup()
+
+    def _job_estudiante_activo(self, job_id: str) -> None:
+        _insertar_job(
+            self.connection,
+            job_id,
+            "Minimum Qualifications Currently pursuing a Bachelor's degree in "
+            "Business Administration or a related field. Must be enrolled as a "
+            "full-time student.",
+        )
+        _insertar_requisito(
+            self.connection, job_id, "bachelor", "educacion-universitaria", "required"
+        )
+        self.connection.commit()
+
+    def test_sin_fact_pursuing_es_no_cumple_y_bloquea(self):
+        _insertar_fact(
+            self.connection,
+            "bachiller-en-educacion-media",
+            "educacion-secundaria",
+            "education",
+            education_status="completed",
+        )
+        self._job_estudiante_activo("job-p1")
+        evaluador = matching.EvaluadorPaso5(self.connection)
+        resultado = evaluador.evaluar_job("job-p1")
+        self.assertEqual(resultado.estado, matching.ESTADO_DESCARTADA)
+        self.assertEqual(resultado.motivo, matching.MOTIVO_TITULO_EN_CURSO)
+
+    def test_fact_pursuing_de_nivel_insuficiente_tampoco_cumple(self):
+        _insertar_fact(
+            self.connection,
+            "diplomado-en-curso",
+            "educacion-tecnica",
+            "education",
+            education_status="pursuing",
+        )
+        self._job_estudiante_activo("job-p2")
+        evaluador = matching.EvaluadorPaso5(self.connection)
+        resultado = evaluador.evaluar_job("job-p2")
+        self.assertEqual(resultado.estado, matching.ESTADO_DESCARTADA)
+        self.assertEqual(resultado.motivo, matching.MOTIVO_TITULO_EN_CURSO)
+
+    def test_perfil_sin_hechos_educativos_es_no_verificable(self):
+        """Sin hechos educativos NO se puede afirmar que 'no cumple'."""
+        self._job_estudiante_activo("job-p3")
+        evaluador = matching.EvaluadorPaso5(self.connection)
+        resultado = evaluador.evaluar_job("job-p3")
+        self.assertEqual(resultado.estado, matching.ESTADO_REVISAR)
+        self.assertEqual(resultado.motivo, matching.MOTIVO_EDUCACION_NO_VERIFICABLE)
+        self.assertNotEqual(resultado.estado, matching.ESTADO_DESCARTADA)
+
+    def test_perfil_sin_hechos_educativos_titulo_completado_tampoco_bloquea(self):
+        _insertar_job(
+            self.connection,
+            "job-p4",
+            "Required Qualifications Bachelor's degree in Accounting required.",
+        )
+        _insertar_requisito(
+            self.connection, "job-p4", "bachelor", "educacion-universitaria", "required"
+        )
+        self.connection.commit()
+        evaluador = matching.EvaluadorPaso5(self.connection)
+        resultado = evaluador.evaluar_job("job-p4")
+        self.assertEqual(resultado.estado, matching.ESTADO_REVISAR)
+        self.assertEqual(resultado.motivo, matching.MOTIVO_EDUCACION_NO_VERIFICABLE)
+
+    def test_fact_pursuing_del_nivel_requerido_cumple(self):
+        _insertar_fact(
+            self.connection,
+            "licenciatura-en-curso",
+            "educacion-universitaria",
+            "education",
+            education_status="pursuing",
+        )
+        self._job_estudiante_activo("job-p5")
+        evaluador = matching.EvaluadorPaso5(self.connection)
+        resultado = evaluador.evaluar_job("job-p5")
+        self.assertNotEqual(resultado.estado, matching.ESTADO_DESCARTADA)
+        self.assertNotEqual(resultado.motivo, matching.MOTIVO_EDUCACION_NO_VERIFICABLE)
 
 
 class TestCorridas(unittest.TestCase):
