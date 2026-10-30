@@ -15,6 +15,7 @@ import tkinter as tk
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
+from jobpulse_v15 import areas as areas_mod
 from jobpulse_v15.ia_api import IAError
 from jobpulse_v15.profile_model import parse_experiencia_notes
 from jobpulse_v15.db import Database
@@ -1849,6 +1850,45 @@ class TestManualJobStateUI(unittest.TestCase):
             self.assertEqual(len(facts), 2)
             self.assertEqual({f["category"] for f in facts}, {"contact"})
             self.assertEqual({f["value_code"] for f in facts}, {"nombre", "email"})
+        finally:
+            window.window.destroy()
+
+    def test_pestana_areas_marca_y_desmarca(self):
+        """El usuario marca/desmarca las areas del sistema en su perfil."""
+        with self.repository.database.connection() as connection:
+            areas_mod.sembrar_taxonomia(connection)
+        window = CandidateProfileWindowCV(self.root, self.repository)
+        try:
+            seccion = window.seccion_areas
+            self.assertIn("informatica", seccion._vars)
+            self.assertFalse(seccion._vars["informatica"].get())
+
+            seccion._vars["informatica"].set(True)
+            seccion._vars["administracion"].set(True)
+            seccion._guardar()
+
+            facts = [
+                fact
+                for fact in self.repository.list_candidate_profile_facts()
+                if fact["category"] == "area"
+            ]
+            self.assertEqual(
+                {fact["value_code"] for fact in facts},
+                {"informatica", "administracion"},
+            )
+            with self.repository.database.connection() as connection:
+                marcadas = areas_mod.areas_del_perfil(connection)
+            self.assertEqual(marcadas, {"informatica", "administracion"})
+
+            # Desmarcar una area la quita del perfil (no se borra nada mas).
+            seccion._vars["administracion"].set(False)
+            seccion._guardar()
+            facts = [
+                fact
+                for fact in self.repository.list_candidate_profile_facts()
+                if fact["category"] == "area"
+            ]
+            self.assertEqual({fact["value_code"] for fact in facts}, {"informatica"})
         finally:
             window.window.destroy()
 

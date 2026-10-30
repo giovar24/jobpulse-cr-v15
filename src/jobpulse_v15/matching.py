@@ -53,8 +53,17 @@ Precedencia de estados (definida en el plan del paso 5):
 5. ``calificada``          puntaje >= 0.80.
 6. ``baja_compatibilidad`` resto.
 
+Ademas, antes de evaluar los requisitos, se aplica el FILTRO POR AREA: si el
+perfil marco areas de empleo (``candidate_profile_facts.category='area'``) y
+la oferta esta clasificada en un area que NO marco el usuario, la vacante no
+se evalua: queda con estado ``fuera_de_area`` (motivo
+``fuera_de_area_del_perfil``). Reglas conservadoras: sin areas marcadas no hay
+filtro (se evalua todo); las ofertas sin area o en el area ``otros`` (titulo
+ambiguo o sin encaje) SIEMPRE se evaluan; y la corrida sigue escribiendo una
+fila por vacante, para que la exclusion quede auditable.
+
 El modulo no lleva datos del candidato hardcodeados: todo sale de
-``candidate_profile_facts`` y ``concepto``.
+``candidate_profile_facts``, ``concepto`` y ``job_area``.
 
 Trazabilidad: cada corrida escribe filas NUEVAS en ``job_match`` (PK
 ``job_id, corrida_id``) y deja las corridas anteriores con ``valida = 0``
@@ -66,9 +75,11 @@ from __future__ import annotations
 import json
 import re
 import sqlite3
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Iterable, Sequence
+
+from jobpulse_v15 import areas
 
 UMBRAL_COBERTURA = 0.60
 UMBRAL_PUNTAJE = 0.80
@@ -81,6 +92,9 @@ ESTADO_DESCARTADA = "descartada"
 ESTADO_DATOS_INSUFICIENTES = "datos_insuficientes"
 ESTADO_SIN_REQUISITOS = "sin_requisitos"
 ESTADO_BAJA_COMPATIBILIDAD = "baja_compatibilidad"
+# El perfil marco areas de empleo y esta oferta NO esta en ellas: no se
+# evalua (queda registrada para que la exclusion sea auditable).
+ESTADO_FUERA_DE_AREA = "fuera_de_area"
 
 MOTIVO_BLOQUEANTE = "titulo_universitario_requerido"
 MOTIVO_TITULO_EN_CURSO = "titulo_universitario_en_curso_requerido"
@@ -95,6 +109,7 @@ MOTIVO_COBERTURA = "cobertura_insuficiente"
 MOTIVO_CUMPLE_UMBRAL = "cumple_umbral"
 MOTIVO_PUNTAJE_BAJO = "puntaje_bajo"
 MOTIVO_SIN_REQUISITOS = "sin_requisitos_mapeados"
+MOTIVO_FUERA_DE_AREA = "fuera_de_area_del_perfil"
 
 # Orden de prioridad al elegir el motivo cuando coexisten varios.
 PRIORIDAD_MOTIVOS = (
@@ -113,7 +128,10 @@ PRIORIDAD_MOTIVOS = (
     MOTIVO_COBERTURA,
 )
 
+NIVEL_SECUNDARIA = 1
+NIVEL_SUPERIOR_CORTO = 2
 NIVEL_UNIVERSITARIO = 3
+NIVEL_POSGRADO = 4
 
 
 # --------------------------------------------------------------------------
@@ -172,6 +190,84 @@ _CONTEXTO_NO_UNIVERSIDAD = re.compile(
     r"|secondary\s+school"
     r"|educaci[óo]n\s+media",
     re.IGNORECASE,
+)
+
+# --------------------------------------------------------------------------
+# NIVEL EDUCATIVO DECLARADO POR EL TEXTO (escalera GENERAL, no por pais)
+# --------------------------------------------------------------------------
+#
+# El nivel de un requisito NO se toma del codigo canonico sino de la FRASE que
+# aparece en el texto de la oferta. La escalera es general (tipo ISCED):
+#
+#   1 = secundaria              high school, secondary school, bachillerato
+#   2 = superior de ciclo corto associate degree, two-year college degree,
+#                                 technical degree, tecnico superior
+#   3 = universitario           bachelor's degree, university degree,
+#                                 licenciatura, bachillerato universitario
+#   4 = posgrado                master's degree, MBA, postgraduate degree
+#
+# Un aviso del extranjero se lee con SU propio vocabulario: lo que decide el
+# nivel es la frase del texto, no la equivalencia de un pais. El perfil se
+# expresa en la misma escalera, de modo que la comparacion no depende de donde
+# viva la persona ni de donde se publico la vacante.
+_FRASES_NIVEL: tuple[tuple[re.Pattern[str], int], ...] = (
+    # --- 4: posgrado ---
+    (re.compile(r"\bmaster(?:['\u2019]s|s)?\s+degree\b", re.I), NIVEL_POSGRADO),
+    (re.compile(r"\bmba\b", re.I), NIVEL_POSGRADO),
+    (re.compile(r"\bpostgraduate\s+degree\b", re.I), NIVEL_POSGRADO),
+    (re.compile(r"\bdoctorate\b|\bph\.?\s?d\.?\b", re.I), NIVEL_POSGRADO),
+    # --- 3: universitario ---
+    (re.compile(r"\bbachelor(?:['\u2019]s|s)?\s+degree\b", re.I), NIVEL_UNIVERSITARIO),
+    (re.compile(r"\bbaccalaureate\b", re.I), NIVEL_UNIVERSITARIO),
+    (re.compile(r"\buniversity\s+degree\b", re.I), NIVEL_UNIVERSITARIO),
+    (re.compile(r"\bfour[\s-]?year\s+(?:college\s+)?degree\b", re.I), NIVEL_UNIVERSITARIO),
+    (re.compile(r"\blicenciatura\b|\blicenciado\b", re.I), NIVEL_UNIVERSITARIO),
+    (re.compile(r"\bbachiller(?:ato)?\s+universitari[oa]\b", re.I), NIVEL_UNIVERSITARIO),
+    (re.compile(r"\bgrado\s+universitario\b", re.I), NIVEL_UNIVERSITARIO),
+    (re.compile(r"\bt[íi]tulo\s+universitario\b", re.I), NIVEL_UNIVERSITARIO),
+    (re.compile(r"\bestudios\s+universitarios\b", re.I), NIVEL_UNIVERSITARIO),
+    # --- 2: superior de ciclo corto ---
+    (re.compile(r"\b(?:two|2)[\s-]?year\s+(?:college\s+)?degree\b", re.I), NIVEL_SUPERIOR_CORTO),
+    (re.compile(r"\bassociate(?:['\u2019]s)?\s+degree\b", re.I), NIVEL_SUPERIOR_CORTO),
+    (re.compile(r"\btechnical\s+degree\b", re.I), NIVEL_SUPERIOR_CORTO),
+    (re.compile(r"\bt[ée]cnico\s+superior\b", re.I), NIVEL_SUPERIOR_CORTO),
+    (re.compile(r"\bpostsecondary\s+(?:certificate|diploma)\b", re.I), NIVEL_SUPERIOR_CORTO),
+    (re.compile(r"\bcommunity\s+college\s+degree\b", re.I), NIVEL_SUPERIOR_CORTO),
+    # --- 1: secundaria ---
+    (re.compile(r"\bhigh\s+school\b", re.I), NIVEL_SECUNDARIA),
+    (re.compile(r"\bsecondary\s+school\b", re.I), NIVEL_SECUNDARIA),
+    (re.compile(r"\bdiploma\s+de\s+secundaria\b", re.I), NIVEL_SECUNDARIA),
+    (re.compile(r"\beducaci[óo]n\s+media\b", re.I), NIVEL_SECUNDARIA),
+)
+
+# ESTUDIOS UNIVERSITARIOS PARCIALES: el aviso define su propio umbral
+# ("80% completeness of a bachelor's degree program"). El porcentaje NO
+# confiere titulo (ISCED 2011: "partial level completion" es una subcategoria
+# de nivel, no una cualificacion), asi que el requisito se cumple con el
+# titulo universitario O con estudios universitarios en curso.
+_PATRON_ESTUDIOS_PARCIALES = re.compile(
+    r"\b\d{1,3}\s*%?\s*(?:of\s+)?completeness\s+of\s+(?:a|an|the)\s+"
+    r"bachelor(?:['\u2019]s|s)?\s+degree\s+program\b"
+    r"|\b\d{1,3}\s*%\s*(?:of\s+)?(?:a|an|the)\s+bachelor(?:['\u2019]s|s)?\s+"
+    r"degree\s+program\b"
+    r"|\b\d{1,3}\s*%\s*completion\s+of\s+(?:a|an|the)\s+"
+    r"bachelor(?:['\u2019]s|s)?\s+degree\b",
+    re.IGNORECASE,
+)
+
+# VIAS ALTERNATIVAS ACADEMICAS con el nivel que declara el texto. Una via
+# solo desbloquea al perfil si el perfil tiene ESE nivel de estudios: una via
+# que presupone mas estudios de los que el perfil tiene no es una via.
+# ("or advanced university studies" = posgrado sin titulo: presupone un
+# titulo universitario previo; "or advanced coursework" = cursos
+# universitarios; "or technical degree" = superior de ciclo corto).
+_VIA_ACADEMICA_NIVEL: tuple[tuple[re.Pattern[str], int], ...] = (
+    (re.compile(r"\bor\s+advanced\s+university\s+studies\b", re.I), NIVEL_POSGRADO),
+    (re.compile(r"\bor\s+advanced\s+(?:university\s+)?coursework\b", re.I), NIVEL_UNIVERSITARIO),
+    (re.compile(r"\bor\s+university\s+(?:coursework|studies)\b", re.I), NIVEL_UNIVERSITARIO),
+    (re.compile(r"\bor\s+(?:completing\s+)?coursework\s+(?:in|of|toward|towards)\b", re.I), NIVEL_UNIVERSITARIO),
+    (re.compile(r"\bor\s+(?:an?\s+)?technical\s+degree\b", re.I), NIVEL_SUPERIOR_CORTO),
+    (re.compile(r"\bor\s+(?:an?\s+)?associate(?:['\u2019]s)?\s+degree\b", re.I), NIVEL_SUPERIOR_CORTO),
 )
 
 # Negacion DURA: el requisito universitario NO es obligatorio ("not
@@ -322,6 +418,11 @@ _OBLIGATORIEDAD_ANTES = re.compile(
     r"|\bnecesitar[áa]s\s+las\s+siguientes\b"
     r"|\brequisitos\b"
     r"|\bse\s+requiere\b"
+    r"|\bnecesita(?:r[áa]|ndo)?\b"
+    r"|\bse\s+necesita\b"
+    r"|\byou\s+will\s+need\b"
+    r"|\byou\s+need\s+to\s+have\b"
+    r"|\bwill\s+need\s+to\s+have\b"
     r"|\bobligatorio\b"
     r"|\brequerido\b",
     re.IGNORECASE,
@@ -445,6 +546,10 @@ class ConfirmacionEducacion:
     obligatorio: bool = False
     en_curso: bool = False
     suave: bool = False
+    # Vias alternativas ACADEMICAS detectadas, con el nivel que declara el
+    # texto: [(nivel, etiqueta)]. Sirven para decidir si la via esta
+    # DISPONIBLE para el perfil (si el perfil tiene ese nivel de estudios).
+    vias: list[tuple[int, str]] = field(default_factory=list)
 
     @property
     def es_negacion(self) -> bool:
@@ -506,6 +611,59 @@ def _indice_clausula(clausulas: list[tuple[str, int]], posicion: int) -> int | N
 def _es_universitario(ventana: str) -> bool:
     """Filtra terminos que en realidad son secundaria ('Bachelor in high school')."""
     return _CONTEXTO_NO_UNIVERSIDAD.search(ventana) is None
+
+
+def _spans_nivel(texto: str) -> list[tuple[int, int, int]]:
+    """(inicio, fin, nivel) de cada frase que declara un nivel educativo."""
+    spans: list[tuple[int, int, int]] = []
+    for patron, nivel in _FRASES_NIVEL:
+        for match in patron.finditer(texto or ""):
+            spans.append((match.start(), match.end(), nivel))
+    return spans
+
+
+def nivel_educativo_del_texto(texto: str, termino: str | None = None) -> int | None:
+    """Nivel educativo que declara el TEXTO de la oferta (escalera general).
+
+    Si se indica ``termino`` (el ``value_text`` del requisito extraido) se
+    toma el nivel de la frase que CUBRE ese termino: la frase mas larga gana
+    ("two year college degree" -> 2, aunque dentro diga "college degree").
+    Si ninguna frase cubre el termino, se devuelve ``None`` y el llamador usa
+    el nivel del codigo canonico.
+
+    Sin ``termino``: el nivel mas alto declarado en el texto.
+    """
+    texto = texto or ""
+    spans = _spans_nivel(texto)
+    if not spans:
+        return None
+    termino = (termino or "").strip()
+    if not termino:
+        return max(nivel for _, _, nivel in spans)
+    for match in re.finditer(re.escape(termino), texto, re.IGNORECASE):
+        inicio, fin = match.start(), match.end()
+        cubre = [s for s in spans if s[0] <= inicio and fin <= s[1]]
+        if cubre:
+            return max(cubre, key=lambda s: s[1] - s[0])[2]
+        solapa = [s for s in spans if s[0] < fin and s[1] > inicio]
+        if solapa:
+            return max(solapa, key=lambda s: s[1] - s[0])[2]
+    return None
+
+
+def es_estudios_parciales(texto: str) -> bool:
+    """True si el texto exige ESTUDIOS UNIVERSITARIOS PARCIALES (X % de un
+    programa de bachelor). Es un requisito de nivel 3 SIN titulo."""
+    return _PATRON_ESTUDIOS_PARCIALES.search(texto or "") is not None
+
+
+def _vias_academicas(ventana: str) -> list[tuple[int, str]]:
+    """Vias alternativas ACADEMICAS de la ventana: (nivel, etiqueta)."""
+    vias: list[tuple[int, str]] = []
+    for patron, nivel in _VIA_ACADEMICA_NIVEL:
+        if patron.search(ventana or "") and (nivel, patron.pattern) not in vias:
+            vias.append((nivel, patron.pattern))
+    return vias
 
 
 def _es_titulo_empleo(ventana: str) -> bool:
@@ -746,6 +904,17 @@ def confirmar_requisito_universitario(texto: str) -> ConfirmacionEducacion:
                 )
             continue
 
+        # --- obligatoriedad: la decide el TEXTO --------------------------
+        # Se calcula ANTES de la alternativa: asi la confirmacion negativa
+        # tambien sabe si el titulo era obligatorio ("Minimum Qualifications
+        # Bachelor's degree or advanced university studies" ES obligatorio).
+        antes_obligacion = antes_amplio[-200:] if len(antes_amplio) > 200 else antes_amplio
+        obligatorio, suave = _analisis_clausula(antes_obligacion, ambito)
+        if es_encabezado and not obligatorio:
+            # El encabezado de la seccion de requisitos gobierna lo que
+            # viene debajo.
+            obligatorio = True
+
         # --- alternativa (conservadora: clause + grupo + siguiente) ------
         alt_antes = texto[max(limite_izq, g_ini - VENTANA_ALTERNATIVA_ANTES): g_ini]
         alt_despues = texto[g_fin: min(limite_der, g_fin + VENTANA_ALTERNATIVA_DESPUES)]
@@ -758,19 +927,25 @@ def confirmar_requisito_universitario(texto: str) -> ConfirmacionEducacion:
             or _tiene_alternativa(clausula_actual)
             or _ALTERNATIVA_SIGUIENTE.search(clausula_siguiente)
         ):
+            # Vias ACADEMICAS con nivel declarado: el evaluador decide si
+            # estan DISPONIBLES para el perfil.
+            vias = (
+                _vias_academicas(ventana_alternativa)
+                + _vias_academicas(clausula_actual)
+                + _vias_academicas(clausula_siguiente)
+            )
             if negativa is None:
                 negativa = ConfirmacionEducacion(
-                    False, primero.group(0), _frase_de(texto, g_ini), "alternativa"
+                    False,
+                    primero.group(0),
+                    _frase_de(texto, g_ini),
+                    "alternativa",
+                    obligatorio=obligatorio,
+                    suave=suave,
+                    vias=vias,
                 )
             continue
 
-        # --- obligatoriedad: la decide el TEXTO --------------------------
-        antes_obligacion = antes_amplio[-200:] if len(antes_amplio) > 200 else antes_amplio
-        obligatorio, suave = _analisis_clausula(antes_obligacion, ambito)
-        if es_encabezado and not obligatorio:
-            # El encabezado de la seccion de requisitos gobierna lo que
-            # viene debajo.
-            obligatorio = True
         confirmaciones.append(
             ConfirmacionEducacion(
                 True,
@@ -806,6 +981,9 @@ class Requisito:
     minimum: float | None
     codigo_canonico: str
     education_status: str | None = None
+    # Frase literal del aviso donde se encontro el requisito: es el ancla
+    # para leer el NIVEL que declara el texto (no el codigo canonico).
+    evidence: str | None = None
 
 
 @dataclass
@@ -828,7 +1006,12 @@ class Resultado:
 class EvaluadorPaso5:
     """Evalua vacantes contra los hechos del perfil (sin datos hardcodeados)."""
 
-    def __init__(self, connection: sqlite3.Connection) -> None:
+    def __init__(
+        self,
+        connection: sqlite3.Connection,
+        *,
+        aplicar_filtro_areas: bool = True,
+    ) -> None:
         self.connection = connection
         self._niveles: dict[tuple[str, str], int | None] = {}
         self.facts = self._cargar_facts()
@@ -836,6 +1019,12 @@ class EvaluadorPaso5:
         self.requisitos_por_job = self._cargar_requisitos()
         self.textos_por_job = self._cargar_textos()
         self.jobs_con_analisis = self._cargar_jobs_con_analisis()
+        # Filtro por area de empleo: las areas marcadas por el usuario y el
+        # area de cada oferta. Si el perfil no marca ninguna, no hay filtro.
+        # ``aplicar_filtro_areas=False`` = "evaluar todo" (ignora las areas).
+        self.aplicar_filtro_areas = aplicar_filtro_areas
+        self.areas_perfil = areas.areas_del_perfil(connection)
+        self.area_por_job = areas.areas_por_oferta(connection)
 
     # -- carga ------------------------------------------------------------
     def _cargar_facts(self) -> dict[str, list[dict]]:
@@ -874,7 +1063,7 @@ class EvaluadorPaso5:
             """
             SELECT j.job_id, r.requirement_id, r.category, r.value_code, r.value_text,
                    r.qualifier, r.requirement_level, r.minimum, r.codigo_canonico,
-                   r.education_status
+                   r.education_status, r.evidence
             FROM job_requirements r
             JOIN job_analysis a ON a.analysis_id = r.analysis_id
             JOIN jobs j ON j.job_id = a.job_id
@@ -895,6 +1084,7 @@ class EvaluadorPaso5:
                     minimum=row["minimum"],
                     codigo_canonico=row["codigo_canonico"],
                     education_status=row["education_status"],
+                    evidence=row["evidence"],
                 )
             )
         return por_job
@@ -935,13 +1125,45 @@ class EvaluadorPaso5:
             self._niveles[clave] = row["nivel"] if row else None
         return self._niveles[clave]
 
-    def nivel_candidato_educacion(self) -> int | None:
+    def niveles_educativos(self) -> list[int]:
+        """Niveles educativos del perfil (los declarados en ``concepto``)."""
         niveles = [
             self.nivel_concepto(fact["codigo_canonico"], "education")
             for fact in self.facts["education"]
         ]
-        niveles = [n for n in niveles if n is not None]
+        return [n for n in niveles if n is not None]
+
+    def nivel_candidato_educacion(self) -> int | None:
+        niveles = self.niveles_educativos()
         return max(niveles) if niveles else None
+
+    def tiene_nivel_educativo(self, nivel: int) -> bool:
+        """True si el perfil tiene AL MENOS ese nivel de estudios.
+
+        No mira el ESTADO (completed / pursuing): para saber si una via
+        alternativa esta DISPONIBLE importa el nivel alcanzado, no si el
+        titulo se termino.
+        """
+        return any(n >= nivel for n in self.niveles_educativos())
+
+    def nivel_efectivo_requisito(self, requisito: Requisito, texto: str) -> int | None:
+        """Nivel del requisito educativo segun el TEXTO de la oferta.
+
+        El texto manda sobre el codigo canonico: "Two year college degree"
+        (que el extractor mapea a ``university_degree``) declara nivel 2. Si
+        el texto no declara ningun nivel, se usa el del codigo canonico.
+        """
+        nivel_codigo = self.nivel_concepto(requisito.codigo_canonico, "education")
+        evidencia = requisito.evidence or ""
+        if evidencia:
+            nivel = nivel_educativo_del_texto(evidencia, requisito.value_text)
+            if nivel is not None:
+                return nivel
+        if texto and texto.strip() != evidencia.strip():
+            nivel = nivel_educativo_del_texto(texto, requisito.value_text)
+            if nivel is not None:
+                return nivel
+        return nivel_codigo
 
     def cumple_skill(self, codigo: str) -> bool:
         return any(f["codigo_canonico"] == codigo for f in self.facts["skill"])
@@ -1031,7 +1253,7 @@ class EvaluadorPaso5:
         * Si el perfil NO registra hechos educativos, la dimension educativa
           NO es verificable: nunca se descarta por falta de informacion.
         """
-        nivel_req = self.nivel_concepto(requisito.codigo_canonico, "education")
+        nivel_req = self.nivel_efectivo_requisito(requisito, texto)
         if nivel_req is None:
             return "no_confirmado", None
         nivel_cand = self.nivel_candidato_educacion()
@@ -1040,6 +1262,14 @@ class EvaluadorPaso5:
             # perfil no cumple: es 'no verificable', no 'no cumple'.
             return "no_verificable", None
         if nivel_cand >= nivel_req:
+            return "cumple", None
+        # ESTUDIOS UNIVERSITARIOS PARCIALES ("80 % de completitud de un
+        # bachelor"): el aviso acepta un avance parcial, asi que lo cumplen
+        # los estudios universitarios en curso.
+        if (
+            es_estudios_parciales(requisito.evidence or texto or "")
+            and self.tiene_nivel_educativo(NIVEL_UNIVERSITARIO)
+        ):
             return "cumple", None
         if nivel_req < NIVEL_UNIVERSITARIO:
             # El perfil no alcanza un nivel no universitario (p. ej. tecnico).
@@ -1050,6 +1280,21 @@ class EvaluadorPaso5:
         obligatorio = (
             requisito.requirement_level == "required" or confirmacion.obligatorio
         )
+        # --- VIA ALTERNATIVA ACADEMICA: esta DISPONIBLE para el perfil? ---
+        # Una via solo desbloquea si el perfil tiene el nivel que la via
+        # declara: "or advanced university studies" (posgrado) no es una via
+        # para quien no tiene estudios universitarios.
+        if confirmacion.vias and not confirmacion.suave:
+            disponibles = [
+                via for via in confirmacion.vias if self.tiene_nivel_educativo(via[0])
+            ]
+            if disponibles and obligatorio:
+                # El perfil PUEDE tomar la via: el requisito no bloquea.
+                return "cumple", confirmacion
+            if not disponibles and obligatorio:
+                # Hay vias, pero ninguna al alcance del perfil: la via no
+                # rescata y el titulo principal sigue exigiendose.
+                return "bloqueante", confirmacion
         if not obligatorio:
             # No es obligatorio: no bloquea, pero tampoco se da por cumplido.
             return "faltante", confirmacion
@@ -1071,6 +1316,27 @@ class EvaluadorPaso5:
 
     # -- evaluacion de una vacante ---------------------------------------
     def evaluar_job(self, job_id: str) -> Resultado:
+        # Filtro por AREA de empleo: el usuario marco en su perfil las areas
+        # que le interesan. Una oferta clasificada en otra area NO se evalua
+        # (queda registrada con estado propio: la exclusion es auditable).
+        if self.aplicar_filtro_areas and areas.es_fuera_de_area(
+            self.area_por_job.get(job_id), self.areas_perfil
+        ):
+            return Resultado(
+                job_id=job_id,
+                estado=ESTADO_FUERA_DE_AREA,
+                puntaje=None,
+                cobertura=0.0,
+                motivo=MOTIVO_FUERA_DE_AREA,
+                cubiertos=[],
+                faltantes=[],
+                total_req=0,
+                evaluables=0,
+                cubiertos_count=0,
+                faltantes_count=0,
+                no_v_count=0,
+                nc_count=0,
+            )
         requisitos = self.requisitos_por_job.get(job_id, [])
         if not requisitos:
             return Resultado(
@@ -1274,9 +1540,16 @@ def ejecutar_paso5(
     connection: sqlite3.Connection,
     corrida_id: str | None = None,
     invalidar_previas: bool = True,
+    aplicar_filtro_areas: bool = True,
 ) -> tuple[str, list[Resultado]]:
-    """Corre el paso 5 completo y persiste una corrida nueva."""
-    evaluador = EvaluadorPaso5(connection)
+    """Corre el paso 5 completo y persiste una corrida nueva.
+
+    ``aplicar_filtro_areas=False`` = "evaluar todo": ignora las areas que el
+    usuario marco en el perfil y evalua todas las vacantes.
+    """
+    evaluador = EvaluadorPaso5(
+        connection, aplicar_filtro_areas=aplicar_filtro_areas
+    )
     resultados = [evaluador.evaluar_job(job_id) for job_id in evaluador.jobs_con_analisis]
     corrida = corrida_id or datetime.now().strftime("%Y%m%d_%H%M%S")
     guardar_resultados(connection, resultados, corrida, invalidar_previas)

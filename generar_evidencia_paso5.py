@@ -203,6 +203,56 @@ L.append("    **no es verificable** → nunca se descarta por falta de informaci
 L.append("    vacante va a `revisar_a_mano` con el motivo")
 L.append("    `educacion_no_verificable`.")
 L.append("")
+L.append("### 1.1. Mecánicas GENERALES (decididas 2026-10-30)")
+L.append("")
+L.append("Las reglas son **generales**: el nivel lo declara el TEXTO de la oferta y")
+L.append("el perfil se compara contra ese nivel. Nada depende de quién sea la")
+L.append("persona: si cambia el perfil (sus hechos educativos), cambian los")
+L.append("resultados sin tocar el código.")
+L.append("")
+L.append("- **M1 — El nivel lo declara el TEXTO, no el código canónico.** La escalera")
+L.append("  es general (tipo ISCED): 1 secundaria · 2 superior de ciclo corto ·")
+L.append("  3 universitario · 4 posgrado. El ancla es la evidencia literal del")
+L.append("  requisito (`job_requirements.evidence`) y gana la frase más larga que")
+L.append("  cubre al término: \"Two year college degree\" → 2 (aunque dentro diga")
+L.append("  \"college degree\"), \"Bachelor's degree\" → 3, \"Master's degree\" → 4,")
+L.append("  \"Associate's degree\" → 2, \"High School Diploma\" → 1. Un aviso del")
+L.append("  extranjero se lee con SU vocabulario (no hay equivalencias por país).")
+L.append("- **M2 — Una vía alternativa ACADÉMICA está o no DISPONIBLE** para el")
+L.append("  perfil: se compara el nivel que declara la vía con el nivel de estudios")
+L.append("  del perfil. \"or advanced university studies\" → posgrado (4);")
+L.append("  \"or advanced/university coursework\" → universitario (3);")
+L.append("  \"or technical degree\" / \"or associate's degree\" → ciclo corto (2).")
+L.append("  Si hay una vía disponible → no bloquea; si TODAS las vías son de nivel")
+L.append("  superior al del perfil → la vía no rescata y el título principal sigue")
+L.append("  exigiéndose → `descartada`. Las vías por **experiencia** (\"or")
+L.append("  equivalent experience\") NO son evaluables → nunca confirman un")
+L.append("  descarte (conservador).")
+L.append("- **M3 — Estudios universitarios PARCIALES** (\"80% completeness of a")
+L.append("  bachelor's degree program\") = nivel 3 **sin título**: lo cumplen el")
+L.append("  título universitario o los estudios universitarios en curso. Un")
+L.append("  porcentaje de completitud no confiere título (ISCED 2011:")
+L.append("  \"partial level completion\" es subcategoría de nivel, no cualificación).")
+L.append("- **M4 — Sin lógica por país:** el perfil y las vacantes se comparan en la")
+L.append("  misma escalera; el nivel vive en `candidate_profile_facts` + `concepto`")
+L.append("  (datos), nunca en el código.")
+L.append("")
+L.append("**Fuentes de las 3 decisiones de negocio** (generales, no de Costa Rica):")
+L.append("")
+L.append("1. `\"or advanced university studies\"` (posgrado) solo desbloquea a quien")
+L.append("   tiene estudios universitarios: ISCED 2011/OECD — los programas de")
+L.append("   posgrado *require at least two years at ISCED level 6 prior to")
+L.append("   entrance (although most require a four-year Bachelor's degree)*; la")
+L.append("   UCR/SEP exige títulos previos para admitir en posgrado.")
+L.append("2. `\"two year college degree\"` / `\"associate degree\"` = nivel 2: ISCED")
+L.append("   2011/OECD — *Programmes classified at ISCED level 5 may be referred to")
+L.append("   in many ways: higher technical education, community college education,")
+L.append("   technician or advanced/higher vocational training, **associate degree**,")
+L.append("   bac+2*; el bachelor es el nivel 6.")
+L.append("3. `\"X % de un bachelor's degree program\"` = estudios parciales: ISCED")
+L.append("   2011 — *individual credits awarded for successful completion of")
+L.append("   individual courses are not considered as qualifications*.")
+L.append("")
 L.append("## 2. Trazabilidad de corridas (`job_match`)")
 L.append("")
 L.append("```")
@@ -373,6 +423,59 @@ for etiqueta, job_id, veredicto, porque in MEDICION:
         else:
             L.append("  > (sin frase)")
 L.append("")
+
+# --------------------------------------------------------------- delta
+anterior = conn.execute(
+    "SELECT corrida_id FROM job_match WHERE corrida_id <> ? "
+    "ORDER BY corrida_id DESC LIMIT 1", (vigente,)).fetchone()
+if anterior:
+    prev = anterior["corrida_id"]
+    antes = {
+        r["job_id"]: (r["estado"], r["motivo"])
+        for r in conn.execute(
+            "SELECT job_id, estado, motivo FROM job_match WHERE corrida_id=?", (prev,))
+    }
+    despues = {
+        r["job_id"]: (r["estado"], r["motivo"])
+        for r in conn.execute(
+            "SELECT job_id, estado, motivo FROM job_match WHERE corrida_id=?", (vigente,))
+    }
+    cambios = [
+        (jid, antes[jid], despues[jid])
+        for jid in sorted(set(antes) & set(despues))
+        if antes[jid] != despues[jid]
+    ]
+    L.append("## 7. DELTA vs. la corrida anterior `%s` (%d avisos cambian)" % (prev, len(cambios)))
+    L.append("")
+    L.append("Cada cambio se midió ANTES de escribir la corrida nueva (evaluación en")
+    L.append("seco contra la BD) y aquí queda documentado con la frase literal del")
+    L.append("aviso.")
+    L.append("")
+    L.append("| # | job_id | antes | ahora | por qué |")
+    L.append("|---|---|---|---|---|")
+    for i, (jid, a, d) in enumerate(cambios, 1):
+        porque = {
+            ("revisar_a_mano", "descartada"): "vía académica sin nivel alcanzable",
+            ("revisar_a_mano", "calificada"): "el texto declara un nivel que el perfil sí alcanza",
+        }.get((a[0], d[0]), "motivo corregido: el texto sí obliga (lo que faltaba era la vía)")
+        L.append("| %d | `%s` | `%s` / `%s` | `%s` / `%s` | %s |"
+                 % (i, jid, a[0], a[1], d[0], d[1], porque))
+    L.append("")
+    L.append("### 7.1. Frase literal de cada cambio")
+    L.append("")
+    for i, (jid, a, d) in enumerate(cambios, 1):
+        texto = texto_de(jid)
+        L.append("- **%d. `%s`** — `%s/%s` → `%s/%s`" % (i, jid, a[0], a[1], d[0], d[1]))
+        citas = []
+        for cl in matching._clausulas(texto):
+            if any(p.search(cl[0]) for p, _ in matching._FRASES_NIVEL):
+                citas.append(cl[0])
+                break
+        if not citas:
+            citas = [str(r["evidence"]) for r in requisitos_de(jid) if r["evidence"]]
+        for cita in citas[:1]:
+            L.append("  > %s" % " ".join(str(cita).split())[:400])
+    L.append("")
 
 SALIDA.write_text("\n".join(L), encoding="utf-8")
 print("escrito %s (%d lineas) | corrida=%s | descartada=%d | no_confirmada=%d"

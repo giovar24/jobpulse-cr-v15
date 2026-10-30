@@ -20,6 +20,7 @@ import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 from typing import Any, Callable, Mapping
 
+from jobpulse_v15 import areas
 from jobpulse_v15.candidate_profile import extract_candidate_profile, read_cv_text
 from jobpulse_v15.cv_ia import extraer_cv_ia
 from jobpulse_v15.ia_api import IAClient, IAError
@@ -57,6 +58,7 @@ ETIQUETAS_CATEGORIA = {
     "schedule": "Horario",
     "availability": "Disponibilidad",
     "other": "Otro",
+    "area": "Área de empleo",
 }
 
 NIVELES_CEFR = ("", "A1", "A2", "B1", "B2", "C1", "C2", "nativo")
@@ -434,6 +436,140 @@ class _ProgresoIA(tk.Toplevel):
         self.protocol("WM_DELETE_WINDOW", self.withdraw)
 
 
+class _SeccionAreas(ttk.Frame):
+    """Areas de empleo que el usuario quiere evaluar (casillas de marcar).
+
+    Las areas las define el sistema (tabla ``area``); el usuario solo marca o
+    desmarca. Las areas marcadas se guardan como hechos de perfil
+    (``candidate_profile_facts.category='area'``) y el Paso 5 usa esa lista
+    para NO evaluar las ofertas de otras areas (estado ``fuera_de_area``).
+
+    Si no queda ninguna area marcada, no hay filtro: se evalua todo.
+    """
+
+    def __init__(self, parent: tk.Misc, repository: Any) -> None:
+        super().__init__(parent, padding=16)
+        self.repository = repository
+        self._vars: dict[str, tk.BooleanVar] = {}
+        self._areas: list[Mapping[str, Any]] = []
+        self._facts: list[Mapping[str, Any]] = []
+        self._conteo: dict[str, int] = {}
+        self._construir()
+        self.cargar()
+
+    # -- construccion ----------------------------------------------------
+    def _construir(self) -> None:
+        ttk.Label(
+            self,
+            text=(
+                "Marca las áreas de empleo en las que quieres trabajar. Las "
+                "ofertas de otras áreas no se evaluan (quedan visibles con el "
+                "estado 'fuera de área'). Si no marcas ninguna, se evalúan todas."
+            ),
+            wraplength=900,
+            justify="left",
+            foreground="#555555",
+        ).pack(anchor="w", pady=(0, 10))
+        self.marco = ttk.Frame(self)
+        self.marco.pack(fill="both", expand=True)
+        self.columna_izq = ttk.Frame(self.marco)
+        self.columna_der = ttk.Frame(self.marco)
+        self.columna_izq.pack(side="left", anchor="nw", fill="both", expand=True)
+        self.columna_der.pack(side="left", anchor="nw", fill="both", expand=True)
+        ttk.Button(
+            self,
+            text="Guardar áreas",
+            command=self._guardar,
+        ).pack(anchor="e", pady=(12, 0))
+        self.mensaje = ttk.Label(self, text="", foreground="#555555")
+        self.mensaje.pack(anchor="w", pady=(4, 0))
+
+    # -- datos -----------------------------------------------------------
+    def cargar(self, facts: list[Mapping[str, Any]] | None = None) -> None:
+        """Carga la taxonomia del sistema y marca las areas del perfil."""
+        try:
+            with self.repository.database.connection() as connection:
+                self._areas = areas.cargar_areas(connection)
+                self._conteo = areas.conteo_por_area(connection)
+        except sqlite3.Error as exc:
+            messagebox.showerror(
+                "No se pudieron cargar las áreas", str(exc), parent=self.winfo_toplevel()
+            )
+            return
+        if facts is None:
+            facts = [
+                fact
+                for fact in self.repository.list_candidate_profile_facts()
+                if fact["category"] == "area"
+            ]
+        self._facts = list(facts)
+        marcadas = {str(fact["value_code"]).casefold() for fact in self._facts}
+        self._vars.clear()
+        for hijo in self.columna_izq.winfo_children():
+            hijo.destroy()
+        for hijo in self.columna_der.winfo_children():
+            hijo.destroy()
+        if not self._areas:
+            ttk.Label(
+                self.columna_izq,
+                text=(
+                    "Todavía no hay áreas definidas. Ejecuta "
+                    "'jobpulse-v15 init-areas' para cargar la taxonomía."
+                ),
+                foreground="#555555",
+            ).pack(anchor="w")
+            return
+        mitad = (len(self._areas) + 1) // 2
+        for indice, area in enumerate(self._areas):
+            columna = self.columna_izq if indice < mitad else self.columna_der
+            variable = tk.BooleanVar(
+                value=str(area["codigo"]).casefold() in marcadas
+            )
+            self._vars[str(area["codigo"])] = variable
+            cantidad = self._conteo.get(str(area["codigo"]), 0)
+            texto = "%s  (%d vacantes)" % (area["nombre"], cantidad)
+            if str(area["codigo"]) == areas.AREA_OTROS:
+                texto += "  — siempre se evalúan"
+            ttk.Checkbutton(columna, text=texto, variable=variable).pack(
+                anchor="w", pady=2
+            )
+
+    def _guardar(self) -> None:
+        """Guarda las areas marcadas (marcar/desmarcar, sin borrar datos)."""
+        try:
+            marcadas = {
+                codigo for codigo, variable in self._vars.items() if variable.get()
+            }
+            for fact in self._facts:
+                if str(fact["value_code"]).casefold() not in {
+                    codigo.casefold() for codigo in marcadas
+                }:
+                    self.repository.delete_candidate_profile_fact(
+                        int(fact["profile_fact_id"])
+                    )
+            nuevas = [
+                areas.fact_de_area(area)
+                for area in self._areas
+                if str(area["codigo"]) in marcadas
+            ]
+            if nuevas:
+                self.repository.save_candidate_profile_facts(nuevas)
+        except (ValueError, sqlite3.Error) as exc:
+            messagebox.showerror(
+                "No se pudo guardar", str(exc), parent=self.winfo_toplevel()
+            )
+            return
+        self.cargar()
+        self.mensaje.configure(
+            text=(
+                "%d área(s) marcada(s). Las ofertas de otras áreas no se "
+                "evalúan en la próxima corrida del Paso 5." % len(marcadas)
+                if marcadas
+                else "No marcaste ninguna área: se evaluarán todas las ofertas."
+            )
+        )
+
+
 class CandidateProfileWindowCV:
     """Editor del perfil con secciones en orden de CV Harvard/ATS."""
 
@@ -479,6 +615,7 @@ class CandidateProfileWindowCV:
         self._tab_certificaciones()
         self._tab_idiomas()
         self._tab_otros()
+        self._tab_areas()
 
         self.estado = ttk.Label(self.window, text="", foreground="#555555", padding=(14, 0, 14, 8))
         self.estado.pack(fill="x", side="bottom")
@@ -753,6 +890,11 @@ class CandidateProfileWindowCV:
         )
         self.notebook.add(self.seccion_otros, text="  Otros (matching)  ")
 
+    def _tab_areas(self) -> None:
+        """Pestaña de areas de empleo (las define el sistema; el usuario marca)."""
+        self.seccion_areas = _SeccionAreas(self.notebook, self.repository)
+        self.notebook.add(self.seccion_areas, text="  Áreas de empleo  ")
+
     # ── datos <-> UI ──
     def refresh(self) -> None:
         try:
@@ -787,6 +929,7 @@ class CandidateProfileWindowCV:
         self.seccion_idiomas.cargar(por_categoria.get("language", []))
         otros = [f for f in facts if f["category"] in CATEGORIAS_OTROS]
         self.seccion_otros.cargar(otros)
+        self.seccion_areas.cargar(por_categoria.get("area", []))
         self.estado.configure(text=f"{len(facts)} datos en el perfil")
 
     def _guardar_contacto(self) -> None:

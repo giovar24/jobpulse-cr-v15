@@ -24,6 +24,7 @@ from jobpulse_v15.candidate_profile import (
     CandidateProfileImport,
     extract_candidate_profile,
 )
+from jobpulse_v15 import areas
 from jobpulse_v15 import ciclo_vida
 from jobpulse_v15.ciclo_vida import preferencias as preferencias_ciclo_vida
 from jobpulse_v15.cinde import CindeFetcher
@@ -382,6 +383,7 @@ class JobPulseWindow:
         self.root.minsize(860, 560)
         self._create_variables()
         self._build_layout()
+        self._cargar_combo_areas()
         self.search_jobs()
 
     def _create_variables(self) -> None:
@@ -408,6 +410,8 @@ class JobPulseWindow:
         self.published_from_var = tk.StringVar()
         self.published_to_var = tk.StringVar()
         self.profile_compatibility_var = tk.StringVar(value="Cualquiera")
+        self.area_var = tk.StringVar(value="Cualquiera")
+        self.solo_areas_perfil_var = tk.BooleanVar(value=False)
         self.status_var = tk.StringVar(value="Preparando busqueda...")
 
     def _build_layout(self) -> None:
@@ -590,6 +594,22 @@ class JobPulseWindow:
             4,
             width=22,
         )
+        ttk.Label(filters, text="Área").grid(
+            row=2, column=2, sticky="w", padx=(12, 6), pady=(8, 0)
+        )
+        self.area_combo = ttk.Combobox(
+            filters,
+            textvariable=self.area_var,
+            values=("Cualquiera",),
+            state="readonly",
+            width=24,
+        )
+        self.area_combo.grid(row=2, column=3, sticky="ew", pady=(8, 0))
+        ttk.Checkbutton(
+            filters,
+            text="Solo áreas de mi perfil",
+            variable=self.solo_areas_perfil_var,
+        ).grid(row=2, column=6, columnspan=2, sticky="w", padx=(12, 0), pady=(8, 0))
         self._add_entry(
             filters,
             "Publicada desde (AAAA-MM-DD)",
@@ -649,6 +669,7 @@ class JobPulseWindow:
         columns = (
             "company",
             "location",
+            "area",
             "work_mode",
             "posting_language",
             "date_published",
@@ -667,6 +688,7 @@ class JobPulseWindow:
         headings = {
             "company": "Empresa",
             "location": "Ubicacion",
+            "area": "Área",
             "work_mode": "Modalidad",
             "posting_language": "Idioma",
             "date_published": "Publicada",
@@ -677,6 +699,7 @@ class JobPulseWindow:
         widths = {
             "company": 190,
             "location": 190,
+            "area": 150,
             "work_mode": 100,
             "posting_language": 90,
             "date_published": 105,
@@ -790,6 +813,19 @@ class JobPulseWindow:
         except ValueError as exc:
             raise ValueError(f"{label} debe ser numerico.") from exc
 
+    def _cargar_combo_areas(self) -> None:
+        """Llena el filtro de areas con la taxonomia del sistema."""
+        self._areas_por_nombre: dict[str, str] = {}
+        try:
+            with self.repository.database.connection() as connection:
+                taxonomia = areas.cargar_areas(connection)
+        except sqlite3.Error:
+            return
+        self._areas_por_nombre = {
+            str(area["nombre"]): str(area["codigo"]) for area in taxonomia
+        }
+        self.area_combo.configure(values=("Cualquiera", *self._areas_por_nombre))
+
     def _on_review_reason_selected(self, _event: tk.Event) -> None:
         if _event.widget is not self.review_reason_combo:
             return
@@ -859,6 +895,17 @@ class JobPulseWindow:
             compatibility_filter = PROFILE_COMPATIBILITY_FILTERS[
                 self.profile_compatibility_var.get()
             ]
+            # Filtro por area de empleo (opcional): el area la define el
+            # sistema y la marca el usuario en su perfil.
+            with self.repository.database.connection() as connection:
+                area_por_job = areas.areas_por_oferta(connection)
+                areas_perfil = areas.areas_del_perfil(connection)
+            area_elegida = self._areas_por_nombre.get(self.area_var.get())
+            solo_perfil = bool(self.solo_areas_perfil_var.get())
+            nombre_por_codigo = {
+                codigo: nombre
+                for nombre, codigo in self._areas_por_nombre.items()
+            }
             filtered_jobs = [
                 job
                 for job in jobs
@@ -868,6 +915,22 @@ class JobPulseWindow:
                 )
                 == compatibility_filter
             ]
+            if area_elegida:
+                filtered_jobs = [
+                    job
+                    for job in filtered_jobs
+                    if area_por_job.get(job["job_id"]) == area_elegida
+                ]
+            if solo_perfil and areas_perfil:
+                # Conservador: las ofertas sin area o en 'otros' (ambiguas)
+                # SIGUEN visibles: una clasificacion dudosa no oculta avisos.
+                filtered_jobs = [
+                    job
+                    for job in filtered_jobs
+                    if not areas.es_fuera_de_area(
+                        area_por_job.get(job["job_id"]), areas_perfil
+                    )
+                ]
         except (ValueError, sqlite3.Error) as exc:
             messagebox.showerror("No se pudo buscar", str(exc), parent=self.root)
             return
@@ -892,6 +955,7 @@ class JobPulseWindow:
                 values=(
                     job.get("company") or "",
                     location,
+                    nombre_por_codigo.get(area_por_job.get(job["job_id"]), ""),
                     job.get("work_mode") or "unknown",
                     job.get("posting_language") or "undetermined",
                     job.get("date_published") or "",
@@ -1058,6 +1122,8 @@ class JobPulseWindow:
         self.published_from_var.set("")
         self.published_to_var.set("")
         self.profile_compatibility_var.set("Cualquiera")
+        self.area_var.set("Cualquiera")
+        self.solo_areas_perfil_var.set(False)
         self.search_jobs()
 
     def _on_select_job(self, event: tk.Event) -> None:

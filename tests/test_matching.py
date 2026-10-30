@@ -75,6 +75,7 @@ def _insertar_requisito(
     value_text: str | None = None,
     minimum: float | None = None,
     education_status: str | None = None,
+    evidence: str | None = None,
 ) -> None:
     analysis_id = connection.execute(
         "SELECT analysis_id FROM job_analysis WHERE job_id = ?", (job_id,)
@@ -83,8 +84,8 @@ def _insertar_requisito(
         """
         INSERT INTO job_requirements
             (analysis_id, category, value_code, value_text, requirement_level,
-             minimum, codigo_canonico, origin, education_status)
-        VALUES (?, ?, ?, ?, ?, ?, ?, 'manual', ?)
+             minimum, codigo_canonico, origin, education_status, evidence)
+        VALUES (?, ?, ?, ?, ?, ?, ?, 'manual', ?, ?)
         """,
         (
             analysis_id,
@@ -95,6 +96,7 @@ def _insertar_requisito(
             minimum,
             canon,
             education_status,
+            evidence,
         ),
     )
 
@@ -888,6 +890,331 @@ class TestCorridas(unittest.TestCase):
         self.assertEqual(fila["total_req"], 1)
         self.assertEqual(fila["evaluables"], 1)
         self.assertEqual(fila["estado"], matching.ESTADO_DESCARTADA)
+
+
+class TestMecanicasGenerales(unittest.TestCase):
+    """M1 nivel por texto · M2 via disponible/no · M3 parciales · M4 generalidad.
+
+    Todas las frases son LITERALES de la BD real y las reglas son GENERALES:
+    no dependen de quien sea el candidato (ver ``test_misma_regla_perfiles_
+    distintos``, que evalua el MISMO aviso con dos perfiles).
+    """
+
+    TEXTO_HUNTSMAN = (
+        "Minimum Qualifications Bachelor's degree in Accounting, Finance, or a "
+        "related field , or advanced university studies in Accounting. Minimum of "
+        "2 years of professional accounting experience."
+    )
+    TEXTO_KIMBERLY = (
+        "To succeed in this role, you will need the following qualifications: "
+        "University degree or advanced coursework in, Finance, Business "
+        "Administration, Computer Science or related quantitative fields."
+    )
+    TEXTO_INGRAM = (
+        "Two year college degree or equivalent experience and minimum 3 year "
+        "experience in functional area. OR High School Diploma or equivalent and "
+        "5 years functional experience, preferably at a senior level."
+    )
+    TEXTO_ABBOTT = (
+        "Required Qualifications 80% completeness of a bachelor's degree "
+        "program from a four-year college or university in Business "
+        "Administration, Engineering or other technical/scientific experience. "
+        "0-2 years supervisory experience."
+    )
+    TEXTO_ASSDIRECTOR = (
+        "Required Qualifications Education Bachelor's degree or technical degree "
+        "in Mechanical Engineering, Electrical Engineering, Electromechanical "
+        "Engineering."
+    )
+
+    def setUp(self):
+        self.tmpdir = tempfile.TemporaryDirectory()
+        self.connection = _crear_base(self.tmpdir.name)
+        _insertar_fact(
+            self.connection,
+            "bachiller-en-educacion-media",
+            "educacion-secundaria",
+            "education",
+            education_status="completed",
+        )
+        _insertar_fact(
+            self.connection,
+            "diplomado-en-electronica",
+            "educacion-tecnica",
+            "education",
+            education_status="completed",
+        )
+
+    def tearDown(self):
+        self.connection.close()
+        self.tmpdir.cleanup()
+
+    # ---------------------------------------------------------------- M1
+    def test_nivel_por_frase_del_texto(self):
+        """El nivel lo declara la FRASE del texto (escalera general)."""
+        self.assertEqual(
+            matching.nivel_educativo_del_texto("Two year college degree required"),
+            matching.NIVEL_SUPERIOR_CORTO,
+        )
+        self.assertEqual(
+            matching.nivel_educativo_del_texto("Associate's degree in electronics"),
+            matching.NIVEL_SUPERIOR_CORTO,
+        )
+        self.assertEqual(
+            matching.nivel_educativo_del_texto("Bachelor's degree in Accounting"),
+            matching.NIVEL_UNIVERSITARIO,
+        )
+        self.assertEqual(
+            matching.nivel_educativo_del_texto("Master's degree in Finance"),
+            matching.NIVEL_POSGRADO,
+        )
+        self.assertEqual(
+            matching.nivel_educativo_del_texto("High School Diploma"),
+            matching.NIVEL_SECUNDARIA,
+        )
+        self.assertEqual(
+            matching.nivel_educativo_del_texto("Licenciatura en Ingenieria"),
+            matching.NIVEL_UNIVERSITARIO,
+        )
+
+    def test_la_frase_mas_larga_gana(self):
+        """"two year college degree" (2) gana sobre "college degree" (3)."""
+        texto = "Two year college degree or equivalent experience."
+        self.assertEqual(
+            matching.nivel_educativo_del_texto(texto, "college degree"),
+            matching.NIVEL_SUPERIOR_CORTO,
+        )
+
+    def test_texto_sin_nivel_devuelve_none(self):
+        self.assertIsNone(
+            matching.nivel_educativo_del_texto("Excel Advanced and customer service.")
+        )
+
+    def test_el_texto_baja_el_nivel_del_requisito(self):
+        """Literal de la BD: 'Two year college degree' NO es nivel universitario.
+
+        El extractor lo mapea a ``educacion-universitaria``; el texto manda.
+        """
+        _insertar_job(self.connection, "ingram", self.TEXTO_INGRAM)
+        _insertar_requisito(
+            self.connection,
+            "ingram",
+            "university_degree",
+            "educacion-universitaria",
+            "required",
+            value_text="college degree",
+            evidence=self.TEXTO_INGRAM,
+        )
+        self.connection.commit()
+        evaluador = matching.EvaluadorPaso5(self.connection)
+        resultado = evaluador.evaluar_job("ingram")
+        self.assertNotEqual(resultado.estado, matching.ESTADO_DESCARTADA)
+
+    # ---------------------------------------------------------------- M2
+    def test_via_de_posgrado_no_disponible_bloquea(self):
+        """Literal de la BD: 'or advanced university studies' = posgrado.
+
+        Sin estudios universitarios la via NO esta disponible -> el bachelor
+        sigue exigiendose -> descarta.
+        """
+        _insertar_job(self.connection, "huntsman", self.TEXTO_HUNTSMAN)
+        _insertar_requisito(
+            self.connection,
+            "huntsman",
+            "bachelor",
+            "educacion-universitaria",
+            "required",
+            value_text="Bachelor",
+            evidence=self.TEXTO_HUNTSMAN,
+        )
+        self.connection.commit()
+        evaluador = matching.EvaluadorPaso5(self.connection)
+        resultado = evaluador.evaluar_job("huntsman")
+        self.assertEqual(resultado.estado, matching.ESTADO_DESCARTADA)
+        self.assertEqual(resultado.motivo, matching.MOTIVO_BLOQUEANTE)
+
+    def test_via_de_posgrado_disponible_no_bloquea(self):
+        """Con estudios de posgrado la via SI esta disponible: no descarta."""
+        _insertar_fact(
+            self.connection,
+            "maestria",
+            "educacion-posgrado",
+            "education",
+            education_status="completed",
+        )
+        _insertar_job(self.connection, "huntsman", self.TEXTO_HUNTSMAN)
+        _insertar_requisito(
+            self.connection,
+            "huntsman",
+            "bachelor",
+            "educacion-universitaria",
+            "required",
+            value_text="Bachelor",
+            evidence=self.TEXTO_HUNTSMAN,
+        )
+        self.connection.commit()
+        evaluador = matching.EvaluadorPaso5(self.connection)
+        resultado = evaluador.evaluar_job("huntsman")
+        self.assertNotEqual(resultado.estado, matching.ESTADO_DESCARTADA)
+
+    def test_via_de_cursos_no_disponible_bloquea(self):
+        """Literal de la BD: 'University degree or advanced coursework'."""
+        _insertar_job(self.connection, "kimberly", self.TEXTO_KIMBERLY)
+        _insertar_requisito(
+            self.connection,
+            "kimberly",
+            "university_degree",
+            "educacion-universitaria",
+            "ambiguous",
+            value_text="University degree",
+            evidence=self.TEXTO_KIMBERLY,
+        )
+        self.connection.commit()
+        evaluador = matching.EvaluadorPaso5(self.connection)
+        resultado = evaluador.evaluar_job("kimberly")
+        self.assertEqual(resultado.estado, matching.ESTADO_DESCARTADA)
+
+    def test_via_de_cursos_disponible_no_bloquea(self):
+        """Con estudios universitarios la via de coursework esta disponible."""
+        _insertar_fact(
+            self.connection,
+            "licenciatura",
+            "educacion-universitaria",
+            "education",
+            education_status="completed",
+        )
+        _insertar_job(self.connection, "kimberly", self.TEXTO_KIMBERLY)
+        _insertar_requisito(
+            self.connection,
+            "kimberly",
+            "university_degree",
+            "educacion-universitaria",
+            "ambiguous",
+            value_text="University degree",
+            evidence=self.TEXTO_KIMBERLY,
+        )
+        self.connection.commit()
+        evaluador = matching.EvaluadorPaso5(self.connection)
+        resultado = evaluador.evaluar_job("kimberly")
+        self.assertNotEqual(resultado.estado, matching.ESTADO_DESCARTADA)
+
+    def test_via_tecnica_disponible_cumple(self):
+        """Literal de la BD: 'Bachelor's degree or technical degree' (nivel 2)."""
+        _insertar_job(self.connection, "assdirector", self.TEXTO_ASSDIRECTOR)
+        _insertar_requisito(
+            self.connection,
+            "assdirector",
+            "bachelor",
+            "educacion-universitaria",
+            "required",
+            value_text="Bachelor",
+            evidence=self.TEXTO_ASSDIRECTOR,
+        )
+        self.connection.commit()
+        evaluador = matching.EvaluadorPaso5(self.connection)
+        resultado = evaluador.evaluar_job("assdirector")
+        self.assertNotEqual(resultado.estado, matching.ESTADO_DESCARTADA)
+
+    def test_via_por_experiencia_no_confirma_bloqueo(self):
+        """'or equivalent experience' no es evaluable: nunca descarta."""
+        texto = (
+            "Minimum Qualifications Bachelor's degree or equivalent experience. "
+            "Minimum of 5 years of experience."
+        )
+        _insertar_job(self.connection, "equiv", texto)
+        _insertar_requisito(
+            self.connection,
+            "equiv",
+            "bachelor",
+            "educacion-universitaria",
+            "required",
+            value_text="Bachelor",
+            evidence=texto,
+        )
+        self.connection.commit()
+        evaluador = matching.EvaluadorPaso5(self.connection)
+        resultado = evaluador.evaluar_job("equiv")
+        self.assertNotEqual(resultado.estado, matching.ESTADO_DESCARTADA)
+
+    # ---------------------------------------------------------------- M3
+    def test_detecta_estudios_parciales(self):
+        self.assertTrue(matching.es_estudios_parciales(self.TEXTO_ABBOTT))
+        self.assertFalse(
+            matching.es_estudios_parciales("Bachelor's degree in Accounting required.")
+        )
+
+    def test_parciales_cumple_con_universitario_en_curso(self):
+        """'80 % de un bachelor' lo cumplen los estudios universitarios en curso."""
+        _insertar_fact(
+            self.connection,
+            "bachelor-en-curso",
+            "educacion-universitaria",
+            "education",
+            education_status="pursuing",
+        )
+        _insertar_job(self.connection, "abbott", self.TEXTO_ABBOTT)
+        _insertar_requisito(
+            self.connection,
+            "abbott",
+            "bachelor",
+            "educacion-universitaria",
+            "required",
+            value_text="bachelor",
+            evidence=self.TEXTO_ABBOTT,
+        )
+        self.connection.commit()
+        evaluador = matching.EvaluadorPaso5(self.connection)
+        resultado = evaluador.evaluar_job("abbott")
+        self.assertNotEqual(resultado.estado, matching.ESTADO_DESCARTADA)
+
+    def test_parciales_sin_universitarios_no_cumplen(self):
+        """Sin estudios universitarios el requisito de parciales no se cumple."""
+        _insertar_job(self.connection, "abbott", self.TEXTO_ABBOTT)
+        _insertar_requisito(
+            self.connection,
+            "abbott",
+            "bachelor",
+            "educacion-universitaria",
+            "required",
+            value_text="bachelor",
+            evidence=self.TEXTO_ABBOTT,
+        )
+        self.connection.commit()
+        evaluador = matching.EvaluadorPaso5(self.connection)
+        resultado = evaluador.evaluar_job("abbott")
+        self.assertEqual(resultado.estado, matching.ESTADO_REVISAR)
+
+    # ---------------------------------------------------------------- M4
+    def test_misma_regla_perfiles_distintos(self):
+        """La MISMA regla con dos perfiles: cambia el resultado, no el codigo.
+
+        Prueba de que nada esta colado al candidato actual.
+        """
+        _insertar_job(self.connection, "huntsman", self.TEXTO_HUNTSMAN)
+        _insertar_requisito(
+            self.connection,
+            "huntsman",
+            "bachelor",
+            "educacion-universitaria",
+            "required",
+            value_text="Bachelor",
+            evidence=self.TEXTO_HUNTSMAN,
+        )
+        self.connection.commit()
+        evaluador = matching.EvaluadorPaso5(self.connection)
+        sin_universidad = evaluador.evaluar_job("huntsman")
+        self.assertEqual(sin_universidad.estado, matching.ESTADO_DESCARTADA)
+
+        _insertar_fact(
+            self.connection,
+            "licenciatura",
+            "educacion-universitaria",
+            "education",
+            education_status="completed",
+        )
+        self.connection.commit()
+        con_universidad = matching.EvaluadorPaso5(self.connection).evaluar_job("huntsman")
+        self.assertNotEqual(con_universidad.estado, matching.ESTADO_DESCARTADA)
 
 
 if __name__ == "__main__":

@@ -23,10 +23,16 @@ REPO = Path(__file__).resolve().parent
 sys.path.insert(0, str(REPO / "src"))
 from jobpulse_v15 import matching
 
-DOC = Path(
-    sys.argv[1] if len(sys.argv) > 1
-    else REPO / "docs" / "PASO5_EVIDENCIA_2026-10-29.md"
-)
+def _doc_por_defecto() -> Path:
+    """Documento de evidencia MAS RECIENTE (si no, el del 29-10)."""
+    candidatos = sorted(
+        (REPO / "docs").glob("PASO5_EVIDENCIA_*.md"),
+        key=lambda ruta: ruta.name,
+    )
+    return candidatos[-1] if candidatos else REPO / "docs" / "PASO5_EVIDENCIA_2026-10-29.md"
+
+
+DOC = Path(sys.argv[1] if len(sys.argv) > 1 else _doc_por_defecto())
 DB = REPO / "data" / "jobpulse_v15.db"
 
 # Las 13 que la corrida 20261029_183231 promovio a 'descartada' (el usuario

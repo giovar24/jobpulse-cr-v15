@@ -138,8 +138,14 @@ class TestRegistroDirectorio(unittest.TestCase):
         self.assertEqual(len(con_misma_url), 1, "la URL no debe duplicarse")
 
     def test_seeds_son_json_valido_y_versionados(self):
+        """Los seeds de tableros ATS son listas; otros seeds (p.ej. areas.json)
+        tienen otra forma y se validan en su propio modulo."""
         self.assertTrue(seed_ats.SEEDS_DIR.is_dir())
-        archivos = sorted(seed_ats.SEEDS_DIR.glob("*.json"))
+        archivos = [
+            archivo
+            for archivo in sorted(seed_ats.SEEDS_DIR.glob("*.json"))
+            if not archivo.name.startswith("areas")
+        ]
         self.assertGreaterEqual(len(archivos), 3)
         for archivo in archivos:
             filas = json.loads(archivo.read_text(encoding="utf-8"))

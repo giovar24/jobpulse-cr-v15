@@ -93,6 +93,33 @@ def _extract_job_analysis(repository: Repository, job_id: str) -> dict[str, Any]
     }
 
 
+def _cmd_areas_classify(repository: Repository, args) -> None:
+    """Clasifica las vacantes por su titulo y guarda el area (derivada)."""
+    from jobpulse_v15 import areas as areas_mod
+
+    with repository.database.connection() as connection:
+        if not areas_mod.cargar_areas(connection):
+            raise ValueError(
+                "No hay taxonomia de areas: ejecuta primero 'init-areas'."
+            )
+        if args.dry_run:
+            reglas = areas_mod.cargar_reglas(connection)
+            conteo: dict[str, int] = {}
+            for fila in connection.execute("SELECT title FROM jobs"):
+                clasificacion = areas_mod.clasificar_texto(fila["title"], reglas)
+                conteo[clasificacion.area_codigo] = (
+                    conteo.get(clasificacion.area_codigo, 0) + 1
+                )
+        else:
+            conteo = areas_mod.clasificar_todas(connection)
+    print("=== vacantes por area ===")
+    for codigo, n in sorted(conteo.items(), key=lambda item: (-item[1], item[0])):
+        print("  %-20s %4d" % (codigo, n))
+    print("  TOTAL %d" % sum(conteo.values()))
+    if args.dry_run:
+        print("[dry-run] No se escribio nada en job_area.")
+
+
 def _cmd_init_sources(repository: Repository, args) -> None:
     """Registra automáticamente las plataformas y sitios de Costa Rica por defecto.
 
@@ -279,6 +306,33 @@ def main() -> int:
             "(Workday, Greenhouse, Ashby, Lever, Recruitee, Workable, "
             "SuccessFactors) desde los seeds empaquetados."
         ),
+    )
+
+    # === Areas de empleo (taxonomia + clasificacion) ===
+    init_areas = commands.add_parser(
+        "init-areas",
+        help="Carga la taxonomia de areas de empleo y sus reglas (semilla del sistema).",
+    )
+    init_areas.add_argument(
+        "--classify",
+        action="store_true",
+        help="Ademas clasifica las vacantes ya guardadas por su titulo.",
+    )
+
+    areas_cmd = commands.add_parser(
+        "areas",
+        help="Gestionar las areas de empleo y la clasificacion de las vacantes.",
+    )
+    areas_sub = areas_cmd.add_subparsers(dest="areas_command", required=True)
+    areas_sub.add_parser("list", help="Lista las areas y cuantas vacantes tiene cada una.")
+    areas_classify = areas_sub.add_parser(
+        "classify",
+        help="Reclasifica TODAS las vacantes por su titulo (usa las reglas de la BD).",
+    )
+    areas_classify.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Solo muestra el conteo por area; no escribe en job_area.",
     )
 
     # === Credenciales y Login ===
@@ -784,6 +838,40 @@ def main() -> int:
                 )
             elif args.command == "init-sources":
                 _cmd_init_sources(repository, args)
+            elif args.command == "init-areas":
+                from jobpulse_v15 import areas as areas_mod
+
+                with repository.database.connection() as connection:
+                    stats = areas_mod.sembrar_taxonomia(connection)
+                print(
+                    f"[OK] Areas cargadas: {stats['areas']} area(s), "
+                    f"{stats['reglas']} regla(s)."
+                )
+                if args.classify:
+                    _cmd_areas_classify(repository, args)
+            elif args.command == "areas" and args.areas_command == "list":
+                from jobpulse_v15 import areas as areas_mod
+
+                with repository.database.connection() as connection:
+                    taxonomia = areas_mod.cargar_areas(connection)
+                    conteo = areas_mod.conteo_por_area(connection)
+                    perfil = sorted(areas_mod.areas_del_perfil(connection))
+                print("%-20s %-42s %s" % ("codigo", "nombre", "vacantes"))
+                for area in taxonomia:
+                    print(
+                        "%-20s %-42s %d"
+                        % (
+                            area["codigo"],
+                            area["nombre"],
+                            conteo.get(area["codigo"], 0),
+                        )
+                    )
+                if perfil:
+                    print("\nMarcadas en tu perfil: %s" % ", ".join(perfil))
+                else:
+                    print("\nTu perfil no marca ninguna area: se evalua todo.")
+            elif args.command == "areas" and args.areas_command == "classify":
+                _cmd_areas_classify(repository, args)
             elif args.command == "run" and args.run_command == "start":
                 run_id = repository.start_run(args.kind, args.group)
                 print(f"Corrida {run_id} iniciada.")

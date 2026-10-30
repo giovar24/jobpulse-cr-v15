@@ -1,0 +1,177 @@
+{
+  "version": "areas-1",
+  "descripcion": "Taxonomía de áreas de empleo (definida por el sistema) y reglas de clasificación de ofertas. El usuario marca en el perfil qué áreas le interesan; las ofertas fuera de esas áreas no se evalúan (salvo que se pida 'evaluar todo'). Reglas GENERALES por título de puesto: no dependen de ningún perfil en particular.",
+  "areas": [
+    {
+      "codigo": "informatica",
+      "nombre": "Informática y tecnología",
+      "descripcion": "Software, soporte TI, redes, cloud, datos, ciberseguridad y arquitectura de sistemas."
+    },
+    {
+      "codigo": "ingenieria",
+      "nombre": "Ingeniería",
+      "descripcion": "Ingeniería civil, industrial, mecánica, eléctrica, de procesos y de manufactura."
+    },
+    {
+      "codigo": "produccion",
+      "nombre": "Producción y manufactura",
+      "descripcion": "Planta, operarios, máquinas, supervisores de producción y manufactura."
+    },
+    {
+      "codigo": "mantenimiento",
+      "nombre": "Mantenimiento y servicios técnicos",
+      "descripcion": "Mantenimiento industrial, electromecánica, refrigeración, aire acondicionado y trabajo eléctrico."
+    },
+    {
+      "codigo": "administracion",
+      "nombre": "Administración, finanzas y contabilidad",
+      "descripcion": "Contabilidad, auditoría, impuestos, nómina, planeación, control, presupuesto y finanzas."
+    },
+    {
+      "codigo": "ventas",
+      "nombre": "Ventas y desarrollo de negocios",
+      "descripcion": "Ventas, cuentas, comercio minorista, desarrollo comercial y ejecuciones de venta."
+    },
+    {
+      "codigo": "servicio_cliente",
+      "nombre": "Servicio al cliente",
+      "descripcion": "Atención al cliente, soporte comercial, recepción, intérpretes y entrega de servicio."
+    },
+    {
+      "codigo": "recursos_humanos",
+      "nombre": "Recursos humanos y talento",
+      "descripcion": "RR.HH., compensación, beneficios, reclutamiento y desarrollo de personas."
+    },
+    {
+      "codigo": "logistica",
+      "nombre": "Logística, compras y cadena de suministro",
+      "descripcion": "Logística, compras, abastecimiento, sourcing, planificación de demanda y cadena de suministro."
+    },
+    {
+      "codigo": "almacenamiento",
+      "nombre": "Almacén y distribución",
+      "descripcion": "Bodegas, picking, montacargas, inventarios, aduana y distribución."
+    },
+    {
+      "codigo": "salud",
+      "nombre": "Salud y atención médica",
+      "descripcion": "Hospitales, clínica, farmacéutica, laboratorios médicos y dispositivos médicos."
+    },
+    {
+      "codigo": "calidad",
+      "nombre": "Calidad y validación",
+      "descripcion": "Control de calidad, inspección, validación, auditoría de calidad y metrología."
+    },
+    {
+      "codigo": "marketing",
+      "nombre": "Marketing y comunicación",
+      "descripcion": "Marketing, contenido, publicidad digital, campañas, marca y crecimiento."
+    },
+    {
+      "codigo": "cumplimiento",
+      "nombre": "Legal, contratos y cumplimiento",
+      "descripcion": "Legal, contratos, licitaciones, regulatorio, políticas, compliance y gobierno."
+    },
+    {
+      "codigo": "seguridad",
+      "nombre": "Seguridad y prevención de riesgos",
+      "descripcion": "Seguridad física, EHS, seguridad industrial, protección contra incendios y continuidad."
+    },
+    {
+      "codigo": "alimentacion",
+      "nombre": "Alimentación, hotelería y turismo",
+      "descripcion": "Restaurantes, cocina, bar, hotel, housekeeping, panadería y turismo."
+    },
+    {
+      "codigo": "automotriz",
+      "nombre": "Automotriz y transporte",
+      "descripcion": "Mecánica automotriz, choferes, mensajería, lubricentros y vehículos."
+    },
+    {
+      "codigo": "educacion",
+      "nombre": "Educación y formación",
+      "descripcion": "Docencia, instructores, capacitación, diseño instruccional y enseñanza."
+    },
+    {
+      "codigo": "construccion",
+      "nombre": "Construcción e infraestructura",
+      "descripcion": "Obra civil, construcción, site engineering, plomería y movimiento de tierras."
+    },
+    {
+      "codigo": "otros",
+      "nombre": "Otros / sin área clara",
+      "descripcion": "Avisos cuyo título no encaja en ninguna área o encaja en varias (ambiguo). Siempre se evalúan: una clasificación dudosa no oculta ofertas."
+    }
+  ],
+  "reglas": [
+    {"area": "informatica", "patron": "\\bsoporte\\b", "prioridad": 16, "fuente": "titulo"},
+    {"area": "informatica", "patron": "\\b(it|ti|tic|tics|information technology)\\b", "prioridad": 22, "fuente": "titulo"},
+    {"area": "informatica", "patron": "helpdesk|desktop support|terminal support|applications support", "prioridad": 22, "fuente": "titulo"},
+    {"area": "informatica", "patron": "software|aplicaciones|developer|desarrollador|programador|programmer|embedded|vlsi", "prioridad": 24, "fuente": "titulo"},
+    {"area": "informatica", "patron": "\\bdata\\b.*(engineer|science|scientist|analytics|governance)|master data|analytics|inteligencia artificial|machine learning|mlops", "prioridad": 25, "fuente": "titulo"},
+    {"area": "informatica", "patron": "ai (engineer|scientist|analyst|consultant|developer)", "prioridad": 25, "fuente": "titulo"},
+    {"area": "informatica", "patron": "network|networking|red(es)?\\b|datacenter|data center|switching|wireless|firewall", "prioridad": 24, "fuente": "titulo"},
+    {"area": "informatica", "patron": "cyber|information security|security (governance|engineer|analyst|specialist)|security platforms", "prioridad": 27, "fuente": "titulo"},
+    {"area": "informatica", "patron": "cloud|kubernetes|devops|full stack", "prioridad": 22, "fuente": "titulo"},
+    {"area": "informatica", "patron": "systems? engineer", "prioridad": 22, "fuente": "titulo"},
+    {"area": "informatica", "patron": "technical architect|solutions? architect|windows solutions|solutions? (design|analyst)|technical (analyst|project manager|program manager|service)|service management|technical services", "prioridad": 20, "fuente": "titulo"},
+    {"area": "informatica", "patron": "sap\\b|successfactors|workday|erp\\b|salesforce", "prioridad": 20, "fuente": "titulo"},
+    {"area": "informatica", "patron": "technical support|support engineer|escalation engineer|support (delivery )?intern", "prioridad": 25, "fuente": "titulo"},
+    {"area": "informatica", "patron": "qa tester|tester|software testing|technical writing", "prioridad": 26, "fuente": "titulo"},
+    {"area": "informatica", "patron": "hpe|hewlett|aruba|cisco|dell\\b|ibm\\b|intel\\b", "prioridad": 20, "fuente": "titulo"},
+    {"area": "informatica", "patron": "hardware|storage\\b|solution\\b", "prioridad": 18, "fuente": "titulo"},
+    {"area": "informatica", "patron": "repair", "prioridad": 18, "fuente": "titulo"},
+
+    {"area": "ingenieria", "patron": "ingenier[oa]|ingenieria|engineering|engineer", "prioridad": 21, "fuente": "titulo"},
+    {"area": "ingenieria", "patron": "process engineer|automation|materiales|mechatronics|continuous improvement|six sigma|r&d|research and development|desarrollo de producto", "prioridad": 22, "fuente": "titulo"},
+
+    {"area": "produccion", "patron": "producci[óo]n|production|manufactur|plant\\b|operario|operador|machine operator|maquinista|machinist|montacarguista|montacargas|multil[ií]nea|inyecci[óo]n|molde|torne", "prioridad": 20, "fuente": "titulo"},
+    {"area": "produccion", "patron": "sew(er|ing)", "prioridad": 22, "fuente": "titulo"},
+
+    {"area": "mantenimiento", "patron": "mantenimiento|maintenance", "prioridad": 22, "fuente": "titulo"},
+    {"area": "mantenimiento", "patron": "aire acondicionado|refrigeraci[óo]n|electromec[aá]nic|soldador|el[eé]ctric|t[eé]cnicos? mec[aá]nic", "prioridad": 24, "fuente": "titulo"},
+
+    {"area": "administracion", "patron": "contab|accounting|accountant|accounts payable|accounts receivable|auditor|audit\\b|revenue accountant|project accountant|plant controller|controller\\b", "prioridad": 24, "fuente": "titulo"},
+    {"area": "administracion", "patron": "tax\\b|impositivo", "prioridad": 25, "fuente": "titulo"},
+    {"area": "administracion", "patron": "payroll|n[óo]mina", "prioridad": 26, "fuente": "titulo"},
+    {"area": "administracion", "patron": "financ|finance|financial|capital investment|inversi[óo]n", "prioridad": 22, "fuente": "titulo"},
+    {"area": "administracion", "patron": "administrativ|secretar[ií]a|asistente administrativa", "prioridad": 24, "fuente": "titulo"},
+    {"area": "administracion", "patron": "presupuesto|budget|control de producci[óo]n|controlling|planeaci[óo]n|planning\\b|planner", "prioridad": 24, "fuente": "titulo"},
+    {"area": "administracion", "patron": "contract pricing|quotation|quoting|costing|pricing|credit|collections", "prioridad": 22, "fuente": "titulo"},
+    {"area": "administracion", "patron": "business operations|business process|business analyst|estrategia|strategy", "prioridad": 20, "fuente": "titulo"},
+
+    {"area": "ventas", "patron": "ventas|sales|vendedor|account executive|account manager|key account|asesor de ventas|ejecutivo de (ventas|cuentas)|business development|high ticket|commercial|gtm|branch agent|cajero|dependiente|mercaderista", "prioridad": 24, "fuente": "titulo"},
+    {"area": "ventas", "patron": "account (executive|manager)|key account", "prioridad": 26, "fuente": "titulo"},
+
+    {"area": "servicio_cliente", "patron": "servicio al cliente|customer service|customer support|customer success|customer delivery|atenci[óo]n al cliente|chat support|front desk|receptionist|recepci[óo]n|service delivery|technical success support|client services|interpreter|int[eé]rprete", "prioridad": 24, "fuente": "titulo"},
+
+    {"area": "recursos_humanos", "patron": "human resources|recursos humanos|\\bhr\\b|people and culture|talent acquisition|compensation|recruit|reclutamiento|hr solutions", "prioridad": 24, "fuente": "titulo"},
+    {"area": "recursos_humanos", "patron": "benefits\\b", "prioridad": 26, "fuente": "titulo"},
+
+    {"area": "logistica", "patron": "logistics|log[ií]stica|supply chain|cadena de suministro|buyer|procurement|compras|sourcing|demand planner|supply|planificador|cpfr", "prioridad": 26, "fuente": "titulo"},
+
+    {"area": "almacenamiento", "patron": "bodega|bodeguero|warehouse|almac[eé]n|montacargas|montacarguista|picking|aduanas|customs|forwarder|cuarto fr[ií]o", "prioridad": 25, "fuente": "titulo"},
+
+    {"area": "salud", "patron": "salud|health|hospital|cl[ií]nic|enfermer|pharmac|pharma|cardiac|patient|laboratorio|laboratory|microbiolog|imaging|veterinar|lab technician", "prioridad": 24, "fuente": "titulo"},
+    {"area": "salud", "patron": "diagnostics", "prioridad": 27, "fuente": "titulo"},
+    {"area": "salud", "patron": "medical device", "prioridad": 18, "fuente": "titulo"},
+
+    {"area": "calidad", "patron": "quality|calidad|inspection|inspecci[óo]n|validation|validaci[óo]n|metrolog|testing technician|auditor de calidad", "prioridad": 25, "fuente": "titulo"},
+
+    {"area": "marketing", "patron": "marketing|contenido|content|campaign|publicidad|brand\\b|growth|ad trafficking|programmatic|audience|digital experience|direct mail|comunicaci[óo]n|creative", "prioridad": 25, "fuente": "titulo"},
+
+    {"area": "cumplimiento", "patron": "legal|abogad|jur[ií]d|contracts|contract administrator|licitaciones|compliance|cumplimiento|policy|governance|document control", "prioridad": 24, "fuente": "titulo"},
+    {"area": "cumplimiento", "patron": "regulatory|regulatorio", "prioridad": 26, "fuente": "titulo"},
+
+    {"area": "seguridad", "patron": "seguridad|security\\b|guardia|vigilancia|safety|\\behs\\b|fire protection|protecci[óo]n contra incendio|riesgos|continuity|continuidad", "prioridad": 16, "fuente": "titulo"},
+
+    {"area": "alimentacion", "patron": "cook|cociner|cocina|chef|bartender|mesero|waiter|restaurante|hotel|housekeeping|mucama|panader|pasteler|barista|catering|alimentos y bebidas|hospitality|turismo|salonero", "prioridad": 22, "fuente": "titulo"},
+    {"area": "alimentacion", "patron": "villa|estate manager|property manager|room service|attendant", "prioridad": 20, "fuente": "titulo"},
+
+    {"area": "automotriz", "patron": "mec[aá]nico automotriz|automotriz|chofer|conductor|motorista|mensajer|veh[ií]culo|lubric|cambiador de aceite|taxi|rentista", "prioridad": 27, "fuente": "titulo"},
+
+    {"area": "educacion", "patron": "teacher|docente|instructor|formador|training|capacitaci[óo]n|learning|instructional designer|\\besl\\b|course|educaci[óo]n|ense[nñ]anza", "prioridad": 25, "fuente": "titulo"},
+
+    {"area": "construccion", "patron": "construcci[óo]n|obra civil|construction|site engineer|field engineer|residente de obra|plomer|alcantarillado|topograf", "prioridad": 24, "fuente": "titulo"}
+  ]
+}

@@ -2,6 +2,7 @@
 
 import json
 import re
+import sqlite3
 from collections.abc import Mapping, Sequence
 from datetime import date
 import math
@@ -9,6 +10,7 @@ import unicodedata
 from typing import Any
 from urllib.parse import urlparse
 
+from jobpulse_v15 import areas
 from jobpulse_v15 import ciclo_vida
 from jobpulse_v15.db import Database
 
@@ -31,7 +33,12 @@ ANALYSIS_STATUSES = {"complete", "partial", "error"}
 # Categorias extra SOLO para facts del perfil del candidato (no para
 # requisitos de vacantes): datos personales, resumen y proyectos del CV
 # (secciones harvard-ats-v1). Inertes para el matching job<->perfil.
-PROFILE_FACT_CATEGORIES = REQUIREMENT_CATEGORIES | {"contact", "summary", "project"}
+PROFILE_FACT_CATEGORIES = REQUIREMENT_CATEGORIES | {
+    "contact",
+    "summary",
+    "project",
+    "area",
+}
 REQUIREMENT_LEVELS = {"required", "preferred", "inferred", "ambiguous"}
 REQUIREMENT_ORIGINS = {"source_field", "rule", "local_ai", "api", "manual"}
 JOB_MANUAL_OVERRIDE_FIELDS = {
@@ -821,7 +828,38 @@ class Repository:
                 """,
                 (site_id, source_job_id, content_hash),
             )
+            # Clasificacion por area de empleo: la MISMA regla para cualquier
+            # fuente (Workday, ANE, Indeed, LinkedIn, Elempleo, Harvie,
+            # CINDE...). Si la taxonomia no esta sembrada todavia, se omite.
+            self._clasificar_area(connection, job_id)
         return not source_already_exists
+
+    @staticmethod
+    def _clasificar_area(connection: sqlite3.Connection, job_id: str) -> None:
+        """Clasifica la oferta por su titulo y guarda el area (derivada)."""
+        if connection.execute("SELECT 1 FROM area LIMIT 1").fetchone() is None:
+            return
+        fila = connection.execute(
+            "SELECT title FROM jobs WHERE job_id = ?", (job_id,)
+        ).fetchone()
+        if fila is None:
+            return
+        clasificacion = areas.clasificar_texto(
+            fila["title"], areas.cargar_reglas(connection)
+        )
+        connection.execute("DELETE FROM job_area WHERE job_id = ?", (job_id,))
+        connection.execute(
+            """
+            INSERT INTO job_area (job_id, area_codigo, confianza, evidencia)
+            VALUES (?, ?, ?, ?)
+            """,
+            (
+                job_id,
+                clasificacion.area_codigo,
+                areas.CONFIANZA_TITULO,
+                clasificacion.evidencia,
+            ),
+        )
 
     def get_job(self, job_id: str) -> dict[str, Any] | None:
         with self.database.connection() as connection:
