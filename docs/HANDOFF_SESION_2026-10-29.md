@@ -1,4 +1,4 @@
-# Handoff — Sesión 2026-10-29: O6.3 / Paso 5 (matching requisitos vs. perfil) — bloqueante educativo cerrado (3 rondas)
+# Handoff — Sesión 2026-10-29: O6.3 / Paso 5 (matching requisitos vs. perfil) — regla y evidencia cerradas (4 rondas); las 19 `educacion_no_confirmada` ABIERTAS para firma de segunda persona
 
 ## TL;DR
 
@@ -14,11 +14,14 @@ solo si el **texto completo** de la oferta confirma un título universitario
 obligatorio **sin negación y sin alternativa**; en cualquier otro caso →
 `revisar_a_mano` con motivo `educacion_no_confirmada`.
 
-La sesión cerró el bloqueante en **tres rondas**:
+La sesión cerró la REGLA y la EVIDENCIA en **cuatro rondas**:
 1. **(mañana)** 8 falsos descartes corregidos (40 → 32 `descartada`, corrida
-   `171039`) y **revisión manual de las 20 `educacion_no_confirmada`** → 19 no
-   bloqueantes y **1 bloqueo real** (`workday-Supplier-Quality-Engineer-III_31162905`:
-   "or equivalent field of study" NO es vía alternativa).
+   `171039`) y una primera revisión de las 20 `educacion_no_confirmada` →
+   19 "no bloqueantes" y 1 bloqueo real (`workday-Supplier-Quality-Engineer-III_31162905`:
+   "or equivalent field of study" NO es vía alternativa). **Nota (ronda 4): ese
+   veredicto lo firmó el AUTOR de la regla y se DESCARTA por sesgo; las 19
+   quedaron ABIERTAS** (el bloqueo real del Supplier-Quality sí está confirmado
+   con su frase literal).
 2. **(tarde)** medición de una muestra de 10 de `educacion_no_cumple` → **5/10
    eran bloqueos REALES** escondidos porque el extractor marcaba
    `ambiguous`/`inferred` → la regla "el TEXTO decide la obligatoriedad" y el
@@ -36,14 +39,28 @@ La sesión cerró el bloqueante en **tres rondas**:
    perfil SIN hechos educativos → "no verificable" → `revisar_a_mano` con el
    motivo nuevo `educacion_no_verificable`, nunca descartar por falta de
    información).
+4. **(cierre de la noche)** el usuario objetó tres cosas y se corrigieron: (a)
+   el **conteo del resumen no cuadraba** — la suma daba 494 por un
+   `revisar_a_mano 141` copiado de la corrida `171039`; verificado por
+   `GROUP BY estado`: real **94** (`205348`) y **128** (`183231`) → docs
+   corregidos (commit `0a1fde7`); (b) la revisión de las 19 era un
+   **autoveredicto del autor de la regla** → se DESCARTA y se crea la hoja de
+   revisión para una segunda persona, texto completo y **sin veredictos**
+   (`docs/PASO5_REVISION_PENDIENTES.md`, commit `bc61ac6`); (c) cuatro "no
+   bloqueo" de esa revisión **no se sostenían** tal como se presentaron →
+   quedaron como **3 decisiones de negocio abiertas** (advanced university
+   studies / two year college / 80 % de la carrera), a decidir **con fuente**
+   antes de que la segunda persona firme.
 
 Corrida vigente **`20261029_205348`** (447 filas, `valida=1`; las 6 previas con
 `valida=0`): calificada 102 · revisar_a_mano **94** · sin_requisitos 141 ·
 **descartada 80** (56 título requerido + 24 estudiante activo) ·
-datos_insuficientes 30. Evidencia literal (80 descartadas + 19 por revisar + la
-medición de 43 casos) en `docs/PASO5_EVIDENCIA_2026-10-29.md`, generada por
-`generar_evidencia_paso5.py`. Suite: **358 tests verdes**. **No se cambió ningún
-umbral** (cobertura 0.60 / puntaje 0.80).
+datos_insuficientes 30 (sumas verificadas por `GROUP BY estado`). Evidencia
+literal (80 descartadas + 19 por revisar + la medición de 43 casos) en
+`docs/PASO5_EVIDENCIA_2026-10-29.md`, generada por `generar_evidencia_paso5.py`,
+y **hoja de revisión de las 19** en `docs/PASO5_REVISION_PENDIENTES.md`.
+Suite: **358 tests verdes**. **No se cambió ningún umbral** (cobertura 0.60 /
+puntaje 0.80).
 
 ## Lo que se hizo
 
@@ -203,6 +220,49 @@ Requirements:", "Education :").
 - `generar_evidencia_paso5.py` reescrito (evidencia desde la BD + §6 con la tabla
   de la medición de 43 casos y la frase literal de cada uno).
 
+### Cuarta tanda (cierre de la noche): conteo verificado + las 19 ABIERTAS
+
+Objecciones del usuario y cómo se cerraron:
+
+- **Conteo no cuadraba (daba 494)**: la causa era un `revisar_a_mano 141`
+  transcribido de la corrida `171039` (donde sí es correcto) al resumen de
+  `183231` y `205348`. Verificación por consulta: `GROUP BY estado` sobre la BD,
+  corrida por corrida:
+  `171039` → 141 ✓ · `183231` → **128** (docs decían 141) · `205348` → **94**
+  (19 + 57 + 4 + 3 + 11). Corregido en `AGENTS.md`, `DESARROLLO_v15.md` y este
+  handoff, anotando las sumas como "verificadas por GROUP BY = 447"; la línea
+  histórica de `171039` NO se tocó. Commit `0a1fde7`.
+- **La revisión de las 19 la firmaba el autor de la regla** (sesgo): en la ronda
+  anterior la IA propuso "las 19 no bloquean" con el criterio que ella misma
+  ajustó → veredicto **descartado formalmente**. Se creó
+  `generar_revision_pendientes.py`, que genera
+  `docs/PASO5_REVISION_PENDIENTES.md`: las 19 con **texto completo verbatim**
+  de cada mención educativa (±350 chars) + la evidencia literal del requisito
+  extraído, **sin ningún veredicto ni clasificación del motor**, tabla de
+  firmas (veredicto/criterio/revisor/fecha) y las 3 preguntas de negocio.
+  Commit `bc61ac6`.
+- **Cuatro "no bloqueo" no se sostenían** tal como se presentaron, ahora son
+  **decisiones de negocio ABIERTAS** (ver Pendiente inmediato punto 1): #2
+  `workday-Accounting-Analyst---Temporary_J-020392` ("or advanced university
+  studies" es alternativa académica, no experiencia), #4
+  `workday-Associate--Repair-III_R-118081` ("two year college degree": el
+  supuesto "2 años ≠ universitario" no está escrito como regla y un técnico
+  superior universitario en CR sí lo sería — CONESUP), #13/#14
+  `workday-Production-Supervisor-I_*` ("80 % completeness of a bachelor's degree
+  program" = bachillerato PARCIAL con alternativa de experiencia; el módulo no
+  define estudios parciales), #16 `…Compliance-Specialist_2022361-1` (la
+  alternativa estaba fuera del recorte — ya se muestra el texto completo en la
+  hoja y en el doc de evidencia, §5 con contexto ±200).
+- `generar_evidencia_paso5.py` + regeneración del doc de evidencia (§5
+  retitulado "por qué el MOTOR no las descarta" + contexto en cada caso);
+  `verificar_evidencia.py` re-corrido: **112 verificaciones, 0 fallos**.
+
+**Commits del día (rama `main`, sin pushear):** `f5a2345` (módulo real del
+Paso 5 + bloqueo educativo con evidencia literal) → `67e968a` (el TEXTO decide
++ estudiante activo) → `986f25e` (alcance por grupo + semántica
+`education_status` + medición 43) → `0a1fde7` (corrección del conteo
+141→94/128) → `bc61ac6` (las 19 ABIERTAS + hoja de revisión).
+
 ## Decisiones de diseño (esta sesión)
 
 1. **El bloqueante educativo se CONFIRMA en el texto, no se infiere**: sin
@@ -260,6 +320,18 @@ Requirements:", "Education :").
 15. **La evidencia se verifica POR CONSULTA**, no a ojo: `verificar_evidencia.py`
     comprueba que cada caso aparece en el documento con frase literal y que esa
     frase es substring literal del texto de la BD.
+16. **Las sumas de estado se confirman por `GROUP BY estado` ANTES de tomar
+    cualquier decisión** (cierre): los resúmenes transcriben mal (el 141 de
+    `171039` se arrastró a `183231` y `205348`); la BD manda, el resumen se
+    verifica contra ella. El conteo de cada corrida es una consulta, no un
+    dato leído de un documento.
+17. **La revisión de las `educacion_no_confirmada` es DOBLE CIEGO respecto del
+    autor** (cierre): el veredicto que firma el autor de la regla (o la IA que
+    la programó) se DESCARTA por sesgo; firma una segunda persona sobre el
+    texto completo **sin veredictos previos** (`docs/PASO5_REVISION_PENDIENTES.md`,
+    regenerable con `generar_revision_pendientes.py`) y sin registrar nada en
+    `job_match_decision` hasta esa firma. Las reglas de negocio que condicionan
+    el veredicto se deciden **con fuente** antes de firmar.
 
 ## Estado de objetivos (tabla O1–O10)
 
@@ -270,7 +342,7 @@ Requirements:", "Education :").
 | O3 fetchers ATS | 🟢 7/7 plataformas validadas (83/122 tableros con jobs CR) |
 | O4 calibración gate-vs-IA | ⏳ redefinir (sin gate semántico no hay contra-qué) |
 | O5 higiene de datos | 🟢 solo O5.3 (re-barrido ~46 basura) |
-| O6 perfil del candidato | 🟢 **O6.3 matching ✅ cerrado 29-10** · O6.4 dedupe semántico pendiente |
+| O6 perfil del candidato | 🟡 **O6.3 matching: regla y evidencia ✅ cerradas 29-10; las 19 `educacion_no_confirmada` ABIERTAS (firma segunda persona) + Paso 7 (decisiones/ UI/export)** · O6.4 dedupe semántico pendiente |
 | O7 operación UI-first | ✅ completo |
 | O8 ciclo de vida | 🔵 diseñado — plan de 7 pasos (herencia, ventana, categorías) |
 | O9 optimización UI | ⏳ placeholder |
@@ -310,6 +382,8 @@ python -m pytest tests/ -q
 | `run_paso5.py` | Runner del paso 5 (`--dry`) |
 | `generar_evidencia_paso5.py` | **Genera `docs/PASO5_EVIDENCIA_2026-10-29.md` desde la BD** (incluye §6 = medición de 43 casos) |
 | `verificar_evidencia.py` | **Verifica POR CONSULTA** que cada caso del documento está con frase literal de la BD (exit 0 = TODO CUADRA) |
+| `generar_revision_pendientes.py` | **Regenera la hoja de revisión** de las `educacion_no_confirmada` (siempre desde la corrida vigente) |
+| `docs/PASO5_REVISION_PENDIENTES.md` | **Hoja de firma para la SEGUNDA persona**: las 19 con texto completo verbatim, SIN veredictos, con tabla de firmas y las 3 decisiones de negocio |
 | `evidencia_descartadas.py` | Evidencia literal de cada `descartada` |
 | `resumen_bloqueo.py` | Veredicto del análisis educativo (3 cortes) |
 | `verificar_corridas.py` | Trazabilidad de corridas + delta entre corridas |
@@ -329,8 +403,11 @@ python -m pytest tests/ -q
   datos_insuficientes 30.
 - Las **19** `revisar_a_mano / educacion_no_confirmada` que quedan: son
   requisitos universitarios **obligatorios** que el texto NO confirma (negación o
-  alternativa). Las 20 revisadas en la ronda de tarde dieron 19 no bloqueantes +
-  1 bloqueo real ya corregido (`workday-Supplier-Quality-Engineer-III_31162905`).
+  alternativa). **Estado: ABIERTAS / NO revisadas** — el veredicto humano lo
+  firma una segunda persona en `docs/PASO5_REVISION_PENDIENTES.md` (el
+  autoveredicto del autor de la regla se descartó; el único bloqueo real
+  confirmado ronda 1 sigue siendo `workday-Supplier-Quality-Engineer-III_31162905`
+  por "or equivalent field of study", ya en la corrida con su frase literal).
 - **Medición AMPLIADA `educacion_no_cumple` (43 casos)**: estrato A (13, todas las
   promovidas) → 12/13 bloqueos reales (1 falso descarte = A2, corregido);
   estrato B (30 sistemáticas) → 14/30 bloqueos reales (falsos negativos,
