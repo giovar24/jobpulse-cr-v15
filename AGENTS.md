@@ -209,16 +209,23 @@ python -m pytest tests/ -q
   `src/jobpulse_v15/matching.py` (los `paso5_*.py` de la raíz están obsoletos);
   migración `015_job_match_valida.sql` (columna `valida`); **cada cambio de regla
   = una corrida NUEVA** en `job_match` (nunca UPDATE in-place). Regla acordada:
-  `descartada` solo si el texto completo confirma título universitario `required`
+  `descartada` solo si el TEXTO completo confirma título universitario **obligatorio**
   **sin negación y sin alternativa**; si no → `revisar_a_mano` +
   `educacion_no_confirmada`. "bachiller" NO es universitario (en CR es
-  secundaria); "licenciatura" sí. Corrida vigente **`20261029_171039`**:
-  calificada 102 · revisar_a_mano 141 · sin_requisitos 141 · **descartada 32** ·
-  datos_insuficientes 31 (los 4 corridas previas quedan `valida=0`).
-  Evidencia literal: `docs/PASO5_EVIDENCIA_2026-10-29.md`.
+  secundaria); "licenciatura" sí. **La obligatoriedad la decide el TEXTO**
+  ("Required/Minimum/Basic Qualifications", "must have", "degree or above"), no
+  solo `requirement_level`; "Preferred" no bloquea. "or equivalent field of
+  study" NO es vía alternativa; "or advanced coursework/university studies" SÍ.
+  **Estudiante activo** ("currently pursuing", "must be enrolled") es criterio
+  distinto → motivo `titulo_universitario_en_curso_requerido`.
+  Corrida vigente **`20261029_183231`**: calificada 102 · revisar_a_mano 141 ·
+  sin_requisitos 141 · **descartada 45** (37 título + 8 en curso) ·
+  datos_insuficientes 31 (las 5 corridas previas quedan `valida=0`).
+  Evidencia literal: `docs/PASO5_EVIDENCIA_2026-10-29.md` (generado por
+  `generar_evidencia_paso5.py`).
   Herramientas: `run_paso5.py` (`--dry`), `evidencia_descartadas.py`,
   `resumen_bloqueo.py`, `verificar_corridas.py`.
-  **Pendiente: revisar a mano las 20 `educacion_no_confirmada` (Paso 6).**
+  **Pendiente: aplicar a mano las 20 `educacion_no_confirmada` (Paso 7).**
 - **Veredicto del enriquecimiento (`ia_estado.py`, 2026-10-29)**: el flujo ya no
   "asume" que la IA terminó — mide la BD antes/después del pase y decide:
   `evaluar_ia()` → `completado` | `parcial` | `sin_trabajo` (OK) vs `atascado`

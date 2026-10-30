@@ -26,7 +26,7 @@
 | **CV Parsing** | `cv2profile.py` + `reporte_cv.py` (PDF→perfil Harvard/ATS completo) | Editor harvard-ats-v1 (`ui_perfil.py`) + reglas + **pase IA `cv_ia.py`** (E2E Gemma/Gemini, integrado al asistente de import) | ✅ Gap cerrado (O6.2) |
 | **Auth/Session** | `core/browser_manager.py` + `hacer_login.py` + `credenciales.py` + `providers/login/` | ✅ FASE 3 completa: `browser_manager` + `credenciales` (keyring) + `providers/login/auto_login.py` + `browser_sites.py` | Cerrado |
 | **Scheduler** | `recordatorio.py` + `jobpulse.cmd` (login + recordatorio Windows) | Parcial: launcher `jobpulse-v15.bat` (venv + IA + Brave CDP + UI); sin recordatorio | Gap medio |
-| **Tests** | 7 unitarios (texto, dedupe, gate) | 25 suites / 324 tests + 44 subtests (pytest, python del sistema) | v1_5 **mejor cobertura** |
+| **Tests** | 7 unitarios (texto, dedupe, gate) | 25 suites / 339 tests + 44 subtests (pytest, python del sistema) | v1_5 **mejor cobertura** |
 | **UI** | Streamlit (`app.py`) legacy + Tkinter (`ui.py`) completa | Tkinter (`ui.py`) completa (filtros, edición, seguimiento, perfil, calidad, duplicados, admin fuentes) | Similares |
 
 ---
@@ -164,36 +164,59 @@ bloqueo), `verificar_corridas.py` (trazabilidad). Evidencia completa versionada 
   (puntaje ≥ 0.80) > `baja_compatibilidad`. Umbrales **sin cambio** (0.60 / 0.80).
 - **Bloqueante educativo (regla acordada con el usuario)**: `descartada` solo si el
   **texto completo** (`requirements_raw` + `description_raw`) confirma un título
-  universitario con `requirement_level='required'`, **sin negación y sin alternativa**.
+  universitario **obligatorio**, **sin negación y sin alternativa**.
   En cualquier otro caso → `revisar_a_mano` con motivo `educacion_no_confirmada`.
   "bachiller" NO es universitario en CR (es secundaria); "licenciatura" sí.
   Negación: 30 chars antes / 45 después. Alternativa: 40 antes / 110 después + la
   cláusula completa (viñeta/frase) y la cláusula siguiente.
-- **Motivos** (`PRIORIDAD_MOTIVOS`): `titulo_universitario_requerido` >
-  `educacion_no_confirmada` > `educacion_no_cumple` > `skill_faltante` >
-  `idioma_no_comparable` > `experiencia_no_verificable` > `licencia_no_comparable` >
-  `cobertura_insuficiente`.
+- **La OBLIGATORIEDAD la decide el TEXTO, no solo `requirement_level`** (decisión del
+  29-10 tras medir la muestra): la cláusula que exige el título ("Required
+  Qualifications", "Minimum/Basic Qualifications", "must have", "degree or above",
+  "Requisitos") bloquea aunque el extractor lo marque `ambiguous`/`inferred`; si el
+  texto solo lo prefiere ("Preferred") NO bloquea. El encabezado de la sección de
+  requisitos cuenta aunque vaya en su propia viñeta ("Qualifications\nBachelor's…").
+- **Excepción "equivalente"**: "or equivalent field of study / discipline / degree"
+  NO es una vía alternativa (sigue exigiendo un título universitario, cambia la
+  carrera). "or advanced coursework / advanced university studies" SÍ es vía
+  alternativa → no se descarta.
+- **Estudiante activo** (`titulo_universitario_en_curso_requerido`): "currently
+  pursuing", "must be enrolled", "students pursuing" es un criterio DISTINTO del
+  título completado; se cumple solo si el perfil registra un hecho educativo con
+  `education_status='pursuing'` (el perfil actual no tiene ninguno → nivel máximo 2).
+- **Motivos** (`PRIORIDAD_MOTIVOS`): `titulo_universitario_en_curso_requerido` >
+  `titulo_universitario_requerido` > `educacion_no_confirmada` >
+  `educacion_no_cumple` > `skill_faltante` > `idioma_no_comparable` >
+  `experiencia_no_verificable` > `licencia_no_comparable` > `cobertura_insuficiente`.
   `educacion_no_confirmada` = obligatorio que el texto NO confirma;
   `educacion_no_cumple` = el perfil no alcanza el nivel pedido (requisito no
   obligatorio: no bloquea, se deja para revisión).
-- **Corrida vigente `20261029_171039`** (447 vacantes): calificada 102 ·
-  revisar_a_mano 141 · sin_requisitos 141 · **descartada 32** ·
-  datos_insuficientes 31. De las 52 vacantes con requisito universitario
-  **obligatorio**: 32 confirmadas (descartada), 18 con alternativa, 1 con negación
-  ("No university degree required."), 1 sin término en el texto → las 20 últimas van
-  a `revisar_a_mano` (revisión manual pendiente, NO se revisaron todavía).
-- **Falsos descartes corregidos** (8, todos con evidencia literal): negación
+- **Corrida vigente `20261029_183231`** (447 vacantes): calificada 102 ·
+  revisar_a_mano 141 · sin_requisitos 141 · **descartada 45**
+  (37 `titulo_universitario_requerido` + 8 `titulo_universitario_en_curso_requerido`) ·
+  datos_insuficientes 31.
+- **Revisión manual del bloqueante (HECHA, 29-10)**: las 20
+  `revisar_a_mano / educacion_no_confirmada` se revisaron una por una con evidencia
+  literal → **19 no bloqueantes** (alternativa o negación) y **1 bloqueo real**
+  (`workday-Supplier-Quality-Engineer-III_31162905`: "Bachelor's degree in
+  engineering, Science, or equivalent field of study") → corregido por la regla.
+  Muestra de 10 de `educacion_no_cumple` → **5/10 eran bloqueos reales** escondidos
+  por el nivel `ambiguous`/`inferred` del extractor → esos 5 (y 8 más) ahora son
+  `descartada` **con evidencia literal** (`docs/PASO5_EVIDENCIA_2026-10-29.md` §4).
+  Los 90 `educacion_no_cumple` restantes NO son bloqueos: el texto no obliga.
+- **Falsos descartes corregidos** (9, todos con evidencia literal): negación
   ("No university degree required"), alternativas ("or its equivalent",
   "Associate's or bachelor's degree", "Bachelor's degree or certification",
   "equivalent practical experience may be considered", "or an equivalent
-  combination…", "or other technical/scientific experience"). Antes: 40 descartada
-  (corrida `160358`) → ahora 32.
-- **Tests**: `tests/test_matching.py` (31 casos, incluidos 11 regresiones con frases
+  combination…", "or other technical/scientific experience", "or advanced
+  university studies"). Antes: 40 descartada (corrida `160358`) → ahora 45 (pero 15
+  entradas nuevas con evidencia, 1 salida, 7 reetiquetadas como *en curso*).
+- **Tests**: `tests/test_matching.py` (46 casos, incluidos 15 regresiones con frases
   literales de la BD) + `tests/test_database.py` (versión de esquema dinámica:
-  fallaba con `8` fijo desde la migración 009). Suite completa: **324 tests verdes**.
+  fallaba con `8` fijo desde la migración 009). Suite completa: **339 tests verdes**.
 
-**Pendiente del Paso 5**: revisar a mano las 20 `educacion_no_confirmada` (Paso 6) y
-después las decisiones/UI/export (Paso 7). **No** se han revisado todavía.
+**Pendiente del Paso 5**: solo la **aplicación manual** de las 20
+`revisar_a_mano / educacion_no_confirmada` (el análisis de por qué no se descartan ya
+está hecho) y después las decisiones/UI/export (Paso 7).
 
 **O8 — sub-diseño (2026-10-27): PORTAR el mecanismo que v1.x ya tenía resuelto** (el usuario lo recordó y hizo revisar el código; hallazgo confirmado):
 
@@ -335,10 +358,12 @@ Pendientes vivos (handoff vigente `docs/HANDOFF_SESION_2026-10-27.md`):
 5. **O6.3** (matching afinado) · **O6.4** (dedupe semántico del perfil:
    slugs ES/EN — decidir import vs diálogo). **O6.3 ✅ cerrado 29-10**
    (ver bloque "O6.3 — Matching (Paso 5)").
-6. **Paso 6/7 del matching**: revisión manual de las 20
-   `revisar_a_mano / educacion_no_confirmada` (corrida `20261029_171039`),
-   luego decisiones finales + UI + export. **No tocar los umbrales**
-   (cobertura 0.60 / puntaje 0.80) sin acuerdo explícito.
+6. **Paso 6/7 del matching**: la revisión manual del grupo
+   `revisar_a_mano / educacion_no_confirmada` ya está HECHA (20 revisadas con
+   evidencia literal; 19 no bloqueantes, 1 bloqueo real corregido). Falta la
+   **aplicación manual** de esas 20 y luego las decisiones finales + UI + export
+   (Paso 7). **No tocar los umbrales** (cobertura 0.60 / puntaje 0.80) sin acuerdo
+   explícito.
 7. Luego: **O9** (optimización de UI — alcances por definir), O3 (validar
    7 fetchers ATS), O4 (calibración — redefinir: sin gate semántico no
    tiene contra-qué comparar).
@@ -393,12 +418,48 @@ Pendientes vivos (handoff vigente `docs/HANDOFF_SESION_2026-10-27.md`):
 
 ---
 
-*Última actualización: 2026-10-29 (O6.3 matching / Paso 5 cerrado: bloqueante educativo validado con evidencia literal; corrida vigente `20261029_171039`)*
-*Próxima revisión: tras el Paso 6 (revisión manual de las 20 `educacion_no_confirmada`)*
+*Última actualización: 2026-10-29 (O6.3 matching / Paso 5 cerrado: el TEXTO decide la obligatoriedad del título universitario + criterio explícito de estudiante activo; corrida vigente `20261029_183231`)*
+*Próxima revisión: tras aplicar las decisiones manuales del Paso 7 (UI + export)*
 
 ---
 
 ## 8. HISTORIAL DE CAMBIOS RECIENTES
+
+### 2026-10-29 (tarde) - O6.3 / Paso 5: el TEXTO decide la obligatoriedad + estudiante activo
+
+**Cambios de regla (corrida nueva `20261029_183231`; las 5 previas quedan `valida=0`):**
+- **La obligatoriedad la decide el TEXTO, no solo `requirement_level`.** Si la
+  clausula exige el titulo ("Required/Minimum/Basic Qualifications", "must have",
+  "degree or above", "Requisitos", encabezado "Qualifications" en su propia vineta)
+  bloquea aunque el extractor lo marque `ambiguous`/`inferred`; si el texto solo lo
+  prefiere ("Preferred") NO bloquea.
+- **"or equivalent field of study / discipline / degree" NO es via alternativa**
+  (sigue exigiendo titulo universitario). **"or advanced coursework / advanced
+  university studies" SI es via alternativa** -> no se descarta.
+- **Estudiante activo** = criterio explicito y distinto del titulo completado:
+  nuevo motivo `titulo_universitario_en_curso_requerido`; se cumple solo si el
+  perfil tiene un hecho educativo con `education_status='pursuing'`.
+- `Requisito` gana `education_status`; el perfil carga `education_status` de sus
+  facts (`candidato_universitario_en_curso()`).
+
+**Resultado (447 vacantes):** `descartada` 32 -> **45** (37 titulo requerido +
+8 estudiante activo); `revisar_a_mano` 141 (20 `educacion_no_confirmada` +
+90 `educacion_no_cumple` + 11 skill + 4 experiencia + 3 licencia);
+`calificada` 102 · `sin_requisitos` 141 · `datos_insuficientes` 31.
+Delta exacto: 13 entradas a `descartada` (con frase literal), 1 salida
+(`workday-Accounting-Analyst---Temporary_J-020392`, via alternativa "or advanced
+university studies"), 7 reetiquetadas como *estudiante activo*.
+
+**Medicion (muestra 10 de `educacion_no_cumple`):** 5/10 eran bloqueos REALES
+escondidos por el nivel del extractor -> la regla nueva los promueve con evidencia.
+
+**Verificacion:**
+- `tests/test_matching.py`: 46 casos (15 regresiones con frases literales de la BD).
+- Suite completa: **339 tests verdes** (324 + 15 nuevos).
+- `docs/PASO5_EVIDENCIA_2026-10-29.md` regenerado por
+  `generar_evidencia_paso5.py` (704 lineas, 45 descartadas + 20 no confirmadas).
+- SQL directo sobre la corrida `183231`: las 8 correcciones de la sesion anterior
+  siguen `revisar_a_mano / educacion_no_confirmada`.
 
 ### 2026-10-29 - O6.3 / Paso 5: matching de requisitos vs. perfil (modulo real + evidencia literal)
 

@@ -1,10 +1,13 @@
 # -*- coding: utf-8 -*-
 """Evidencia literal del paso 5 (archivo UTF-8, sin mojibake).
 
-Por cada vacante DESCARTADA de la corrida vigente:
-  - los requisitoseducation que bloquean (value_text, requirement_level),
+Por cada vacante DESCARTADA de la corrida indicada:
+  - los requisitos education que bloquean (value_text, requirement_level,
+    education_status),
   - la FRASE EXACTA que confirma el titulo universitario,
-  - el CONTEXTO +-200 chars alrededor del termino.
+  - el CONTEXTO +-200 chars alrededor del termino,
+  - la clasificacion textual: confirmado / negacion / alternativa,
+    obligatorio, en_curso (estudiante activo), suave (preferred).
 
 Uso: evidencia_descartadas.py [corrida_id] [archivo_salida]
 """
@@ -46,23 +49,32 @@ for i, job_id in enumerate(jobs, 1):
     texto = "\n".join(x for x in (job["requirements_raw"], job["description_raw"]) if x)
     conf = matching.confirmar_requisito_universitario(texto)
 
+    estado = conn.execute(
+        "SELECT estado, motivo FROM job_match WHERE corrida_id = ? AND job_id = ?",
+        (corrida, job_id),
+    ).fetchone()
+
     requisitos = conn.execute(
-        """SELECT value_code, value_text, requirement_level, codigo_canonico, evidence
+        """SELECT value_code, value_text, requirement_level, codigo_canonico,
+                  education_status, evidence
            FROM job_requirements r JOIN job_analysis a ON a.analysis_id = r.analysis_id
            WHERE a.is_current = 1 AND a.job_id = ? AND r.category = 'education'
            ORDER BY requirement_level, value_text""",
         (job_id,),
     ).fetchall()
 
-    bloqueantes = [r for r in requisitos if r["requirement_level"] == "required"]
     lineas.append("")
     lineas.append("[%d] %s" % (i, job_id))
     lineas.append("    titulo: %s" % job["title"])
-    lineas.append("    requisitos education bloqueantes (requirement_level='required'):")
-    for r in bloqueantes:
-        lineas.append("      - value_text=%r | codigo_canonico=%r" % (
-            r["value_text"], r["codigo_canonico"]))
-    lineas.append("    deteccion: motivo=%r termino=%r" % (conf.motivo, conf.termino))
+    lineas.append("    estado=%r motivo=%r" % (estado["estado"], estado["motivo"]))
+    lineas.append("    requisitos education (level, education_status):")
+    for r in requisitos:
+        lineas.append("      - value_text=%r | level=%r | education_status=%r | canon=%r" % (
+            r["value_text"], r["requirement_level"], r["education_status"],
+            r["codigo_canonico"]))
+    lineas.append(
+        "    deteccion: motivo=%r termino=%r | obligatorio=%s en_curso=%s suave=%s"
+        % (conf.motivo, conf.termino, conf.obligatorio, conf.en_curso, conf.suave))
     if conf.segmento:
         lineas.append("    FRASE EXACTA: %s" % conf.segmento)
         low = texto.lower()
