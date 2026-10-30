@@ -118,7 +118,7 @@ def fetch(self, site: dict, *, pages: int, search_text: str | None,
 | `recordatorio.py` | Portado | Login startup + recordatorio Windows (Task Scheduler) |
 | `jobpulse-v15.cmd` | Nuevo | Launcher UI + corrida con un clic |
 
-### OBJETIVOS O1–O10 (lista canónica, estado al 2026-10-29)
+### OBJETIVOS O1–O10 (lista canónica, estado al 2026-10-30)
 
 > Cada handoff de sesión lleva su copia de esta tabla con el estado al cierre.
 
@@ -131,9 +131,9 @@ def fetch(self, site: dict, *, pages: int, search_text: str | None,
 | **O5** Higiene de datos | O5.1 ✅ auditoría/huecos · O5.3 re-barrido de los ~14-19 jobs con descripción basura (login-wall) · **O5.4 ✅ CERRADO (2026-10-27)**: análisis por **huella de descripción** (en ANE el título+empresa NO es identidad — "Confidencial"); solo 4/120 del lote 26-10 eran republicaciones → **las 4 viejas marcadas `dismissed` con nota** (parejas 121034/121185, 121026/121184, 121025/121183, 120958/121094), las nuevas quedan activas; grupos misma-empresa+misma-ciudad (INAMU ×3, SALESLAND ×2) = **plazas múltiples, decisión del usuario, intactos**; multi-sede (INAMU 8 ciudades, HIPERMASCOTAS 2 tiendas) = vacantes reales | 🟢 solo queda O5.3 |
 | **O6** Perfil del candidato | O6.1 editor ✅ · O6.2 capa IA de CVs + integración UI ✅ · **O6.3 matching afinado (niveles/CEFR) ✅ CERRADO (2026-10-29)** — ver bloque "O6.3 — Matching (Paso 5)" más abajo · O6.4 dedupe semántico del perfil (slugs ES/EN del mismo hecho: normalizar al importar vs. decidir en diálogo — pendiente decisión del usuario) | 🟢 O6.1/O6.2/O6.3 cerrados · O6.4 pendiente decisión |
 | **O7** Operación UI-first (servidores bajo demanda) | La app arranca/detiene lo que necesita; el usuario no toca CLI ni launchers | ✅ **completo (2026-10-27)** |
-| **O8** Ciclo de vida de la vacante | Plan previo del usuario (recordado 2026-10-27; formalizado tras investigar el estado real del código). **O8.1 categorías de puestos** ❌ no existe ningún campo (hoy solo hay categorías de REQUISITOS: education/experience/language/license/skill) → taxonomía nueva (migración 00N) editable en UI, sugerencia IA opcional (decisión 27-10: el AGENTE genera el borrador desde los 295 jobs con `tools/categorias_borrador.py`; el usuario corrige después) · **O8.2 recurrentes y aplicadas ocultas por defecto (decisión del usuario 27-10, refinada con ejemplo Concentrix)**: ⚠️ **ESTABA RESUELTO en v1.x (tombstones + `dup_of`, ver sub-diseño) y NO se portó**; hoy la republicación nace con ID nuevo y el estado manual del ID viejo NO se arrastra. Diseño aprobado: **matching por compañía + huella de descripción** (el título NO como criterio primario — O5.4 demostró falsos: 13 coincidencias solo-título NO eran republicaciones y grupos mismo-título eran plazas distintas). Al INGERIR una copia nueva que coincida (huella exacta o ratio ≥ ~0.92) con una ya marcada reviewed/applied → **la copia hereda el estado manual automáticamente** (nace oculta + nota de herencia con el ID origen; datos intactos — regla de repo actualizada 27-10: duplicado EXACTO = auto, patrón de v1.x; dudoso = manual). Margen incierto (ratio medio) → `quality duplicates` (dedupe conservador intacto). Opt-in en UI para mostrar repetidas/ya aplicadas; marcar aplicado = SIEMPRE manual. Y la ocultación NO es perpetua: **ventana temporal definida por el usuario en la pestaña de Configuración** (selector 1/2/3/6 meses, etc. — decisión del usuario 27-10; ancla = `updated_at` del estado del original): la copia solo hereda el estado (y queda oculta) si el estado del original tiene MENOS de la ventana; si el original ya la supera, la copia entra como vacante NUEVA (nuevo ciclo, re-aplicable). Default DECIDIDO por el usuario (27-10): **3 meses** (persistencia en `ui_config.json`, pestaña nueva "Vacantes" de Configuración; selector 1/2/3/6/12) · **O8.3 registro de aplicados** ✅ YA EXISTE: estado "Aplicada" en el diálogo de estado (excluye de búsqueda por defecto vía skip_automatic) + tabla `applications` (planned → applied → recruiter_contact → interview → offer, con applied_at + next_action_at + notas) + diálogo Seguimiento por vacante · **O8.4 de-baja automática por tiempo** ⚠️ **EXISTÍA en v1.x (`purge_expired`, ver sub-diseño) y NO se portó**: en v1.5 la búsqueda no filtra por edad ni vigencia (`expires_at` SOLO ANE lo llena; `gate.es_vigente` dormido sin callers) → portar como **OCULTAR, no borrar** (v1.x borraba filas): vencidas por `expires_at`, sin vencimiento → fuera de la ventana de publicación, sin fecha legible → TTL por `created_at`; ventana configurable en la MISMA pestaña "Vacantes" (decisión 27-10; default propuesto: 6 meses) | 🔵 diseñado 27-10 — implementación = portación de v1.x |
+| **O8** Ciclo de vida de la vacante | Plan previo del usuario (recordado 2026-10-27; formalizado tras investigar el estado real del código). **O8.1 categorías de puestos ✅ PRIMERA VERSIÓN (2026-10-30)** — resuelto como **taxonomía de ÁREAS DE EMPLEO**: 20 áreas definidas por el SISTEMA en la BD (`area` + `area_regla`, migración `016_areas.sql`, semilla versionada `seeds/areas.json` con 51 reglas), clasificación por **TÍTULO** con reglas por **prioridad** (empate en la prioridad máxima → `otros`) y el perfil solo **marca/desmarca** (pestaña "Áreas de empleo" → `candidate_profile_facts.category='area'`). El borrador de categorías con IA (`tools/categorias_borrador.py`) deja de hacer falta: las categorías son **declarativas y versionadas**. El filtro en el MOTOR del Paso 5 (estado `fuera_de_area`) es de O10 (ver bloque "O8.1/O10 — Filtro por ÁREA de empleo") · **O8.2 recurrentes y aplicadas ocultas por defecto (decisión del usuario 27-10, refinada con ejemplo Concentrix)**: ⚠️ **ESTABA RESUELTO en v1.x (tombstones + `dup_of`, ver sub-diseño) y NO se portó**; hoy la republicación nace con ID nuevo y el estado manual del ID viejo NO se arrastra. Diseño aprobado: **matching por compañía + huella de descripción** (el título NO como criterio primario — O5.4 demostró falsos: 13 coincidencias solo-título NO eran republicaciones y grupos mismo-título eran plazas distintas). Al INGERIR una copia nueva que coincida (huella exacta o ratio ≥ ~0.92) con una ya marcada reviewed/applied → **la copia hereda el estado manual automáticamente** (nace oculta + nota de herencia con el ID origen; datos intactos — regla de repo actualizada 27-10: duplicado EXACTO = auto, patrón de v1.x; dudoso = manual). Margen incierto (ratio medio) → `quality duplicates` (dedupe conservador intacto). Opt-in en UI para mostrar repetidas/ya aplicadas; marcar aplicado = SIEMPRE manual. Y la ocultación NO es perpetua: **ventana temporal definida por el usuario en la pestaña de Configuración** (selector 1/2/3/6 meses, etc. — decisión del usuario 27-10; ancla = `updated_at` del estado del original): la copia solo hereda el estado (y queda oculta) si el estado del original tiene MENOS de la ventana; si el original ya la supera, la copia entra como vacante NUEVA (nuevo ciclo, re-aplicable). Default DECIDIDO por el usuario (27-10): **3 meses** (persistencia en `ui_config.json`, pestaña nueva "Vacantes" de Configuración; selector 1/2/3/6/12) · **O8.3 registro de aplicados** ✅ YA EXISTE: estado "Aplicada" en el diálogo de estado (excluye de búsqueda por defecto vía skip_automatic) + tabla `applications` (planned → applied → recruiter_contact → interview → offer, con applied_at + next_action_at + notas) + diálogo Seguimiento por vacante · **O8.4 de-baja automática por tiempo** ⚠️ **EXISTÍA en v1.x (`purge_expired`, ver sub-diseño) y NO se portó**: en v1.5 la búsqueda no filtra por edad ni vigencia (`expires_at` SOLO ANE lo llena; `gate.es_vigente` dormido sin callers) → portar como **OCULTAR, no borrar** (v1.x borraba filas): vencidas por `expires_at`, sin vencimiento → fuera de la ventana de publicación, sin fecha legible → TTL por `created_at`; ventana configurable en la MISMA pestaña "Vacantes" (decisión 27-10; default propuesto: 6 meses) | 🔵 diseñado 27-10 — implementación = portación de v1.x |
 | **O9** Optimización de UI | Ajustes de interfaz pedidos por el usuario y siempre pospuestos — alcances por definir (después de O2-redefinido) | ⏳ placeholder |
-| **O10** Mejorar filtros de búsqueda y compatibilidad | El paso 4 del flujo filtraba `matched` a ciegas → grilla vacía (0 jobs cuando 370/447 análisis son `partial`). `ui.elegir_filtro_compatibilidad()` usa `matched` si existe y si no muestra todos los vigentes, explicando por qué. Pendiente: refinar `solo_vigentes` (uso `date_published` vs `last_seen_at`), visibilidad opt-in de recurrentes/aplicadas (O8.2), y columna "Req." (O2.2). | 🟡 diseñado (elegir_filtro_compatibilidad implementado 28-10) |
+| **O10** Mejorar filtros de búsqueda y compatibilidad | El paso 4 del flujo filtraba `matched` a ciegas → grilla vacía (0 jobs cuando 370/447 análisis son `partial`). `ui.elegir_filtro_compatibilidad()` usa `matched` si existe y si no muestra todos los vigentes, explicando por qué. **Filtro por ÁREA ✅ (2026-10-30)**: combo "Área" + casilla "Solo áreas de mi perfil" + columna "Área" en la UI principal, y filtro en el MOTOR del Paso 5 (estado `fuera_de_area`, motivo `fuera_de_area_del_perfil`; "evaluar todo" = `run_paso5.py --evaluar-todo`). Pendiente: refinar `solo_vigentes` (uso `date_published` vs `last_seen_at`), visibilidad opt-in de recurrentes/aplicadas (O8.2), y columna "Req." (O2.2). | 🟡 `elegir_filtro_compatibilidad` (28-10) + filtro por área (30-10) implementados |
 
 **O7 — sub-objetivos (implementados 2026-10-27, tras el barrido fallido desde la UI):**
 
@@ -266,6 +266,56 @@ reglas de negocio (advanced university studies / two year college / 80 % de la
 carrera). Después: tabla `job_match_decision` + decisiones finales + UI + export
 (Paso 7).
 
+**O8.1 / O10 — Filtro por ÁREA de empleo (✅ 2026-10-30):**
+
+Módulo real: **`src/jobpulse_v15/areas.py`** (tests: `tests/test_areas.py`). La
+taxonomía la define el **sistema** y vive en la BD; el perfil solo marca/desmarca.
+
+- **Esquema**: migración **`016_areas.sql`** (esquema v16) → tablas `area`,
+  `area_regla`, `job_area`; reconstrucción de `candidate_profile_facts` (CHECK
+  `category` + `'area'`) y de `job_match` (CHECK `estado` + `'fuera_de_area'`),
+  copiando sus filas (48 facts / 3576 filas de `job_match`) y recreando 5
+  índices. `check_integrity` → ok, 0 violaciones FK.
+- **Taxonomía**: **20 áreas** (19 del sistema + `otros`) sembradas desde
+  `src/jobpulse_v15/seeds/areas.json` (versionado) con **51 reglas**. Comandos:
+  `init-areas [--classify]`, `areas list`, `areas classify [--dry-run]`.
+- **Clasificación por TÍTULO**, la **MISMA para cualquier fuente** (Workday,
+  ANE, Indeed, LinkedIn, Elempleo, Harvie, CINDE, Procomer). Gana la regla de
+  mayor **prioridad**; si dos áreas empatan en la prioridad máxima el aviso es
+  **ambiguo** → `otros`. La descripción NO clasifica (en miles de caracteres
+  cualquier palabra aparece por casualidad): la pasada por descripción queda
+  como informativa futura (confianza `descripcion`, nunca excluye).
+- **Se clasifica al INGESTAR**: `Repository.save_job` clasifica cada vacante
+  nueva (`job_area`), así un puesto nuevo de cualquier fuente queda clasificado
+  solo; `areas classify` reclasifica todo en lote cuando cambian las reglas.
+- **Perfil**: pestaña **"Áreas de empleo"** en `ui_perfil.py` → casillas por
+  área (muestra el nº de vacantes) + botón "Guardar áreas"; lo marcado se
+  guarda como hechos `candidate_profile_facts.category='area'`. **Sin áreas
+  marcadas no hay filtro** (se evalúa todo).
+- **En el MOTOR del Paso 5** (`matching.py`): la oferta de otra área queda con
+  estado **`fuera_de_area`** (motivo `fuera_de_area_del_perfil`) y **NO se
+  evalúan sus requisitos**; la corrida sigue escribiendo **una fila por
+  vacante** (auditable). "Evaluar todo" = `run_paso5.py --evaluar-todo`.
+- **Conservador por diseño**: `otros` (ambiguo o sin encaje) y las ofertas sin
+  clasificar **SIEMPRE se evalúan** — una clasificación dudosa nunca oculta
+  una oferta.
+- **UI principal**: combo "Área" + casilla "Solo áreas de mi perfil" + columna
+  "Área" en la tabla.
+- **Medición real** (447 vacantes, `GROUP BY` sobre la BD): 447/447 clasificadas
+  → informática 92 · producción 43 · ventas 42 · administración 38 ·
+  **otros 34** (32 sin encaje + 2 ambiguos: "Payroll, Time & Benefits
+  Specialist", "Recepcionista Hospital Curridabat") · alimentación 32 · servicio
+  20 · logística 18 · automotriz 17 · ingeniería 16 · marketing 16 · salud 15 ·
+  almacén 14 · calidad 12 · mantenimiento 12 · RR.HH. 10 · legal 7 · educación
+  5 · seguridad 4 · construcción 0. **Sin áreas marcadas los resultados son
+  IDÉNTICOS a la corrida vigente** (104 calificada / 90 revisar_a_mano / 82
+  descartada / 30 datos_insuficientes / 141 sin_requisitos) → no hizo falta
+  corrida nueva. Con "todo menos informática" se excluyen exactamente las 92;
+  con solo "administración" se excluyen 375 (se evalúan 72).
+- **Tests**: `tests/test_areas.py` (20 tests + 21 subtests, con títulos
+  LITERALES de la BD real) + test de UI de marcar/desmarcar en
+  `tests/test_ui.py`. Suite completa: **393 tests verdes**.
+
 **O8 — sub-diseño (2026-10-27): PORTAR el mecanismo que v1.x ya tenía resuelto** (el usuario lo recordó y hizo revisar el código; hallazgo confirmado):
 
 El ciclo de vida existía en el proyecto v1.x (`D:\Proyectos\jobpulse_cr`,
@@ -382,41 +432,41 @@ python -m pytest tests/ -q    # pytest vive en el python del sistema (el venv no
 
 ## 5. PRÓXIMA ACCIÓN INMEDIATA
 
-Pendientes vivos (handoff vigente `docs/HANDOFF_SESION_2026-10-27.md`):
+Pendientes vivos (handoff vigente `docs/HANDOFF_SESION_2026-10-30.md`):
 
-1. **Prueba de humo del usuario (cierra O7)**: abrir la UI → "Ejecutar barrido"
-   (Brave abre/cierra solo; de paso refresca las ~46 descripciones basura si
-   la sesión ANE vive — si no, "Re-login ANE" primero) → "Enriquecer" (con
-   la BD ya llena responde casi instantáneo por caché).
-2. **O5.3**: re-barrido de los jobs con descripción basura (login-wall) —
-   hoy ~46 (creció con el lote nuevo); vía UI.
-3. **O8 Ciclo de vida de la vacante** (nuevo, 27-10): comportamientos
-   decididos — recurrentes y aplicadas ocultas por defecto (opt-in para
-   verlas); aplicado = manual; herencia por compañía + huella de
-   descripción (exacta o ratio ≥ ~0.92; margen incierto → quality
+1. **El usuario marca sus áreas en la UI** (perfil → pestaña **"Áreas de
+   empleo"**): hasta entonces el filtro está INACTIVO (sin áreas marcadas se
+   evalúa todo, que es lo que hoy ocurre). Después, la próxima corrida del
+   Paso 5 deja las ofertas de otras áreas con estado `fuera_de_area` (o
+   `run_paso5.py --evaluar-todo` para evaluating todas).
+2. **Capa B — extractor educativo** (aprobada por el usuario, parqueada):
+   migración **`017`** (filas `concepto`: master/MBA/associate/técnico
+   superior), arreglar `Repository.save_analysis` (no rellena
+   `codigo_canonico` → los requisitos re-analizados quedarían NULL y el Paso 5
+   los ignoraría) y `run_full_flow.py::run_analysis()` (llama
+   `IngestionService.analyze_job`, que **no existe**) → luego re-analizar las
+   447 vacantes y su propia corrida.
+3. **Paso 5 — las 30 `revisar_a_mano / educacion_no_confirmada` siguen ABIERTAS**:
+   las firma una **segunda persona** en `docs/PASO5_REVISION_PENDIENTES.md`
+   (el autoveredicto del autor de la regla se descarta por sesgo) → después,
+   tabla `job_match_decision` + decisiones finales + UI + export (Paso 7).
+   **No tocar los umbrales** (cobertura 0.60 / puntaje 0.80) sin acuerdo
+   explícito.
+4. **O8.2 ciclo de vida de la vacante**: recurrentes y aplicadas ocultas por
+   defecto (opt-in para verlas); aplicado = manual; herencia por compañía +
+   huella de descripción (exacta o ratio ≥ ~0.92; margen incierto → quality
    duplicates), con **ventana temporal configurable en Configuración**
-   (1/2/3/6 meses…; fuera de la ventana la copia entra nueva). Falta
-   decidir: default de la ventana (prop. 3 meses), de-baja de jobs viejos
-   (O8.4) y taxonomía de categorías (O8.1); luego migración + lógica en
-   repository/ingest + UI.
-4. **O2-redefinido (afinar búsqueda)**: **O2.1** normalizar locations
+   (1/2/3/6 meses…; fuera de la ventana la copia entra nueva).
+5. **O5.3**: re-barrido de los jobs con descripción basura (login-wall) —
+   hoy ~46; vía UI.
+6. **O2-redefinido (afinar búsqueda)**: **O2.1** normalizar locations
    crudos de Indeed ("Heredia, Provincia de Heredia"); **O2.2** filtro
    "solo con requisitos obligatorios" + columna "Req."; motor semántico
    DORMIDO.
-5. **O6.3** (matching afinado) · **O6.4** (dedupe semántico del perfil:
-   slugs ES/EN — decidir import vs diálogo). **O6.3 ✅ cerrado 29-10**
-   (ver bloque "O6.3 — Matching (Paso 5)").
-6. **Paso 6/7 del matching**: la revisión manual del grupo
-   `revisar_a_mano / educacion_no_confirmada` ya está HECHA (20 revisadas con
-   evidencia literal; 19 no bloqueantes, 1 bloqueo real corregido) y la **medición
-   ampliada a 43 casos** del grupo `educacion_no_cumple` también (26/43 bloqueos
-   reales ≈ 60 % → la regla se sostiene; 43/43 contra el ground truth manual).
-   Falta la **aplicación manual** de las 19 que quedan y luego las decisiones
-   finales + UI + export (Paso 7). **No tocar los umbrales** (cobertura 0.60 /
-   puntaje 0.80) sin acuerdo explícito.
-7. Luego: **O9** (optimización de UI — alcances por definir), O3 (validar
-   7 fetchers ATS), O4 (calibración — redefinir: sin gate semántico no
-   tiene contra-qué comparar).
+7. Luego: **O6.4** (dedupe semántico del perfil: slugs ES/EN — decidir import
+   vs diálogo) · **O9** (optimización de UI — alcances por definir) · O3
+   (validar 7 fetchers ATS) · O4 (calibración — redefinir: sin gate semántico
+   no tiene contra-qué comparar).
 
 ---
 
@@ -490,15 +540,97 @@ Pendientes vivos (handoff vigente `docs/HANDOFF_SESION_2026-10-27.md`):
   studies" / "two year college degree (técnico superior universitario)" / "80 %
   de la carrera" — se decidieron como universitario o no ANTES de firmar los
   veredictos.
+- **Áreas de empleo: la taxonomía la define el SISTEMA y vive en la BD**
+  (decisión del usuario, 2026-10-30): `area` + `area_regla` sembradas desde
+  `seeds/areas.json` (versionado); el perfil solo **marca o desmarca** (hechos
+  `candidate_profile_facts.category='area'`). Nada del perfil hardcodeado.
+- **Áreas de empleo: la clasificación es por TÍTULO y la MISMA para cualquier
+  fuente** (decisión del usuario): Workday, ANE, Indeed, LinkedIn, Elempleo,
+  Harvie, CINDE y Procomer usan las mismas reglas. Gana la regla de mayor
+  **prioridad**; si dos áreas empatan en la prioridad máxima el aviso es
+  **ambiguo** → `otros`. La descripción NO clasifica (en miles de caracteres
+  cualquier palabra aparece por casualidad): su pasada queda como informativa
+  futura (confianza `descripcion`, nunca excluye).
+- **Áreas de empleo: el filtro va en el MOTOR del Paso 5** (decisión del
+  usuario): estado `fuera_de_area` (motivo `fuera_de_area_del_perfil`), **sin
+  evaluar requisitos**, pero la corrida conserva **una fila por vacante**
+  (la exclusión es auditable). "Evaluar todo" = `run_paso5.py --evaluar-todo`.
+- **Áreas de empleo: filtro CONSERVADOR por diseño**: sin áreas marcadas en el
+  perfil NO hay filtro (se evalúa todo); `otros` (ambiguo o sin encaje) y las
+  ofertas sin clasificar **SIEMPRE se evalúan** — una clasificación dudosa
+  nunca oculta una oferta.
 
 ---
 
-*Última actualización: 2026-10-29 (O6.3 matching / Paso 5: alcance por grupo de enumeración + semántica de `education_status` + medición ampliada a 43 casos; corrida vigente `20261029_205348`)*
-*Próxima revisión: tras aplicar las decisiones manuales del Paso 7 (UI + export)*
+*Última actualización: 2026-10-30 (O8.1/O10 — filtro por ÁREA de empleo de punta a punta: taxonomía en BD, clasificación por título al ingerir, pestaña "Áreas de empleo" en el perfil, estado `fuera_de_area` en el Paso 5; además O6.3 con las mecánicas M1–M4 y la corrida vigente `20261030_151648`)*
+*Próxima revisión: tras marcar el usuario sus áreas en la UI y el cierre de la Capa B (extractor educativo)*
 
 ---
 
 ## 8. HISTORIAL DE CAMBIOS RECIENTES
+
+### 2026-10-30 — O6.3 (mecánicas M1–M4) + O8.1/O10: FILTRO por ÁREA de empleo de punta a punta
+
+**Parte 1 — cierre del bloque educativo (mecánicas generales):**
+- **M1** el nivel lo declara el TEXTO (ancla: `job_requirements.evidence`; gana
+  la frase más larga) · **M2** una vía académica está o no DISPONIBLE según el
+  nivel del perfil (las vías por experiencia NO confirman descarte) ·
+  **M3** "X % de un bachelor" = estudios parciales (cumplen título o estar en
+  curso) · **M4** sin lógica por país.
+- **3 decisiones de negocio resueltas CON FUENTE** (ISCED 2011 / OCDE):
+  "advanced university studies" = posgrado (nivel 4) · "two year college
+  degree"/"associate degree" = ciclo corto (nivel 2) · "% de completitud" =
+  parciales (nivel 3 sin título).
+- **Corrida `20261030_151648`** (447 filas, `valida=1`; las 7 previas quedan
+  `valida=0`): calificada 104 · revisar_a_mano 90 · **descartada 82** ·
+  datos_insuficientes 30 · sin_requisitos 141 (sumas verificadas por
+  `GROUP BY estado` = 447). `educacion_no_confirmada` 19 → **30**.
+- **Evidencia**: `docs/PASO5_EVIDENCIA_2026-10-30.md` (GENERADO: §1.1
+  mecánicas + §7 delta) verificada por `verificar_evidencia.py` → **125
+  verificaciones con frase literal, 0 fallos**. El verificador ahora usa por
+  defecto el documento de evidencia **más reciente** (antes fallaba en falso
+  al haber una corrida nueva).
+- **`docs/PASO5_REVISION_PENDIENTES.md`** regenerado: **30 casos**, texto
+  completo verbatim, **sin veredictos** (los firma una segunda persona).
+
+**Parte 2 — filtro por ÁREA de empleo (O8.1 + O10):**
+- **Migración `016_areas.sql`** (esquema v16): tablas `area`, `area_regla`,
+  `job_area`; reconstrucción de `candidate_profile_facts` (CHECK `category` +
+  `'area'`) y de `job_match` (CHECK `estado` + `'fuera_de_area'`), copiando
+  48 facts y 3576 filas de `job_match` y recreando 5 índices.
+  `check_integrity` → ok, 0 violaciones FK.
+- **Taxonomía del SISTEMA**: 20 áreas (19 + `otros`) y **51 reglas** en
+  `src/jobpulse_v15/seeds/areas.json`; CLI `init-areas [--classify]`,
+  `areas list`, `areas classify [--dry-run]`.
+- **Módulo `src/jobpulse_v15/areas.py`**: clasificación por **TÍTULO** con
+  reglas por **prioridad** (empate en la prioridad máxima → `otros`),
+  áreas del perfil (hechos `category='area'`) y predicado `es_fuera_de_area`
+  (conservador: sin áreas marcadas no hay filtro; `otros` y las sin clasificar
+  **siempre** se evalúan).
+- **Al INGESTAR**: `Repository.save_job` clasifica cada vacante nueva → un
+  puesto nuevo de **cualquier fuente** (Workday, ANE, Indeed, LinkedIn,
+  Elempleo, Harvie, CINDE, Procomer) queda clasificado solo, con la MISMA
+  regla (la fuente no aparece en ninguna regla).
+- **UI del perfil**: pestaña **"Áreas de empleo"** (casillas por área con el nº
+  de vacantes + botón "Guardar áreas"; `otros` anotado "siempre se evalúan").
+  **UI principal**: combo "Área", casilla "Solo áreas de mi perfil" y columna
+  "Área".
+- **Motor del Paso 5**: estado **`fuera_de_area`** (motivo
+  `fuera_de_area_del_perfil`), **sin evaluar requisitos**, conservando una
+  fila por vacante (auditable); `run_paso5.py --evaluar-todo` desactiva el
+  filtro.
+- **Medición real** (447 vacantes, `GROUP BY` sobre la BD): 447/447
+  clasificadas → informática 92 · producción 43 · ventas 42 · administración 38
+  · **otros 34** (32 sin encaje + 2 ambiguos) · alimentación 32 · servicio 20 ·
+  logística 18 · automotriz 17 · ingeniería 16 · marketing 16 · salud 15 ·
+  almacén 14 · calidad 12 · mantenimiento 12 · RR.HH. 10 · legal 7 ·
+  educación 5 · seguridad 4 · construcción 0. **Sin áreas marcadas los
+  resultados son IDÉNTICOS a la corrida vigente** → no hizo falta corrida
+  nueva; con "todo menos informática" se excluyen exactamente las 92 y con
+  solo "administración" se excluyen 375 (se evalúan 72).
+- **Tests**: `tests/test_areas.py` (nuevo: 20 tests + 21 subtests, con títulos
+  LITERALES de la BD real) + test de UI de marcar/desmarcar en
+  `tests/test_ui.py`; suite completa **393 tests verdes**.
 
 ### 2026-10-29 (noche) - O6.3 / Paso 5: alcance por grupo + semántica de `education_status` + medición de 43 casos
 

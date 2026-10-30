@@ -1,4 +1,4 @@
-# Paso 5 — HOJA DE REVISIÓN PENDIENTE (corrida `20261029_205348`)
+# Paso 5 — HOJA DE REVISIÓN PENDIENTE (corrida `20261030_151648`)
 
 > Documento GENERADO por `generar_revision_pendientes.py` — contiene
 > **solo textos literales de la BD, sin ningún veredicto**.
@@ -32,7 +32,7 @@ depende de ellas y hay que decidirlas **con una fuente**, no por impulso:
    la carrera) cuenta como requisito universitario cumplido? A día de hoy
    el módulo NO define qué pasa con estudios parciales.
 
-## Casos a revisar (19)
+## Casos a revisar (30)
 
 Columnas de la tabla de firmas: `veredicto` (bloqueo real / no bloqueo /
 dudoso), `criterio que lo justifica`, `revisor`, `fecha`.
@@ -54,7 +54,7 @@ citas son literales del texto de la oferta:
 
 ---
 
-### 2. `workday-Accounting-Analyst---Temporary_J-020392` — Accounting Analyst – Temporary
+### 2. `workday-Accounts-Payable-Representative_J-020440` — Accounts Payable Representative
 
 | veredicto | criterio | revisor | fecha |
 |---|---|---|---|
@@ -62,16 +62,16 @@ citas son literales del texto de la oferta:
 
 **Texto 1 (verbatim):**
 
-> plus in identifying top candidates. The candidate must have an unrestricted right to work for Huntsman in Costa Rica. All candidates are expected to work at our office in AFZ, Heredia, on Mondays, Wednesdays, and Thursdays. Please note that additional office days may occasionally be required based on specific business needs. Minimum Qualifications Bachelor’s degree in Accounting, Finance, or a related field , or advanced university studies in Accounting. Minimum of 2 years of professional accounting experience. Practical knowledge of core accounting principles and processes, including: Debits and credits Journal entries and postings Account reconciliations Accruals and prepayments Month-end close activities Financial statement fundamentals General understanding of the accoun
+> identifying top candidates. The candidate must have an unrestricted right to work for Huntsman in Costa Rica. All candidates are expected to work at our office in AFZ, Heredia on Mondays, Wednesdays, and Thursdays. Please note that there may be occasions where additional office days are required, due specific business needs. Minimum Qualifications Bachelor’s degree coursework in Accounting, Finance, Business Administration, or a related discipline and 1+ year of relevant experience; alternatively, 3+ years of relevant professional experience in Accounts Payable or Accounting may be considered in lieu of a degree. Demonstrated experience in Accounts Payable, Accounting, or financial transaction processing is required. Proficiency in Microsoft Excel is required, along with proficiency in Microsoft Outlook. English proficiency at C1 level or higher is required, including strong verbal and written communication skills and the ability to communicate effectivel
 
 **Requisito(s) `education` extraído(s) por el extractor** — la
 citas son literales del texto de la oferta:
 
-- `value_text='Bachelor'` · `requirement_level='required'` · evidencia: > Minimum Qualifications Bachelor’s degree in Accounting, Finance, or a related field , or advanced university studies in Accounting.
+- `value_text='Bachelor'` · `requirement_level='ambiguous'` · evidencia: > Minimum Qualifications Bachelor’s degree coursework in Accounting, Finance, Business Administration, or a related discipline and 1+ year of relevant experience;
 
 ---
 
-### 3. `workday-Assistant-Director-of-Engineering_REQ10393409` — Assistant Director of Engineering
+### 3. `workday-Analyst-Payroll_R273170` — Analyst Payroll
 
 | veredicto | criterio | revisor | fecha |
 |---|---|---|---|
@@ -79,24 +79,16 @@ citas son literales del texto de la oferta:
 
 **Texto 1 (verbatim):**
 
-> lers, wellness seekers, culinary explorers, and cultural globetrotters. With customized itineraries for families and couples alike, we can’t wait for you to experience “Pura Vida” at Peninsula Papagayo. At Four Seasons we consider life and work to be richer when we truly connect with the people and the environment around us. Our family members are masters at their crafts – a gardener can become an artist, a manager a conductor, a chef an inventor. We are looking for employees who share the Golden Rule: people who, by nature, believe in treating others as we would have them treat us. We look for our people to characterize a shared passion for excellence and to infuse that enthusiasm into everything
-
-**Texto 2 (verbatim):**
-
-> ect hotel operations. 8. Reporting and Performance Management Monitor maintenance KPIs and identify opportunities for improvement. Follow up on work orders and preventive maintenance compliance. Support the Director of Engineering in preparing operational reports, presentations, budgets, and technical analyses. 9. Required Qualifications Education Bachelor’s degree or technical degree in Mechanical Engineering, Electrical Engineering, Electromechanical Engineering, Industrial Maintenance, Facilities Management, Civil Engineering, or a related field. Professional Experience: Previous experience in engineering, maintenance, facilities management, construction, or technical operations. Experience in hotels, resorts, luxury propert
-
-**Texto 3 (verbatim):**
-
-> technical systems and facilities found in a hotel environment, including: Electrical systems, including low- and medium-voltage systems. HVAC systems and chilled water systems. Chillers, pumps, cooling towers, and water distribution systems. Plumbing and domestic water systems. Wastewater and drainage systems. Hot water systems. Swimming pools and associated equipment. Fire alarm and life safety systems. Building Management Systems (BMS). Emergency generators and backup power systems. Kitchen and laundry equipment. Lighting systems and controls. Energy efficiency and sustainability principles. Technical drawings, schematics, and engineering documentation. Preventive and predictive maintenance princip
+> ss documentation. Contribute to operational excellence and continuous improvement initiatives. Compliance & Controls Maintain awareness and adherence to SOX controls and internal payroll control requirements. Participate in audits and support compliance reviews as needed. Ensure accurate documentation and retention of payroll records. Requirements Bachelor's degree in Business Administration, Accounting, Finance, Human Resources, or related field. Equivalent combination of education and relevant experience may be considered. Experience supporting multinational payroll qualifies only when the candidate has directly processed U.S. employee payroll; coordination, reporting, or system support alone is not a subs
 
 **Requisito(s) `education` extraído(s) por el extractor** — la
 citas son literales del texto de la oferta:
 
-- `value_text='Bachelor'` · `requirement_level='required'` · evidencia: > Required Qualifications Education Bachelor’s degree or technical degree in Mechanical Engineering, Electrical Engineering, Electromechanical Engineering, Industrial Maintenance, Facilities Management, Civil Engineering, or a related field.
+- `value_text="Bachelor's degree"` · `requirement_level='ambiguous'` · evidencia: > Requirements Bachelor's degree in Business Administration, Accounting, Finance, Human Resources, or related field.
 
 ---
 
-### 4. `workday-Associate--Repair-III_R-118081` — Associate, Repair III
+### 4. `workday-Applications-Support-Sr-Analyst_26963530` — Applications Support Sr Analyst
 
 | veredicto | criterio | revisor | fecha |
 |---|---|---|---|
@@ -104,17 +96,33 @@ citas son literales del texto de la oferta:
 
 **Texto 1 (verbatim):**
 
-> a senior level. Proficient in the various competencies relevant to their job. May act as a lead or mentor to more junior technical or administrative support personnel. Works on assignments that are moderately difficult, requiring judgment in resolving issues or in making recommendations. Generally works independently within established procedures associated with the specific job function. Normally receives little instruction on daily work. Determines methods and procedures on new assignments. May be informal team leader. Two year college degree or equivalent experience and minimum 3 year experience in functional area. OR High School Diploma or equivalent and 5 years functional experience, preferably at a senior level. Has substantial understanding of the job and applies knowledge and skills to complete a wide range of tasks.
+> mation with other support team members and with other technology teams Ability to plan and organize workload Ability to communicate appropriately to relevant stakeholder Proven expertise in supporting high-volume, mission-critical applications that process, manage, and distribute financial data related to securities, pricing, and rates. Education: Bachelor’s/University degree or equivalent experience - Fluent English - Linux - Unix - Oracle - Graphana - Snow ------------------------------------------------------ Job Family Group: Technology ------------------------------------------------------ Job Family: Applications Support ------------------------------------------------------ Time Type: Full time -----------------
 
 **Requisito(s) `education` extraído(s) por el extractor** — la
 citas son literales del texto de la oferta:
 
-- `value_text='High School Diploma'` · `requirement_level='inferred'` · evidencia: > OR High School Diploma or equivalent and 5 years functional experience, preferably at a senior level.
-- `value_text='college degree'` · `requirement_level='required'` · evidencia: > Two year college degree or equivalent experience and minimum 3 year experience in functional area.
+- `value_text='Bachelor'` · `requirement_level='inferred'` · evidencia: > Education: Bachelor’s/University degree or equivalent experience - Fluent English - Linux - Unix - Oracle - Graphana - Snow ------------------------------------------------------ Job Family Group: Technology ------------------------------------------------------ Job Family: Applications Support ------------------------------------------------------ Time Type: Full time ------------------------------------------------------ Most Relevant Skills Please see the requirements listed above.
 
 ---
 
-### 5. `workday-Buyer-Planner-Sr_31163601` — Buyer Planner Sr
+### 5. `workday-Audience-Management_26999789` — Audience Management
+
+| veredicto | criterio | revisor | fecha |
+|---|---|---|---|
+|   |   |   |   |
+
+**Texto 1 (verbatim):**
+
+> tal marketing and vendor management preferred. Acumen working in a technical environment to solve business related problems. Experience analyzing marketing efforts, including dashboard reporting and MIS. Optimization experience a plus. Salesforce Marketing Cloud experience a plus. Digital Marketing and Email Deployment experience a plus Education: Bachelors/University degree or equivalent experience ------------------------------------------------------ Job Family Group: Marketing ------------------------------------------------------ Job Family: Marketing Program Management ------------------------------------------------------ Time Type: Full time ------------------------------------------------------ Most Relevant
+
+**Requisito(s) `education` extraído(s) por el extractor** — la
+citas son literales del texto de la oferta:
+
+- `value_text='University degree'` · `requirement_level='preferred'` · evidencia: > Digital Marketing and Email Deployment experience a plus Education: Bachelors/University degree or equivalent experience ------------------------------------------------------ Job Family Group: Marketing ------------------------------------------------------ Job Family: Marketing Program Management ------------------------------------------------------ Time Type: Full time ------------------------------------------------------ Most Relevant Skills Please see the requirements listed above.
+
+---
+
+### 6. `workday-Buyer-Planner-Sr_31163601` — Buyer Planner Sr
 
 | veredicto | criterio | revisor | fecha |
 |---|---|---|---|
@@ -131,7 +139,7 @@ citas son literales del texto de la oferta:
 
 ---
 
-### 6. `workday-Cardiac-Specialist-II_R18282-1` — Cardiac Specialist II
+### 7. `workday-Cardiac-Specialist-II_R18282-1` — Cardiac Specialist II
 
 | veredicto | criterio | revisor | fecha |
 |---|---|---|---|
@@ -148,7 +156,7 @@ citas son literales del texto de la oferta:
 
 ---
 
-### 7. `workday-Clinical-Project-Manager_R18034-1` — Clinical Project Manager
+### 8. `workday-Clinical-Project-Manager_R18034-1` — Clinical Project Manager
 
 | veredicto | criterio | revisor | fecha |
 |---|---|---|---|
@@ -169,7 +177,7 @@ citas son literales del texto de la oferta:
 
 ---
 
-### 8. `workday-Creative-Execution-Manager--CrM-_261002442` — Creative Execution Manager (CrM)
+### 9. `workday-Creative-Execution-Manager--CrM-_261002442` — Creative Execution Manager (CrM)
 
 | veredicto | criterio | revisor | fecha |
 |---|---|---|---|
@@ -186,7 +194,7 @@ citas son literales del texto de la oferta:
 
 ---
 
-### 9. `workday-Credit---Collections-Specialist--2_R232432` — Credit & Collections Specialist
+### 10. `workday-Credit---Collections-Specialist--2_R232432` — Credit & Collections Specialist
 
 | veredicto | criterio | revisor | fecha |
 |---|---|---|---|
@@ -203,7 +211,63 @@ citas son literales del texto de la oferta:
 
 ---
 
-### 10. `workday-HPE---Professional-Sales-HIT--Compute-and-Hybrid-Cloud-_R-116879` — HPE - Professional Sales HIT (Compute and Hybrid Cloud)
+### 11. `workday-Datacenter-Engineer--L3-ERT_1212932-2` — Datacenter Engineer- L3/ERT
+
+| veredicto | criterio | revisor | fecha |
+|---|---|---|---|
+|   |   |   |   |
+
+**Texto 1 (verbatim):**
+
+> ssue resolution documents. Required to communicate effectively with Technical and Non-Technical stakeholders and should have the ability to drive the conversation/discussion. Must be able to interact with colleagues from different countries and backgrounds (own team, members of L1 and L2, other support functions, and Engineering teams). Education: Bachelor's or Master’s degree in Mechanical, Electrical, Computer Science, or equivalent. Experience: 4+ Years’ experience in the Networking field with a minimum of 3 years supporting Data Center Technologies. What you need to bring: Data Networking technologies including Routing, Switching, and Network architecture and management. Working knowledge and understanding of Spine
+
+**Texto 2 (verbatim):**
+
+> ssue resolution documents. Required to communicate effectively with Technical and Non-Technical stakeholders and should have the ability to drive the conversation/discussion. Must be able to interact with colleagues from different countries and backgrounds (own team, members of L1 and L2, other support functions, and Engineering teams). Education: Bachelor's or Master’s degree in Mechanical, Electrical, Computer Science, or equivalent. Experience: 4+ Years’ experience in the Networking field with a minimum of 3 years supporting Data Center Technologies. What you need to bring: Data Networking technologies including Routing, Switching, and Network architecture and management. Working knowledge and understanding of Spine
+
+**Requisito(s) `education` extraído(s) por el extractor** — la
+citas son literales del texto de la oferta:
+
+- `value_text="Bachelor's"` · `requirement_level='inferred'` · evidencia: > Education: Bachelor's or Master’s degree in Mechanical, Electrical, Computer Science, or equivalent.
+- `value_text="Bachelor's"` · `requirement_level='inferred'` · evidencia: > Education: Bachelor's or Master’s degree in Mechanical, Electrical, Computer Science, or equivalent.
+
+---
+
+### 12. `workday-Datacenter-Engineer--L3-ERT_1212933-2` — Datacenter Engineer- L3/ERT
+
+| veredicto | criterio | revisor | fecha |
+|---|---|---|---|
+|   |   |   |   |
+
+**Texto 1 (verbatim):**
+
+> ssue resolution documents. Required to communicate effectively with Technical and Non-Technical stakeholders and should have the ability to drive the conversation/discussion. Must be able to interact with colleagues from different countries and backgrounds (own team, members of L1 and L2, other support functions, and Engineering teams). Education: Bachelor's or Master’s degree in Mechanical, Electrical, Computer Science, or equivalent. Experience: 4+ Years’ experience in the Networking field with a minimum of 3 years supporting Data Center Technologies. What you need to bring: Data Networking technologies including Routing, Switching, and Network architecture and management. Working knowledge and understanding of Spine
+
+**Requisito(s) `education` extraído(s) por el extractor** — la
+citas son literales del texto de la oferta:
+
+- `value_text="Bachelor's"` · `requirement_level='inferred'` · evidencia: > Education: Bachelor's or Master’s degree in Mechanical, Electrical, Computer Science, or equivalent.
+
+---
+
+### 13. `workday-Fire-Protection-Project-Development-Specialist_WD30282840` — Fire Protection Project Development Specialist
+
+| veredicto | criterio | revisor | fecha |
+|---|---|---|---|
+|   |   |   |   |
+
+**Texto 1 (verbatim):**
+
+> You will use facts, candor, and practical problem solving to improve scopes, estimates, and handoffs. You will improve every day through disciplined follow-up and continuous learning, bringing lessons from each project into the next one. You will win as one team by building trust across sales, engineering, operations, and the field. Qualifications Bachelor’s degree in Engineering, Construction, Business, or a related technical field, or equivalent experience. Experience supporting fire protection, fire alarm, sprinkler, suppression, or related technical project development work. Ability to read and interpret drawings, specifications, scope documents, and customer requirements. Strong communication and coordi
+
+**Requisito(s) `education` extraído(s) por el extractor** — la
+citas son literales del texto de la oferta:
+
+- `value_text='Bachelor'` · `requirement_level='ambiguous'` · evidencia: > Qualifications Bachelor’s degree in Engineering, Construction, Business, or a related technical field, or equivalent experience.
+
+---
+
+### 14. `workday-HPE---Professional-Sales-HIT--Compute-and-Hybrid-Cloud-_R-116879` — HPE - Professional Sales HIT (Compute and Hybrid Cloud)
 
 | veredicto | criterio | revisor | fecha |
 |---|---|---|---|
@@ -220,7 +284,58 @@ citas son literales del texto de la oferta:
 
 ---
 
-### 11. `workday-Instructional-Designer_R17971` — Instructional Designer – Hybrid
+### 15. `workday-HR-Generalist-Senior---Global-Discipline-Delivery_261004191` — HR Generalist Senior - Global Discipline Delivery
+
+| veredicto | criterio | revisor | fecha |
+|---|---|---|---|
+|   |   |   |   |
+
+**Texto 1 (verbatim):**
+
+> skills • Self-motivated and detail oriented • Proven organization and time management skills • Demonstrated problem-solving and decision-making skills • Analytical skills • Experience working with remote locations • Working knowledge of HR functions and applicable Employment laws • Working knowledge of industry standards and practices Education: • Bachelor’s degree/University degree or equivalent experience English advanced ------------------------------------------------------ Job Family Group: Human Resources ------------------------------------------------------ Job Family: HR Advisors & Generalist ------------------------------------------------------ Time Type: Full time --------------------------------------------------
+
+**Requisito(s) `education` extraído(s) por el extractor** — la
+citas son literales del texto de la oferta:
+
+- `value_text='Bachelor'` · `requirement_level='inferred'` · evidencia: > Qualifications: • 5-8 years of relevant experience • Experience in Human Resources, employee relations or related field • Proficient in Microsoft Office and Human Resources Management Systems • Ability to work unsupervised and adjust priorities quickly as circumstances dictate • Consistently demonstrates clear and concise written and verbal communication skills • Self-motivated and detail oriented • Proven organization and time management skills • Demonstrated problem-solving and decision-making skills • Analytical skills • Experience working with remote locations • Working knowledge of HR functions and applicable Employment laws • Working knowledge of industry standards and practices Education: • Bachelor’s degree/University degree or equivalent experience English advanced ------------------------------------------------------ Job Family Group: Human Resources ------------------------------------------------------ Job Family: HR Advisors & Generalist ------------------------------------------------------ Time Type: Full time ------------------------------------------------------ Most Relevant Skills Please see the requirements listed above.
+
+---
+
+### 16. `workday-HR-Operations-Support-Lead-Analyst_25848722` — HR Operations Support Lead Analyst (C13) hybrid located in Heredia
+
+| veredicto | criterio | revisor | fecha |
+|---|---|---|---|
+|   |   |   |   |
+
+**Texto 1 (verbatim):**
+
+> cal judgment regarding personal behavior, conduct and business practices, and escalating, managing and reporting control issues with transparency. Qualifications: 5-10 years of experience Advanced English level Experience in developing risk management programs, identifying all significant processes, risks, and assessing key controls and monitoring associated with these significant processes Self-motivated and detail oriented Proven organization and time management skills Demonstrated problem-solving and decision-making skills Consistently demonstrates clear and concise written and verbal communication skills Education: Bachelor’s degree/University degree or equivalent experience Master’s degree preferred This job description provides a high-level review of the types of work performed. Other job-related duties may be assigned as required. ------------------------------------------------------ Job Family Group: Operations - Core ------------------------------------------------------ Job Family: Operations Support --------------------------
+
+**Requisito(s) `education` extraído(s) por el extractor** — la
+citas son literales del texto de la oferta:
+
+- `value_text='Bachelor'` · `requirement_level='preferred'` · evidencia: > Qualifications: 5-10 years of experience Advanced English level Experience in developing risk management programs, identifying all significant processes, risks, and assessing key controls and monitoring associated with these significant processes Self-motivated and detail oriented Proven organization and time management skills Demonstrated problem-solving and decision-making skills Consistently demonstrates clear and concise written and verbal communication skills Education: Bachelor’s degree/University degree or equivalent experience Master’s degree preferred This job description provides a high-level review of the types of work performed.
+
+---
+
+### 17. `workday-IT-Security-Engineer-II_R-01372831` — IT Security Engineer II
+
+| veredicto | criterio | revisor | fecha |
+|---|---|---|---|
+|   |   |   |   |
+
+**Texto 1 (verbatim):**
+
+> on plans developed by risk owners and ensure plans are completed appropriately Perform ad-hoc risk analysis as assigned Perform other duties as assigned REQUIREMENTS 3+ years' experience in risk analysis, information risk management, data privacy, information technology, or equivalent with exposure to cybersecurity and/or information security risk Bachelor's Degree in Risk Management, Information Assurance, Information Security, Cybersecurity, IT, Data Privacy or similar area or equivalent work experience Experience with risk analysis Ability to explain complex risk management topics to a broad audience General understanding of cybersecurity technologies and controls with the ability to bridge the gap betwee
+
+**Requisito(s) `education` extraído(s) por el extractor** — la
+citas son literales del texto de la oferta:
+
+- `value_text="Bachelor's Degree"` · `requirement_level='preferred'` · evidencia: > Key Responsibilities: Providing key input and assistance in the development and implementation of a global cybersecurity risk management program Maintaining and executing the risk management policy throughout the entire risk lifecycle Executing various risk analysis processes within the team including intake and analysis of reported risks, risk measurement, risk response, and ensuring teams are properly managing plans to reduce risk Execute third party security assessments and analyze identified risks to help with strategic decisions around third party management Ensure consistency of security practice and standards across the organization Conduct Information Security assessments including and documenting controls, identifying potential gaps and or inconsistencies and making sound recommendations for improvement and/or mitigation Collaborate on the technical definitions and oversee implementation of security controls and requirements for systems, infrastructure and solutions Carry out information security risk assessments on technology solutions in line with the company risk management program Conduct third-party risk management activities including vendor/supplier assessments and risk analysis Intake and analysis of identified cyber security issues and risks from a variety of sources including security assessments, compliance checks, automated vulnerability systems, and other internally or externally reported risks Complete analyses and reports to develop a comprehensive view of risk across the company Assist and track for accurate risk measurement and response activities, provide necessary information and analysis to help business leaders prioritize risks Review and track action plans developed by risk owners and ensure plans are completed appropriately Perform ad-hoc risk analysis as assigned Perform other duties as assigned REQUIREMENTS 3+ years' experience in risk analysis, information risk management, data privacy, information technology, or equivalent with exposure to cybersecurity and/or information security risk Bachelor's Degree in Risk Management, Information Assurance, Information Security, Cybersecurity, IT, Data Privacy or similar area or equivalent work experience Experience with risk analysis Ability to explain complex risk management topics to a broad audience General understanding of cybersecurity technologies and controls with the ability to bridge the gap between governance and technical concepts Excellent writing skills, with experience as a writer or technical editor is considered a plus Demonstrated ability to complete work with minimal direction and self-identify tasks Excellent written and verbal communication skills with experience presenting to senior leadership Strong interpersonal, organizational, and excellent documentation skills Excellent customer service skills Relevant certifications such as CRISC, CISSP or CISA are considered a plus Understanding of various risk management frameworks such as the NIST Risk Management Framework or Center for Internet Security Risk Assessment Methodology will be considered plus
+
+---
+
+### 18. `workday-Instructional-Designer_R17971` — Instructional Designer – Hybrid
 
 | veredicto | criterio | revisor | fecha |
 |---|---|---|---|
@@ -237,7 +352,24 @@ citas son literales del texto de la oferta:
 
 ---
 
-### 12. `workday-Principal-Cybersecurity-Engineer_R0007423` — Principal Cybersecurity Engineer
+### 19. `workday-Network-Support-Engineer_1211197` — Network Support Engineer
+
+| veredicto | criterio | revisor | fecha |
+|---|---|---|---|
+|   |   |   |   |
+
+**Texto 1 (verbatim):**
+
+> cumentation (White Papers, KB, Troubleshooting Guides, ) for internal and external use Sound documentation of technical support issues using the available tools is an essential element of the role Develop a "Can-Do" attitude and suggest ways to improve the team performance and increase customer's satisfaction Basic Qualifications Higher education (Bachelor or Master degree in electrical engineering or computer science or equivalent ) 3+ years of working experience in a network support role, 2-3 of these years would be spent supporting large IP networks 3+ years supporting customers on site and via phone. Must be able to support complex and high profile customer base. Strong communication skills, including influencin
+
+**Requisito(s) `education` extraído(s) por el extractor** — la
+citas son literales del texto de la oferta:
+
+- `value_text='Bachelor'` · `requirement_level='inferred'` · evidencia: > Work with various technical teams within Juniper Networks and provide input on new products and feature improvements for reliability, availability, and serviceability Work closely with the Service Managers to support them in gaining a good understanding of the technical issues and their resolution, and support them in driving high profile technical escalations Participate in customer conference calls and/or face to face customer meetings to discuss technical issues Develop and maintain skills in his/her core products and technologies, and highlight any need for training as the customers networks evolve Contribute to technical documentation (White Papers, KB, Troubleshooting Guides, ) for internal and external use Sound documentation of technical support issues using the available tools is an essential element of the role Develop a "Can-Do" attitude and suggest ways to improve the team performance and increase customer's satisfaction Basic Qualifications Higher education (Bachelor or Master degree in electrical engineering or computer science or equivalent ) 3+ years of working experience in a network support role, 2-3 of these years would be spent supporting large IP networks 3+ years supporting customers on site and via phone.
+
+---
+
+### 20. `workday-Principal-Cybersecurity-Engineer_R0007423` — Principal Cybersecurity Engineer
 
 | veredicto | criterio | revisor | fecha |
 |---|---|---|---|
@@ -254,7 +386,28 @@ citas son literales del texto de la oferta:
 
 ---
 
-### 13. `workday-Production-Supervisor-I_31163511` — Production Supervisor I
+### 21. `workday-Principal-Engineer--Quality_Req-51750` — Principal Engineer, Quality
+
+| veredicto | criterio | revisor | fecha |
+|---|---|---|---|
+|   |   |   |   |
+
+**Texto 1 (verbatim):**
+
+> for all production processes based on engineering principles; analyze results, make recommendations and develop reports • Train, coach, and guide lower level employees on more complex procedures • Develop technical content of risk management files • Manage Supplier Quality Activities as needed • Other incidental duties What you'll need (Required): Bachelor's degree in engineering or Scientific field, 6 years of experience minimum of experience, including either industry or industry/education or Master's Degree or equivalent in Engineering or Scientific field, 5 years of experience minimum of experience, including either industry or industry/education or Ph.D. or equivalent in Engineering or Scientific field, 2 years of experience minimum of experience, including either industry or industry/education What else we look for (Preferred): • Proven expertise
+
+**Texto 2 (verbatim):**
+
+> olicies and standards that are followed by others • Guides others in resolving basic issues in specialized area based on existing solutions and procedures • Must be able to work in a team environment, including frequent inter-organizational and outside customer contacts • Represents organization in providing solutions to difficult technical issues associated with specific projects • Develops technical solutions to complex problems which require the regular use of creativity • Uses best practices and knowledge of internal or external business issues to improve products/services or processes • Typically resolves complex problems or problems where precedent may not exist • Adhere to all company rules an
+
+**Requisito(s) `education` extraído(s) por el extractor** — la
+citas son literales del texto de la oferta:
+
+- `value_text="Bachelor's degree"` · `requirement_level='ambiguous'` · evidencia: > analyze results, make recommendations and develop reports • Train, coach, and guide lower level employees on more complex procedures • Develop technical content of risk management files • Manage Supplier Quality Activities as needed • Other incidental duties What you'll need (Required): Bachelor's degree in engineering or Scientific field, 6 years of experience minimum of experience, including either industry or industry/education or Master's Degree or equivalent in Engineering or Scientific field, 5 years of experience minimum of experience, including either industry or industry/education or Ph.D.
+
+---
+
+### 22. `workday-Production-Supervisor-I_31163511` — Production Supervisor I
 
 | veredicto | criterio | revisor | fecha |
 |---|---|---|---|
@@ -276,7 +429,7 @@ citas son literales del texto de la oferta:
 
 ---
 
-### 14. `workday-Production-Supervisor-I_31163518` — Production Supervisor I
+### 23. `workday-Production-Supervisor-I_31163518` — Production Supervisor I
 
 | veredicto | criterio | revisor | fecha |
 |---|---|---|---|
@@ -298,7 +451,7 @@ citas son literales del texto de la oferta:
 
 ---
 
-### 15. `workday-Sales-Specialist_R-117581` — Sales Specialist
+### 24. `workday-Sales-Specialist_R-117581` — Sales Specialist
 
 | veredicto | criterio | revisor | fecha |
 |---|---|---|---|
@@ -315,7 +468,7 @@ citas son literales del texto de la oferta:
 
 ---
 
-### 16. `workday-Security-Governance---Compliance-Specialist_2022361-1` — Security Governance & Compliance Specialist
+### 25. `workday-Security-Governance---Compliance-Specialist_2022361-1` — Security Governance & Compliance Specialist
 
 | veredicto | criterio | revisor | fecha |
 |---|---|---|---|
@@ -332,7 +485,7 @@ citas son literales del texto de la oferta:
 
 ---
 
-### 17. `workday-Security-Governance---Compliance-Specialist_2023168-1` — Security Governance & Compliance Specialist
+### 26. `workday-Security-Governance---Compliance-Specialist_2023168-1` — Security Governance & Compliance Specialist
 
 | veredicto | criterio | revisor | fecha |
 |---|---|---|---|
@@ -349,7 +502,7 @@ citas son literales del texto de la oferta:
 
 ---
 
-### 18. `workday-Senior-Client-Services-Executive_R2025-244318` — Senior Client Services Executive
+### 27. `workday-Senior-Client-Services-Executive_R2025-244318` — Senior Client Services Executive
 
 | veredicto | criterio | revisor | fecha |
 |---|---|---|---|
@@ -366,7 +519,41 @@ citas son literales del texto de la oferta:
 
 ---
 
-### 19. `workday-TnF-Manager-Systems---Software_1214477-2` — TnF Manager Systems / Software
+### 28. `workday-SeniorTechnician--Laboratory--Microbiology-_Req-51330` — SeniorTechnician, Laboratory (Microbiology)
+
+| veredicto | criterio | revisor | fecha |
+|---|---|---|---|
+|   |   |   |   |
+
+**Texto 1 (verbatim):**
+
+> ocedures and executing PM (preventative maintenance) per established schedule • Support laboratory investigations and propose recommendations for manager view • Prepare data summaries for laboratory reports or technical studies using existing templates as a model as well as review and approve basic laboratory data • Execute testing or instructions associated to equipment and process validation protocols • May train, coach, and guide lower-level technicians on new procedures, assess work techniques and provide feedback on procedures • Other incidental duties What you’ll need (Required): • Technical or Diploma Degree in Laboratory Science, Mircrobiology Laboratory or Related fields with 3 years of previous experience working in a laboratory Required, or Bachelor's Degree or Equivalent in Chemistry and /or Microbiology Preferred. • Availability to work from Monday to Friday from 8.00 a.m. to 05.00 p.m. What else we look for (preferred): • Good written and verbal communication, interpersonal, and relationship building skills • Able to read, comprehend, write and speak English • Good computer skills, including usage
+
+**Requisito(s) `education` extraído(s) por el extractor** — la
+citas son literales del texto de la oferta:
+
+- `value_text="Bachelor's Degree"` · `requirement_level='ambiguous'` · evidencia: > • Assist in testing validation/revalidation activities for critical systems and equipment under close supervision • May maintain basic equipment by following procedures and executing PM (preventative maintenance) per established schedule • Support laboratory investigations and propose recommendations for manager view • Prepare data summaries for laboratory reports or technical studies using existing templates as a model as well as review and approve basic laboratory data • Execute testing or instructions associated to equipment and process validation protocols • May train, coach, and guide lower-level technicians on new procedures, assess work techniques and provide feedback on procedures • Other incidental duties What you’ll need (Required): • Technical or Diploma Degree in Laboratory Science, Mircrobiology Laboratory or Related fields with 3 years of previous experience working in a laboratory Required, or Bachelor's Degree or Equivalent in Chemistry and /or Microbiology Preferred.
+
+---
+
+### 29. `workday-Team-Leader--Customer-Service_R-01368730-1` — Team Leader Customer Service – Trilingual
+
+| veredicto | criterio | revisor | fecha |
+|---|---|---|---|
+|   |   |   |   |
+
+**Texto 1 (verbatim):**
+
+> initiative and collaborate within a team. Ability to handle confidential and/or proprietary information. Excellent analytical, presentation, written, and oral communication skills. Demonstrated skills in people management and development. Experience in supporting projects and interfacing effectively with internal and external customers. Education: Bachelor’s degree from a four-year college or university, or equivalent work experience. Working Conditions: Typical office environment physical demands. Some travel may be required. Commitment to hiring a diverse and inclusive workforce. EEO/Affirmative Action Employer. At Thermo Fisher Scientific, each one of our 100,000 outstanding individuals has an exceptional story to share. Join us and contribute
+
+**Requisito(s) `education` extraído(s) por el extractor** — la
+citas son literales del texto de la oferta:
+
+- `value_text='Bachelor'` · `requirement_level='inferred'` · evidencia: > Education: Bachelor’s degree from a four-year college or university, or equivalent work experience.
+
+---
+
+### 30. `workday-TnF-Manager-Systems---Software_1214477-2` — TnF Manager Systems / Software
 
 | veredicto | criterio | revisor | fecha |
 |---|---|---|---|
