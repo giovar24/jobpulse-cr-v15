@@ -154,7 +154,18 @@ def texto_de(job_id: str) -> str:
     job = conn.execute(
         "SELECT requirements_raw, description_raw FROM jobs WHERE job_id = ?", (job_id,)
     ).fetchone()
+    if job is None:
+        # El aviso ya no esta en la BD (purgado en una limpieza): las secciones
+        # dinamicas (4/5) nunca lo piden porque hacen JOIN con jobs; solo la
+        # muestra historica de la seccion 6 puede referenciarlo.
+        return ""
     return "\n".join(x for x in (job["requirements_raw"], job["description_raw"]) if x)
+
+
+def existe_en_bd(job_id: str) -> bool:
+    return conn.execute(
+        "SELECT 1 FROM jobs WHERE job_id = ?", (job_id,)
+    ).fetchone() is not None
 
 
 def requisitos_de(job_id: str):
@@ -395,40 +406,65 @@ L.append("")
 L.append("| # | job_id | veredicto manual | por qué | estado final | motivo final |")
 L.append("|---|---|---|---|---|---|")
 aciertos = 0
-bloqueos = 0
+purgados = 0
 for etiqueta, job_id, veredicto, porque in MEDICION:
     fila = conn.execute(
         "SELECT estado, motivo FROM job_match WHERE corrida_id=? AND job_id=?",
         (vigente, job_id)).fetchone()
-    estado_final = fila["estado"] if fila else "?"
-    motivo_final = fila["motivo"] if fila else "?"
-    if veredicto == "BLOQUEO":
-        bloqueos += 1
-        ok = estado_final == "descartada"
+    if not existe_en_bd(job_id):
+        # Purgado en una limpieza posterior a la corrida medida: la muestra
+        # historica lo conserva, pero ya no es verificable contra la BD.
+        purgados += 1
+        estado_final = motivo_final = "purgado"
     else:
-        ok = estado_final != "descartada"
-    if ok:
+        estado_final = fila["estado"] if fila else "?"
+        motivo_final = fila["motivo"] if fila else "?"
+    if estado_final == "purgado":
+        L.append("| %s | `%s` | %s | %s | %s | %s |"
+                 % (etiqueta, job_id, veredicto, porque, estado_final, motivo_final))
+        continue
+    if veredicto == "BLOQUEO":
+        ok_caso = estado_final == "descartada"
+    else:
+        ok_caso = estado_final != "descartada"
+    if ok_caso:
         aciertos += 1
     L.append("| %s | `%s` | %s | %s | %s | `%s` |"
              % (etiqueta, job_id, veredicto, porque, estado_final, motivo_final))
+verificables = len(MEDICION) - purgados
 L.append("")
-L.append("**Resultado: %d de 43 coinciden con el veredicto manual.**" % aciertos)
+if purgados:
+    L.append("> %d de los %d avisos de la muestra ya NO están en la BD actual"
+             " (purgados por una limpieza posterior): se listan con"
+             " `purgado` y no entran en el cómputo." % (purgados, len(MEDICION)))
+    L.append("")
+L.append("**Resultado: %d de %d verificables coinciden con el veredicto manual.**"
+         % (aciertos, verificables))
 L.append("")
 L.append("- Estrato A: 12 de 13 eran bloqueos reales; **1 falso descarte**")
 L.append("  (`workday-Accounts-Payable-Representative_J-020440`: \"… and 1+ year of")
 L.append("  relevant experience; **alternatively, 3+ years of relevant professional")
 L.append("  experience**\") → corregido por la regla.")
+bloqueos_historicos = sum(1 for _, _, veredicto, _ in MEDICION if veredicto == "BLOQUEO")
 L.append("- Estrato B: 14 de 30 eran bloqueos reales que el motor NO detectaba")
 L.append("  (falsos negativos) → promovidos con frase literal.")
-L.append("- Proporción de bloqueos reales en la muestra: **%d de 43 (%.0f%%)**; la")
+L.append("- Proporción de bloqueos reales en la muestra: **%d de %d (%.0f%%)**; la"
+         % (bloqueos_historicos, len(MEDICION),
+            100 * bloqueos_historicos / len(MEDICION)))
 L.append("  muestra inicial daba 5 de 10 (50%%). La proporción **se mantiene o")
 L.append("  sube** → la regla NO estaba sobreajustada.")
-L.append("- La regla nueva acierta en **%d de 43** casos: donde el texto obliga")
-L.append("  descarta y donde el texto no obliga deja la vacante para revisión.")
+L.append("- La regla nueva acierta en **%d de %d** casos verificables: donde el"
+         % (aciertos, verificables))
+L.append("  texto obliga descarta y donde el texto no obliga deja la vacante para")
+L.append("  revisión.")
 L.append("")
 L.append("### 6.1. Frase literal de cada caso")
 L.append("")
 for etiqueta, job_id, veredicto, porque in MEDICION:
+    if not existe_en_bd(job_id):
+        L.append("- **%s `%s`** — %s" % (etiqueta, job_id, porque))
+        L.append("  > (purgado en la limpieza 2026-10-31: sin frase verificable)")
+        continue
     texto = texto_de(job_id)
     conf = matching.confirmar_requisito_universitario(texto)
     L.append("- **%s `%s`** — %s" % (etiqueta, job_id, porque))

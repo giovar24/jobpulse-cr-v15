@@ -110,11 +110,23 @@ def texto_de(job_id: str) -> str:
     fila = conn.execute(
         "SELECT requirements_raw, description_raw FROM jobs WHERE job_id = ?", (job_id,)
     ).fetchone()
+    if fila is None:
+        # El aviso ya no esta en la BD (purgado): sin texto que verificar.
+        return ""
     return "\n".join(x for x in (fila["requirements_raw"], fila["description_raw"]) if x)
+
+
+def existe_en_bd(job_id: str) -> bool:
+    return conn.execute("SELECT 1 FROM jobs WHERE job_id=?", (job_id,)).fetchone() is not None
 
 
 def comprobar(job_id: str, estado_esperado: str | None = None) -> bool:
     global ok
+    if not existe_en_bd(job_id):
+        # Purgado en una limpieza posterior: no es un fallo del documento,
+        # simplemente ya no es verificable contra la corrida vigente.
+        print("   ~(purgado, omitido) %s" % job_id)
+        return True
     fila = conn.execute(
         "SELECT estado, motivo FROM job_match WHERE corrida_id=? AND job_id=?",
         (vigente, job_id)).fetchone()
@@ -184,6 +196,9 @@ for job_id in PROMOVIDAS_13:
     comprobar(job_id)
 print("  documentadas con frase literal: %d / %d" % (ok - antes, len(PROMOVIDAS_13)))
 for job_id in PROMOVIDAS_13:
+    if not existe_en_bd(job_id):
+        print("   %-64s (purgado)" % job_id[:64])
+        continue
     fila = conn.execute(
         "SELECT estado, motivo FROM job_match WHERE corrida_id=? AND job_id=?",
         (vigente, job_id)).fetchone()

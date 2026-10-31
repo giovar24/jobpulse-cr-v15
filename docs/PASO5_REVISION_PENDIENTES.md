@@ -1,4 +1,4 @@
-# Paso 5 — HOJA DE REVISIÓN PENDIENTE (corrida `20261030_174949`)
+# Paso 5 — HOJA DE REVISIÓN PENDIENTE (corrida `20261031_114039`)
 
 > Documento GENERADO por `generar_revision_pendientes.py` — contiene
 > **solo textos literales de la BD, sin ningún veredicto**.
@@ -54,7 +54,24 @@ citas son literales del texto de la oferta:
 
 ---
 
-### 2. `workday-Accounts-Payable-Representative_J-020440` — Accounts Payable Representative
+### 2. `recruitee-transperfect-2770002` — Client Service Executive
+
+| veredicto | criterio | revisor | fecha |
+|---|---|---|---|
+|   |   |   |   |
+
+**Texto 1 (verbatim):**
+
+> ve time management and ability to multi-task in a fast-paced environment · Superior written and spoken communication skills in English · Ability to work well with people from a variety of different backgrounds and cultures, work independently and as part of a team · Strong MS Office/computer skills Required Experience and Qualifications: · Minimum Bachelor’s degree or its equivalent · Experience in customer service · Experience coordinating projects and assignment of resource
+
+**Requisito(s) `education` extraído(s) por el extractor** — la
+citas son literales del texto de la oferta:
+
+- `value_text='Bachelor'` · `requirement_level='required'` · evidencia: > Description: · Respond to client requests for new project initiatives through our centralized technology · Collaborate with various members of the production team to assess the scope of work and produce cost and timeline estimates for translation projects and requests · Initiate all project related work by providing detailed budget, schedule and instructions to the project team and by anticipating pitfalls or potential roadblocks to successful completion · Ensure that any pitfalls are addressed and resolved with the client before being submitted to the production team · Where applicable, initiate some project specifics to set the production team/individual project up for success · Take a proactive role in learning about clients’ industry, business needs and company culture, educating the project team, and providing a high level of service · Monitor and communicate project progress, ensure strict adherence to deadlines and budgets and ultimately produce high quality deliverables · Serve as the central point of contact for and liaison between external client contact and internal production staff · Set and fulfill client expectations · Comply with all ISO regulations, processes and procedures · Potentially troubleshoot problem projects · Understand and abide by individual project instructions and effectively communicate to the production team · Investigate client complaints where applicable · Discuss issues with clients and production staff and creatively problem solve to alleviate issues · Help with training of more junior team members · Run meetings with production to discuss client feedback, concerns or issues · Hold regular meetings with the client to discuss any concerns and overall satisfaction with TP · Participate in global client services meeting · Handle challenging, demanding and complex projects, taking anything high profile, urgent or critical · Complete any other tasks that are deemed appropriate for the role and assigned by a manager/supervisor Required Skills: · Effective time management and ability to multi-task in a fast-paced environment · Superior written and spoken communication skills in English · Ability to work well with people from a variety of different backgrounds and cultures, work independently and as part of a team · Strong MS Office/computer skills Required Experience and Qualifications: · Minimum Bachelor’s degree or its equivalent · Experience in customer service · Experience coordinating projects and assignment of resource
+
+---
+
+### 3. `workday-Accounts-Payable-Representative_J-020440` — Accounts Payable Representative
 
 | veredicto | criterio | revisor | fecha |
 |---|---|---|---|
@@ -71,7 +88,7 @@ citas son literales del texto de la oferta:
 
 ---
 
-### 3. `workday-Analyst-Payroll_R273170` — Analyst Payroll
+### 4. `workday-Analyst-Payroll_R273170` — Analyst Payroll
 
 | veredicto | criterio | revisor | fecha |
 |---|---|---|---|
@@ -85,23 +102,6 @@ citas son literales del texto de la oferta:
 citas son literales del texto de la oferta:
 
 - `value_text="Bachelor's degree"` · `requirement_level='ambiguous'` · evidencia: > Requirements Bachelor's degree in Business Administration, Accounting, Finance, Human Resources, or related field.
-
----
-
-### 4. `workday-Applications-Support-Sr-Analyst_26963530` — Applications Support Sr Analyst
-
-| veredicto | criterio | revisor | fecha |
-|---|---|---|---|
-|   |   |   |   |
-
-**Texto 1 (verbatim):**
-
-> mation with other support team members and with other technology teams Ability to plan and organize workload Ability to communicate appropriately to relevant stakeholder Proven expertise in supporting high-volume, mission-critical applications that process, manage, and distribute financial data related to securities, pricing, and rates. Education: Bachelor’s/University degree or equivalent experience - Fluent English - Linux - Unix - Oracle - Graphana - Snow ------------------------------------------------------ Job Family Group: Technology ------------------------------------------------------ Job Family: Applications Support ------------------------------------------------------ Time Type: Full time -----------------
-
-**Requisito(s) `education` extraído(s) por el extractor** — la
-citas son literales del texto de la oferta:
-
-- `value_text='Bachelor'` · `requirement_level='inferred'` · evidencia: > Education: Bachelor’s/University degree or equivalent experience - Fluent English - Linux - Unix - Oracle - Graphana - Snow ------------------------------------------------------ Job Family Group: Technology ------------------------------------------------------ Job Family: Applications Support ------------------------------------------------------ Time Type: Full time ------------------------------------------------------ Most Relevant Skills Please see the requirements listed above.
 
 ---
 
@@ -177,7 +177,24 @@ citas son literales del texto de la oferta:
 
 ---
 
-### 9. `workday-Creative-Execution-Manager--CrM-_261002442` — Creative Execution Manager (CrM)
+### 9. `workday-Commercial-Analyst_R-01372758` — Commercial Analyst
+
+| veredicto | criterio | revisor | fecha |
+|---|---|---|---|
+|   |   |   |   |
+
+**Texto 1 (verbatim):**
+
+> ficiency in Microsoft Excel, Word and PowerPoint for analysis and presentation of data. Expect intensive use of Excel and advanced formulas daily. Confidence to handle critical information and make sound recommendations. Strong analytical and quantitative skills with proven understanding of financial budgeting principles. Education and Experience: Bachelor's degree or equivalent experience and relevant formal academic / vocational qualification. Previous experience that provides the knowledge, skills, and abilities to perform the job (comparable to 2 years). Meeting requirements for the role may be possible through a combination of education, training, and relevant experience. Working Environment: We value t
+
+**Requisito(s) `education` extraído(s) por el extractor** — la
+citas son literales del texto de la oferta:
+
+- `value_text="Bachelor's degree"` · `requirement_level='ambiguous'` · evidencia: > Education and Experience: Bachelor's degree or equivalent experience and relevant formal academic / vocational qualification.
+
+---
+
+### 10. `workday-Creative-Execution-Manager--CrM-_261002442` — Creative Execution Manager (CrM)
 
 | veredicto | criterio | revisor | fecha |
 |---|---|---|---|
@@ -194,7 +211,7 @@ citas son literales del texto de la oferta:
 
 ---
 
-### 10. `workday-Credit---Collections-Specialist--2_R232432` — Credit & Collections Specialist
+### 11. `workday-Credit---Collections-Specialist--2_R232432` — Credit & Collections Specialist
 
 | veredicto | criterio | revisor | fecha |
 |---|---|---|---|
@@ -211,7 +228,7 @@ citas son literales del texto de la oferta:
 
 ---
 
-### 11. `workday-Datacenter-Engineer--L3-ERT_1212932-2` — Datacenter Engineer- L3/ERT
+### 12. `workday-Datacenter-Engineer--L3-ERT_1212932-2` — Datacenter Engineer- L3/ERT
 
 | veredicto | criterio | revisor | fecha |
 |---|---|---|---|
@@ -233,7 +250,7 @@ citas son literales del texto de la oferta:
 
 ---
 
-### 12. `workday-Datacenter-Engineer--L3-ERT_1212933-2` — Datacenter Engineer- L3/ERT
+### 13. `workday-Datacenter-Engineer--L3-ERT_1212933-2` — Datacenter Engineer- L3/ERT
 
 | veredicto | criterio | revisor | fecha |
 |---|---|---|---|
@@ -250,7 +267,7 @@ citas son literales del texto de la oferta:
 
 ---
 
-### 13. `workday-Fire-Protection-Project-Development-Specialist_WD30282840` — Fire Protection Project Development Specialist
+### 14. `workday-Fire-Protection-Project-Development-Specialist_WD30282840` — Fire Protection Project Development Specialist
 
 | veredicto | criterio | revisor | fecha |
 |---|---|---|---|
@@ -267,7 +284,7 @@ citas son literales del texto de la oferta:
 
 ---
 
-### 14. `workday-HPE---Professional-Sales-HIT--Compute-and-Hybrid-Cloud-_R-116879` — HPE - Professional Sales HIT (Compute and Hybrid Cloud)
+### 15. `workday-HR-Benefits-Operations-Analyst_261003280` — HR Benefits Operations Analyst
 
 | veredicto | criterio | revisor | fecha |
 |---|---|---|---|
@@ -275,16 +292,16 @@ citas son literales del texto de la oferta:
 
 **Texto 1 (verbatim):**
 
-> rocedures and practices to determine appropriate action. Receives moderate level of guidance. Work is reviewed for soundness of judgment and overall accuracy. General proficiency with various tools, systems, and procedures required to accomplish the job. May need to consult with Senior/Specialist staff members on some technical issues. A four year college degree (or additional experience in a related field) and 3 years functional experience including a minimum 1 year position specific experience.
+> years relevant experience Proficient in Microsoft Office with an emphasis on MS Excel Ability to meet deadlines while dealing with multiple priorities. Proven organization and time management skills Demonstrated problem-solving and decision-making skills Consistently demonstrates clear and concise written and verbal communication skills Education: Bachelor’s degree/University degree or equivalent experience This job description provides a high-level review of the types of work performed. Other job-related duties may be assigned as required. Experience in HR roles Advanced English Language required. Portuguese is a plus. Knowledge in Workday, Service Now (desirable) ------------------------------------------------------ Job Fa
 
 **Requisito(s) `education` extraído(s) por el extractor** — la
 citas son literales del texto de la oferta:
 
-- `value_text='college degree'` · `requirement_level='required'` · evidencia: > A four year college degree (or additional experience in a related field) and 3 years functional experience including a minimum 1 year position specific experience.
+- `value_text='Bachelor'` · `requirement_level='inferred'` · evidencia: > Proven organization and time management skills Demonstrated problem-solving and decision-making skills Consistently demonstrates clear and concise written and verbal communication skills Education: Bachelor’s degree/University degree or equivalent experience This job description provides a high-level review of the types of work performed.
 
 ---
 
-### 15. `workday-HR-Generalist-Senior---Global-Discipline-Delivery_261004191` — HR Generalist Senior - Global Discipline Delivery
+### 16. `workday-HR-Generalist-Senior---Global-Discipline-Delivery_261004191` — HR Generalist Senior - Global Discipline Delivery
 
 | veredicto | criterio | revisor | fecha |
 |---|---|---|---|
@@ -301,7 +318,7 @@ citas son literales del texto de la oferta:
 
 ---
 
-### 16. `workday-HR-Operations-Support-Lead-Analyst_25848722` — HR Operations Support Lead Analyst (C13) hybrid located in Heredia
+### 17. `workday-HR-Operations-Support-Lead-Analyst_25848722` — HR Operations Support Lead Analyst (C13) hybrid located in Heredia
 
 | veredicto | criterio | revisor | fecha |
 |---|---|---|---|
@@ -318,7 +335,7 @@ citas son literales del texto de la oferta:
 
 ---
 
-### 17. `workday-IT-Security-Engineer-II_R-01372831` — IT Security Engineer II
+### 18. `workday-IT-Security-Engineer-II_R-01372831` — IT Security Engineer II
 
 | veredicto | criterio | revisor | fecha |
 |---|---|---|---|
@@ -335,7 +352,7 @@ citas son literales del texto de la oferta:
 
 ---
 
-### 18. `workday-Instructional-Designer_R17971` — Instructional Designer – Hybrid
+### 19. `workday-Instructional-Designer_R17971` — Instructional Designer – Hybrid
 
 | veredicto | criterio | revisor | fecha |
 |---|---|---|---|
@@ -352,7 +369,7 @@ citas son literales del texto de la oferta:
 
 ---
 
-### 19. `workday-Network-Support-Engineer_1211197` — Network Support Engineer
+### 20. `workday-Network-Support-Engineer_1211197` — Network Support Engineer
 
 | veredicto | criterio | revisor | fecha |
 |---|---|---|---|
@@ -369,7 +386,7 @@ citas son literales del texto de la oferta:
 
 ---
 
-### 20. `workday-Principal-Cybersecurity-Engineer_R0007423` — Principal Cybersecurity Engineer
+### 21. `workday-Principal-Cybersecurity-Engineer_R0007423` — Principal Cybersecurity Engineer
 
 | veredicto | criterio | revisor | fecha |
 |---|---|---|---|
@@ -386,7 +403,7 @@ citas son literales del texto de la oferta:
 
 ---
 
-### 21. `workday-Principal-Engineer--Quality_Req-51750` — Principal Engineer, Quality
+### 22. `workday-Principal-Engineer--Quality_Req-51750` — Principal Engineer, Quality
 
 | veredicto | criterio | revisor | fecha |
 |---|---|---|---|
@@ -407,7 +424,7 @@ citas son literales del texto de la oferta:
 
 ---
 
-### 22. `workday-Production-Supervisor-I_31163511` — Production Supervisor I
+### 23. `workday-Production-Supervisor-I_31163511` — Production Supervisor I
 
 | veredicto | criterio | revisor | fecha |
 |---|---|---|---|
@@ -429,7 +446,7 @@ citas son literales del texto de la oferta:
 
 ---
 
-### 23. `workday-Production-Supervisor-I_31163518` — Production Supervisor I
+### 24. `workday-Production-Supervisor-I_31163518` — Production Supervisor I
 
 | veredicto | criterio | revisor | fecha |
 |---|---|---|---|
@@ -451,7 +468,7 @@ citas son literales del texto de la oferta:
 
 ---
 
-### 24. `workday-Sales-Specialist_R-117581` — Sales Specialist
+### 25. `workday-Sales-Specialist_R-117581` — Sales Specialist
 
 | veredicto | criterio | revisor | fecha |
 |---|---|---|---|
@@ -468,7 +485,7 @@ citas son literales del texto de la oferta:
 
 ---
 
-### 25. `workday-Security-Governance---Compliance-Specialist_2022361-1` — Security Governance & Compliance Specialist
+### 26. `workday-Security-Governance---Compliance-Specialist_2022361-1` — Security Governance & Compliance Specialist
 
 | veredicto | criterio | revisor | fecha |
 |---|---|---|---|
@@ -485,7 +502,7 @@ citas son literales del texto de la oferta:
 
 ---
 
-### 26. `workday-Security-Governance---Compliance-Specialist_2023168-1` — Security Governance & Compliance Specialist
+### 27. `workday-Security-Governance---Compliance-Specialist_2023168-1` — Security Governance & Compliance Specialist
 
 | veredicto | criterio | revisor | fecha |
 |---|---|---|---|
@@ -502,7 +519,7 @@ citas son literales del texto de la oferta:
 
 ---
 
-### 27. `workday-Senior-Client-Services-Executive_R2025-244318` — Senior Client Services Executive
+### 28. `workday-Senior-Client-Services-Executive_R2025-244318` — Senior Client Services Executive
 
 | veredicto | criterio | revisor | fecha |
 |---|---|---|---|
@@ -519,7 +536,7 @@ citas son literales del texto de la oferta:
 
 ---
 
-### 28. `workday-SeniorTechnician--Laboratory--Microbiology-_Req-51330` — SeniorTechnician, Laboratory (Microbiology)
+### 29. `workday-SeniorTechnician--Laboratory--Microbiology-_Req-51330` — SeniorTechnician, Laboratory (Microbiology)
 
 | veredicto | criterio | revisor | fecha |
 |---|---|---|---|
@@ -536,7 +553,7 @@ citas son literales del texto de la oferta:
 
 ---
 
-### 29. `workday-Team-Leader--Customer-Service_R-01368730-1` — Team Leader Customer Service – Trilingual
+### 30. `workday-SharePoint-Application-Developer_R55630-1` — SharePoint Application Developer
 
 | veredicto | criterio | revisor | fecha |
 |---|---|---|---|
@@ -544,32 +561,11 @@ citas son literales del texto de la oferta:
 
 **Texto 1 (verbatim):**
 
-> initiative and collaborate within a team. Ability to handle confidential and/or proprietary information. Excellent analytical, presentation, written, and oral communication skills. Demonstrated skills in people management and development. Experience in supporting projects and interfacing effectively with internal and external customers. Education: Bachelor’s degree from a four-year college or university, or equivalent work experience. Working Conditions: Typical office environment physical demands. Some travel may be required. Commitment to hiring a diverse and inclusive workforce. EEO/Affirmative Action Employer. At Thermo Fisher Scientific, each one of our 100,000 outstanding individuals has an exceptional story to share. Join us and contribute
+> resolve SharePoint-related issues. Support migrations and modernization from legacy SharePoint environments. Establish development standards and documentation. Collaborate with business users, IT teams, and vendors to deliver solutions. Performs other additional duties as assigned. What We’re Looking For: 3 to 5 Years of relevant work experience. Bachelor's Degree with Computer Science / MIS field of study required. Core SharePoint Skills SharePoint Online SharePoint Framework (SPFx) SharePoint site architecture Lists, libraries, and content types Permissions and security management Development Skills JavaScript (ES6+) TypeScript HTML5 and CSS3 React (most common with SPFx) REST APIs Microsoft Graph API JSON formatting for SharePoint lists and columns XML & CAML C# for CSOM in VS development (legacy but still used) Client-side web parts and extensions PowerShell (PnP) Microsoft Power Platform Power Automate Power Apps Document management Managed metadata and taxonomy Other Education/Certifications: Advanced study preferred (e.g., Master’s in Information Systems/Software Engineering) or equivalent hands-on experience with Microsoft 365 development. Microsoft Certified: Power Platform Developer Associate (PL-400) SharePoint Online architecture and governance: permissions/security management, managed metadata/taxonomy, content types, and PnP PowerShell; migration/modernization experience Working Conditions: Professional environment (Hybrid). Occasional non-standard work hours or overtime as business requires. Represents the company to the customer
 
 **Requisito(s) `education` extraído(s) por el extractor** — la
 citas son literales del texto de la oferta:
 
-- `value_text='Bachelor'` · `requirement_level='inferred'` · evidencia: > Education: Bachelor’s degree from a four-year college or university, or equivalent work experience.
-
----
-
-### 30. `workday-TnF-Manager-Systems---Software_1214477-2` — TnF Manager Systems / Software
-
-| veredicto | criterio | revisor | fecha |
-|---|---|---|---|
-|   |   |   |   |
-
-**Texto 1 (verbatim):**
-
-> nd infrastructure procurement, vendor coordination, and resource justification. Reports project status, risks, and business impact to senior management and stakeholders. Encourages continuous improvement, innovation, and cost savings through in-house solutions that reduce reliance on external tools and equipment. Education and Experience Required: Bachelor's or Master's degree in Computer Science, Computer/Electronics Engineering, Information Systems, or equivalent. Typically 8+ years of software engineering experience, including at least 2–3 years leading or managing engineering teams. English communication skills Knowledge and Skills: Proven experience leading software engineering teams and delivering complex tools, a
-
-**Texto 2 (verbatim):**
-
-> t environments. Experience with project and portfolio management, including prioritization, planning, and risk management. Strong people leadership skills: coaching, performance management, conflict resolution, and team building. Strong analytical, problem-solving, and decision-making skills. Excellent written and verbal communication skills, with mastery of English and the local language. Able to present technical strategy, project status, and resource needs to senior leadership and negotiate options with them. Accessibility HPE is committed to creating an inclusive and accessible workplace and encourages applications from all qualified individuals, including those with disabilities. If you belie
-
-**Requisito(s) `education` extraído(s) por el extractor** — la
-citas son literales del texto de la oferta:
-
-- `value_text="Bachelor's"` · `requirement_level='required'` · evidencia: > Education and Experience Required: Bachelor's or Master's degree in Computer Science, Computer/Electronics Engineering, Information Systems, or equivalent.
+- `value_text="Bachelor's Degree"` · `requirement_level='ambiguous'` · evidencia: > Bachelor's Degree with Computer Science / MIS field of study required.
 
 ---
