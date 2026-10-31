@@ -1369,28 +1369,48 @@ class Repository:
         return records
 
     def update_missing_job_location(
-        self, job_id: str, *, city: str | None, region: str | None
+        self,
+        job_id: str,
+        *,
+        city: str | None,
+        region: str | None,
+        replace_city: bool = False,
     ) -> bool:
-        """Completa solo campos de ubicacion vacios, sin reemplazar datos existentes."""
+        """Completa solo campos de ubicacion vacios, sin reemplazar datos existentes.
+
+        ``replace_city=True`` solo para CORREGIR una ciudad que no puede ser
+        un lugar (firma del parser viejo: ``"GCG_Costa Rica_San Jose"``). Sin
+        la correccion el ``COALESCE`` de ``save_job`` la conservaria para
+        siempre, porque el fetcher nuevo ya devuelve ``None``.
+        """
         self._required_text(job_id, "job_id")
         city = self._optional_text(city)
         region = self._optional_text(region)
-        if city is None and region is None:
+        if city is None and region is None and not replace_city:
             raise ValueError("Se requiere una ciudad o region normalizada.")
         with self.database.connection() as connection:
             cursor = connection.execute(
                 """
                 UPDATE jobs
-                SET city = COALESCE(NULLIF(trim(city), ''), ?),
-                    region = COALESCE(NULLIF(trim(region), ''), ?),
+                SET city = CASE
+                        WHEN :replace THEN :city
+                        ELSE COALESCE(NULLIF(trim(city), ''), :city)
+                    END,
+                    region = COALESCE(NULLIF(trim(region), ''), :region),
                     updated_at = CURRENT_TIMESTAMP
-                WHERE job_id = ?
+                WHERE job_id = :job_id
                     AND (
-                        city IS NULL OR trim(city) = ''
+                        :replace
+                        OR city IS NULL OR trim(city) = ''
                         OR region IS NULL OR trim(region) = ''
                     )
                 """,
-                (city, region, job_id.strip()),
+                {
+                    "replace": int(replace_city),
+                    "city": city,
+                    "region": region,
+                    "job_id": job_id.strip(),
+                },
             )
             return cursor.rowcount == 1
 

@@ -33,7 +33,7 @@ from jobpulse_v15.repository import (
     REQUIREMENT_CATEGORIES,
     Repository,
 )
-from jobpulse_v15.workday import MAX_PAGES, WorkdayFetcher
+from jobpulse_v15.workday import MAX_PAGES, WorkdayFetcher, ciudad_es_basura
 from jobpulse_v15.credenciales import (
     lista_sitios_login, resumen, faltantes,
     upsert_credencial, borrar_credencial, credencial,
@@ -2169,8 +2169,12 @@ def main() -> int:
                 }
                 updates_by_job: dict[str, dict[str, str | None]] = {}
                 conflicts: set[str] = set()
+                # Ciudades guardadas que no pueden ser un lugar (firma del
+                # parser viejo): se corrigen en vez de conservarse.
+                corregir_ciudad: set[str] = set()
                 for record in records:
-                    if record["city"] and record["region"]:
+                    basura = ciudad_es_basura(record["city"])
+                    if record["city"] and record["region"] and not basura:
                         report["skipped_existing"] = (
                             int(report["skipped_existing"]) + 1
                         )
@@ -2216,17 +2220,27 @@ def main() -> int:
                         country_query,
                     )
                     city_update = (
-                        normalized["city"] if not record["city"] else None
+                        normalized["city"]
+                        if (not record["city"] or basura)
+                        else None
                     )
                     region_update = (
                         normalized["region"] if not record["region"] else None
                     )
-                    if city_update is None and region_update is None:
+                    if (
+                        city_update is None
+                        and region_update is None
+                        and not basura
+                    ):
                         report["skipped_unrecognized"] = (
                             int(report["skipped_unrecognized"]) + 1
                         )
                         continue
-                    city = record["city"] or city_update
+                    city = (
+                        normalized["city"]
+                        if basura
+                        else (record["city"] or city_update)
+                    )
                     region = record["region"] or region_update
                     job_id = record["job_id"]
                     proposed = {"city": city, "region": region}
@@ -2234,6 +2248,8 @@ def main() -> int:
                     if previous is not None and previous != proposed:
                         conflicts.add(job_id)
                     else:
+                        if basura:
+                            corregir_ciudad.add(job_id)
                         updates_by_job[job_id] = proposed
 
                 for job_id, normalized in updates_by_job.items():
@@ -2242,17 +2258,23 @@ def main() -> int:
                             int(report["skipped_conflicting_sources"]) + 1
                         )
                         continue
+                    corregir = job_id in corregir_ciudad
                     update: dict[str, str | None | bool] = {
                         "job_id": job_id,
                         **normalized,
                     }
+                    if corregir:
+                        update["replace_city"] = True
                     if args.apply:
                         update["updated"] = repository.update_missing_job_location(
                             job_id,
                             city=normalized["city"],
                             region=normalized["region"],
+                            replace_city=corregir,
                         )
                     report["updates"].append(update)
+                if corregir_ciudad:
+                    report["corrected_cities"] = len(corregir_ciudad)
                 print(json.dumps(report, ensure_ascii=False, indent=2))
             # === credenciales ===
             elif args.command == "credenciales":
