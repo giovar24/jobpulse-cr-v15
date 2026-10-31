@@ -72,8 +72,10 @@ class TestWorkdayFetcher(unittest.TestCase):
         self.assertEqual(offer["job"]["job_id"], "workday-JR1234567")
         self.assertEqual(offer["job"]["company"], "Intel")
         self.assertEqual(offer["job"]["country"], "CR")
+        # "San Jose" es provincia y ciudad: la CIUDAD no se adivina, la
+        # REGION si es cierta (el lugar esta en la provincia de San Jose).
         self.assertIsNone(offer["job"]["city"])
-        self.assertIsNone(offer["job"]["region"])
+        self.assertEqual(offer["job"]["region"], "San José")
         self.assertEqual(offer["job"]["location_raw"], "San Jose, Costa Rica")
         self.assertEqual(offer["job"]["work_mode"], "unknown")
         self.assertEqual(offer["job"]["date_published"], "2026-10-20")
@@ -161,11 +163,13 @@ class TestWorkdayFetcher(unittest.TestCase):
         ):
             offer = self.fetcher.fetch(self.site)[0]
 
+        # No se adivina la ciudad, pero la provincia que el texto SI nombra
+        # se guarda: el aviso esta en la provincia de San Jose.
         self.assertIsNone(offer["job"]["city"])
-        self.assertIsNone(offer["job"]["region"])
+        self.assertEqual(offer["job"]["region"], "San José")
         self.assertEqual(offer["job"]["location_raw"], location)
 
-    def test_fetch_leaves_ambiguous_location_unstructured(self):
+    def test_fetch_no_adivina_la_ciudad_pero_conserva_la_provincia(self):
         location = "San Jose, Central, Costa Rica"
         with patch.object(
             self.fetcher,
@@ -178,7 +182,7 @@ class TestWorkdayFetcher(unittest.TestCase):
             offer = self.fetcher.fetch(self.site)[0]
 
         self.assertIsNone(offer["job"]["city"])
-        self.assertIsNone(offer["job"]["region"])
+        self.assertEqual(offer["job"]["region"], "San José")
         self.assertEqual(offer["job"]["location_raw"], location)
 
     def test_manual_state_skips_workday_detail_and_is_not_counted_as_zero_results(self):
@@ -353,6 +357,23 @@ class TestWorkdayFetcher(unittest.TestCase):
                     "detail": self.detail(ambiguous_location),
                 },
             )
+            # Ciudad BASURA del parser viejo (la ubicacion entera en `city`):
+            # debe corregirse, no conservarse para siempre.
+            basura_location = "GCG_Costa Rica_San Jose"
+            repository.save_job(
+                {
+                    "job_id": "workday-REQ777777",
+                    "title": "Auxiliar de limpieza",
+                    "city": "GCG_Costa Rica_San Jose",
+                    "location_raw": basura_location,
+                },
+                site_id="intel-cr",
+                source_job_id="REQ777777",
+                raw_payload={
+                    "listing": self.posting(basura_location),
+                    "detail": self.detail(basura_location),
+                },
+            )
             output = io.StringIO()
             command = [
                 "jobpulse-v15",
@@ -366,11 +387,16 @@ class TestWorkdayFetcher(unittest.TestCase):
 
             preview = json.loads(output.getvalue())
             self.assertEqual(preview["mode"], "dry_run")
-            self.assertEqual(preview["records_scanned"], 2)
-            self.assertEqual(preview["skipped_unrecognized"], 1)
-            self.assertEqual(len(preview["updates"]), 1)
+            self.assertEqual(preview["records_scanned"], 3)
+            # Ya no queda ninguna "unrecognized": "San Jose, Costa Rica"
+            # aporta la region San Jose aunque la ciudad sea ambigua.
+            self.assertEqual(preview["skipped_unrecognized"], 0)
+            self.assertEqual(len(preview["updates"]), 3)
             self.assertEqual(preview["updates"][0]["city"], "Verified City")
             self.assertEqual(preview["updates"][0]["region"], "Guanacaste")
+            self.assertEqual(preview["updates"][1]["city"], "San Jose")
+            self.assertEqual(preview["updates"][1]["region"], "San José")
+            self.assertEqual(preview["corrected_cities"], 1)
             self.assertIsNone(repository.get_job("workday-REQ123456")["region"])
 
             output = io.StringIO()
@@ -385,7 +411,12 @@ class TestWorkdayFetcher(unittest.TestCase):
             self.assertEqual(job["region"], "Guanacaste")
             ambiguous_job = repository.get_job("workday-REQ654321")
             self.assertEqual(ambiguous_job["city"], "San Jose")
-            self.assertIsNone(ambiguous_job["region"])
+            # La ciudad existente se conserva; la region que faltaba se llena.
+            self.assertEqual(ambiguous_job["region"], "San José")
+            # La ciudad basura se reemplaza (por None) y la region se llena.
+            basura_job = repository.get_job("workday-REQ777777")
+            self.assertIsNone(basura_job["city"])
+            self.assertEqual(basura_job["region"], "San José")
             records = repository.list_workday_location_records("intel-cr")
             self.assertEqual(records[0]["location_raw"], location)
 
@@ -557,21 +588,25 @@ class TestNormalizeLocation(unittest.TestCase):
             {"city": None, "region": "Cartago"},
         )
 
-    # -- Provincia sola y ambigua: NO se adivina ----------------------
-    def test_provincia_que_tambien_es_ciudad_no_se_guarda(self):
-        # No se sabe si el texto se refiere a la provincia o a la ciudad.
-        for texto in (
-            "San Jose, Costa Rica",
-            "Alajuela, Costa Rica",
-            "Heredia, Costa Rica",
-            "Cartago, Costa Rica",
-            "Heredia Costa Rica",
-            "Heredia, -H, Costa Rica",
-            "San Jose, Central, Costa Rica",
-        ):
+    # -- Provincia nombrada: la REGION es cierta, la ciudad no ---------
+    def test_provincia_nombrada_da_la_region_sin_adivinar_la_ciudad(self):
+        # "Alajuela" es provincia y tambien ciudad/distrito. La CIUDAD queda
+        # nula (no se sabe a cual se refiere), pero la REGION es cierta: si
+        # el texto nombra la provincia, el lugar esta en esa provincia.
+        casos = {
+            "San Jose, Costa Rica": "San José",
+            "Alajuela, Costa Rica": "Alajuela",
+            "Heredia, Costa Rica": "Heredia",
+            "Cartago, Costa Rica": "Cartago",
+            "Heredia Costa Rica": "Heredia",
+            "Heredia, -H, Costa Rica": "Heredia",
+            "San Jose, Central, Costa Rica": "San José",
+            "Heredia, Heredia, Costa Rica": "Heredia",
+        }
+        for texto, provincia in casos.items():
             with self.subTest(texto=texto):
                 self.assertEqual(
-                    self.norm(texto), {"city": None, "region": None}
+                    self.norm(texto), {"city": None, "region": provincia}
                 )
 
     def test_provincia_sola_no_ambigua_si_se_guarda(self):
@@ -579,6 +614,26 @@ class TestNormalizeLocation(unittest.TestCase):
         self.assertEqual(
             self.norm("Guanacaste, Costa Rica"),
             {"city": None, "region": "Guanacaste"},
+        )
+
+    # -- Jerarquia distrito -> canton -> provincia ---------------------
+    def test_jerarquia_distrito_canton_provincia(self):
+        # La direccion costarricense va de lo mas especifico a lo mas
+        # general: distrito, canton, provincia, pais.
+        self.assertEqual(
+            self.norm("San Antonio, Belen, Heredia, Costa Rica"),
+            {"city": "San Antonio", "region": "Heredia"},
+        )
+        self.assertEqual(
+            self.norm("Belen, Heredia"),
+            {"city": "Belen", "region": "Heredia"},
+        )
+
+    def test_guion_bajo_como_separador(self):
+        # "GCG_Costa Rica_San Jose": antes se colaba como ciudad entera.
+        self.assertEqual(
+            self.norm("GCG_Costa Rica_San Jose"),
+            {"city": None, "region": "San José"},
         )
 
     def test_solo_el_pais_o_la_modalidad_no_inventa_nada(self):
@@ -615,8 +670,22 @@ class TestNormalizeLocation(unittest.TestCase):
         # "La Garita" es un distrito, no un canton: no se usa como ciudad.
         self.assertEqual(
             self.norm("Alajuela / Alajuela / La Garita"),
-            {"city": None, "region": None},
+            {"city": None, "region": "Alajuela"},
         )
+
+    def test_no_guarda_planta_zona_ni_abreviatura_como_ciudad(self):
+        casos = {
+            "Costa Rica-Alajuela-Wet Plant": "Alajuela",
+            "Costa Rica-Cartago-Dry Plant": "Cartago",
+            "San Jose, Costa Rica Local Office": "San José",
+            # "Alajuela Coyol" es "Provincia + zona", no una ciudad.
+            "Alajuela Coyol, Alajuela, Costa Rica": "Alajuela",
+        }
+        for texto, provincia in casos.items():
+            with self.subTest(texto=texto):
+                self.assertEqual(
+                    self.norm(texto), {"city": None, "region": provincia}
+                )
 
     # -- Canton conocido: completa la provincia -----------------------
     def test_canton_conocido_completa_la_provincia(self):

@@ -32,18 +32,9 @@ _COSTA_RICA_PROVINCES = {
     "puntarenas": "Puntarenas",
     "san jose": "San José",
 }
-# Provincias cuyo nombre tambien es el de una ciudad/distrito: con ese unico
-# dato no se puede saber a cual se refiere, asi que no se guarda nada.
-# Guanacaste queda fuera (no hay ciudad llamada Guanacaste) y por eso su
-# provincia si se puede dar por buena.
-_PROVINCIAS_AMBIGUAS_CON_CIUDAD = {
-    "alajuela",
-    "cartago",
-    "heredia",
-    "limon",
-    "puntarenas",
-    "san jose",
-}
+# Nota: provincias como "Alajuela" o "San Jose" tambien son nombres de
+# ciudad/distrito. Eso hace ambigua la CIUDAD, nunca la REGION: si el texto
+# nombra la provincia, la region es un dato cierto (ver normalize_location).
 
 # Canton -> provincia, SOLO para cantones cuyo nombre no se repite en otra
 # provincia. Lista explicita y no exhaustiva: se usa para completar la
@@ -63,8 +54,9 @@ _COSTA_RICA_CANTONES = {
     "escazu": "San José",
 }
 
-# Workday separa la ubicacion con coma, guion o barra segun el tablero.
-_SEPARADORES_UBICACION = re.compile(r"[,\-/–]")
+# Workday separa la ubicacion con coma, guion, barra o guion bajo segun el
+# tablero ("GCG_Costa Rica_San Jose").
+_SEPARADORES_UBICACION = re.compile(r"[,\-/–_|]")
 
 # Fragmentos que NO son un lugar y que antes se colaban como ciudad.
 _RUIDO_UBICACION = re.compile(
@@ -72,6 +64,60 @@ _RUIDO_UBICACION = re.compile(
     r"|latin\s*america|latam|global\s*service\s*center|multi-?loc)\b",
     re.IGNORECASE,
 )
+
+# Fragmentos que acompanan a una direccion real pero NO son la ciudad: la
+# planta, la zona franca o la sede ("Wet Plant", "BSC", "Local Office").
+_PALABRAS_NO_CIUDAD = frozenset({
+    "plant", "wet plant", "dry plant", "bsc", "local office", "office",
+    "headquarters", "hq", "site", "afz", "gcg", "zona franca", "free zone",
+})
+
+
+def province_key(value: str) -> str:
+    """Clave de comparacion de un nombre de lugar (sin acentos, minusculas)."""
+    normalized = unicodedata.normalize("NFKD", value or "")
+    return "".join(
+        character
+        for character in normalized
+        if not unicodedata.combining(character)
+    ).casefold().strip()
+
+
+def es_ciudad_plausible(parte: str, provincia: str | None = None) -> bool:
+    """True si ``parte`` puede ser el nombre de un lugar concreto.
+
+    Descarta el ruido que se colaba como ciudad: abreviaturas de relleno
+    ("GCG", "-H"), plantas y sedes ("Wet Plant", "BSC", "Local Office") y
+    "Provincia + zona" ("Alajuela Coyol").
+    """
+    clave = province_key(parte)
+    if len(clave) < 4 or any(caracter.isdigit() for caracter in clave):
+        return False
+    if parte.isupper() and len(clave) <= 5:
+        return False
+    if clave in _PALABRAS_NO_CIUDAD:
+        return False
+    if provincia is not None and clave.startswith(provincia):
+        return False
+    return True
+
+
+def ciudad_es_basura(ciudad: str | None) -> bool:
+    """True si lo GUARDADO como ciudad no puede ser un lugar.
+
+    Firma del parser viejo, que metia la cadena entera de la ubicacion en
+    ``city`` ("GCG_Costa Rica_San Jose"). Sirve para corregir datos ya
+    guardados: si no se corrigieran, el ``COALESCE`` de ``save_job`` los
+    conservaria para siempre (el fetcher nuevo ya devuelve ``None``).
+    """
+    if not ciudad:
+        return False
+    clave = province_key(ciudad)
+    return (
+        "costa rica" in clave
+        or "_" in ciudad
+        or any(caracter.isdigit() for caracter in clave)
+    )
 
 
 class WorkdayFetchError(RuntimeError):
@@ -258,29 +304,31 @@ class WorkdayFetcher:
     ) -> dict[str, str | None]:
         """Extrae ciudad/provincia de los formatos que usa Workday en Costa Rica.
 
-        Acepta cualquier separador (``,`` ``-`` ``/``), no solo la coma, y
-        busca la provincia en cualquier posicion: los tableros escriben
-        ``"Alajuela, Costa Rica"``, ``"Costa Rica - Alajuela"``,
-        ``"Heredia Costa Rica"`` y ``"Guanacaste / Liberia / Liberia"``.
+        La direccion costarricense sigue la jerarquia **distrito, canton,
+        provincia, pais** (de lo mas especifico a lo mas general): asi
+        ``"San Antonio, Belen, Heredia, Costa Rica"`` es el distrito San
+        Antonio, en el canton de Belen, en la provincia de Heredia. El parser
+        aprovecha esa jerarquia y acepta cualquier separador (``,`` ``-``
+        ``/`` ``_``), no solo la coma: los tableros escriben ``"Alajuela,
+        Costa Rica"``, ``"Costa Rica - Alajuela"``, ``"Heredia Costa Rica"``,
+        ``"GCG_Costa Rica_San Jose"`` o ``"Guanacaste / Liberia / Liberia"``.
 
-        Regla de oro: no se adivina. Si el texto solo dice el nombre de una
-        provincia que tambien es nombre de ciudad (``"San Jose, Costa Rica"``)
-        no se guarda NADA, porque no se sabe a cual se refiere. La provincia
-        solo se da por cierta cuando la posicion la desambigua (``"Costa Rica
-        - Alajuela"``, pais delante) o cuando la acompania un canton conocido.
+        Dos reglas de oro:
+
+        - **La provincia es un dato cierto** cuando el texto la nombra (en
+          cualquier posicion): aunque el nombre tambien exista como ciudad
+          (``"San Jose, Costa Rica"``), la provincia a la que pertenece es la
+          misma, asi que se guarda la region. Lo que NO se adivina es la
+          CIUDAD: si el unico lugar nombrado es la provincia, ``city`` queda
+          vacia en vez de repetir el nombre de la provincia.
+        - **La ciudad solo se toma de un lugar concreto** (distrito o canton)
+          que no sea la provincia ni una planta/zona/sede ("Wet Plant",
+          "BSC", "Local Office").
         """
         country_code = country.strip().casefold()
         query = country_query.strip().casefold()
         if country_code not in {"cr", "cri"} or query != "costa rica":
             return {"city": None, "region": None}
-
-        def province_key(value: str) -> str:
-            normalized = unicodedata.normalize("NFKD", value)
-            return "".join(
-                character
-                for character in normalized
-                if not unicodedata.combining(character)
-            ).casefold().strip()
 
         # El pais y los terminos de modalidad no son lugares: se descartan
         # antes de partir para no guardar ciudad="Remote".
@@ -293,39 +341,42 @@ class WorkdayFetcher:
         if not partes:
             return {"city": None, "region": None}
 
+        # Jerarquia distrito -> canton -> provincia -> pais: de las partes que
+        # quedan tras quitar el pais, el ULTIMO lugar concreto nombrado es la
+        # provincia (el resto son distrito/canton, de lo mas especifico a lo
+        # mas general).
         indice_provincia: int | None = None
         for indice, parte in enumerate(partes):
             if province_key(parte) in _COSTA_RICA_PROVINCES:
                 indice_provincia = indice
                 break
 
-        # Los tableros que escriben el pais delante ("Costa Rica - Alajuela")
-        # solo ponen la provincia despues: ahi la posicion la desambigua.
-        pais_delante = province_key(location).startswith(query)
-
         city: str | None = None
         region: str | None = None
 
         if indice_provincia is None:
-            # "Canton, Costa Rica": el texto no nombra ninguna provincia.
-            city = partes[0]
-        elif indice_provincia == 0:
-            # "Provincia / Canton / Distrito" o "Provincia, Central, Pais".
-            # La ciudad solo se toma si es un canton CONOCIDO: lo que sigue a
-            # la provincia puede ser una planta ("Wet Plant") o una agrupacion
-            # ("Central"), y eso no es una ciudad.
-            for parte in partes[1:]:
-                if province_key(parte) in _COSTA_RICA_CANTONES:
-                    city = parte
-                    break
-            if city is not None or pais_delante:
-                region = _COSTA_RICA_PROVINCES[province_key(partes[0])]
-            elif province_key(partes[0]) not in _PROVINCIAS_AMBIGUAS_CON_CIUDAD:
-                region = _COSTA_RICA_PROVINCES[province_key(partes[0])]
+            # "Distrito/Canton, Costa Rica": el texto no nombra la provincia.
+            # El primer lugar es la ciudad (si es un lugar plausible) y su
+            # provincia sale del canton conocido.
+            if es_ciudad_plausible(partes[0], None):
+                city = partes[0]
         else:
-            # "Canton, Provincia, Costa Rica" (formato clasico).
-            city = partes[0]
+            # La provincia, si el TEXTO la nombra, es un dato cierto.
             region = _COSTA_RICA_PROVINCES[province_key(partes[indice_provincia])]
+            provincia = province_key(partes[indice_provincia])
+            if indice_provincia > 0:
+                # "Distrito/Canton, Provincia": el lugar mas especifico esta
+                # delante de la provincia.
+                if es_ciudad_plausible(partes[0], provincia):
+                    city = partes[0]
+            else:
+                # "Provincia, ...": lo que sigue solo es ciudad si es un
+                # canton CONOCIDO; puede ser una planta ("Wet Plant") o una
+                # agrupacion ("Central"), y eso no es una ciudad.
+                for parte in partes[1:]:
+                    if province_key(parte) in _COSTA_RICA_CANTONES:
+                        city = parte
+                        break
 
         if region is None and city is not None:
             # El canton es conocido y su provincia es un dato fijo.
