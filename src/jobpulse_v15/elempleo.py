@@ -119,7 +119,10 @@ class ElempleoFetcher:
                 ctx = browser.contexts[0]
                 return await self._fetch_dom(ctx, site, cfg, pages, skipped_ids, country_query)
 
-        return asyncio.run(_run())
+        # `fetch` ya es una corrutina: await directo. Un `asyncio.run()`
+        # aqui fallaba con "asyncio.run() cannot be called from a running
+        # event loop" (doble envoltura: el caller envuelve la corrutina).
+        return await _run()
 
     async def _fetch_dom(
         self,
