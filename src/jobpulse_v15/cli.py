@@ -52,45 +52,10 @@ def _parse_requirement(value: str) -> dict[str, str]:
 
 
 def _extract_job_analysis(repository: Repository, job_id: str) -> dict[str, Any]:
-    job = repository.get_job(job_id)
-    if job is None:
-        raise ValueError(f"No existe la vacante {job_id!r}.")
-    text = "\n\n".join(
-        value.strip()
-        for value in (job.get("description_raw"), job.get("requirements_raw"))
-        if isinstance(value, str) and value.strip()
-    )
-    if not text:
-        raise ValueError(
-            f"La vacante {job_id!r} no tiene descripcion ni requisitos para analizar."
-        )
-    result = RuleBasedExtractor().extract(text)
-    source_context = repository.get_job_source_context(job_id)
-    source_site_id = (
-        source_context["site_id"] if source_context is not None else None
-    )
-    source_config_hash = (
-        hashlib.sha256(source_context["site_config_json"].encode("utf-8")).hexdigest()
-        if source_context is not None
-        else None
-    )
-    analysis_id = repository.save_analysis(
-        job_id,
-        text_hash=hashlib.sha256(text.encode("utf-8")).hexdigest(),
-        extractor_version=EXTRACTOR_VERSION,
-        analysis_status=result.analysis_status,
-        field_statuses=result.field_statuses,
-        requirements=result.requirements,
-        source_site_id=source_site_id,
-        source_config_hash=source_config_hash,
-    )
-    return {
-        "analysis_id": analysis_id,
-        "job_id": job_id,
-        "analysis_status": result.analysis_status,
-        "field_statuses": result.field_statuses,
-        "requirements": result.requirements,
-    }
+    """Compatibilidad: la implementacion vive en ``analysis_flow``."""
+    from jobpulse_v15.analysis_flow import extract_job_analysis
+
+    return extract_job_analysis(repository, job_id)
 
 
 def _cmd_areas_classify(repository: Repository, args) -> None:

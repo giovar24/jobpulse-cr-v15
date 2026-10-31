@@ -1163,33 +1163,12 @@ class JobPulseWindow:
         self.status_var.set(f"Analisis actualizado para {title}.")
 
     def _analyze_job(self, job_id: str) -> str:
+        from jobpulse_v15.analysis_flow import extract_job_analysis
+
         job = self.repository.get_job(job_id)
         if job is None:
             raise ValueError("La vacante ya no existe en la base.")
-        text = "\n\n".join(
-            value.strip()
-            for value in (job.get("description_raw"), job.get("requirements_raw"))
-            if isinstance(value, str) and value.strip()
-        )
-        if not text:
-            raise ValueError("La vacante no tiene texto para analizar.")
-        result = RuleBasedExtractor().extract(text)
-        source = self.repository.get_job_source_context(job_id)
-        source_config_hash = (
-            hashlib.sha256(source["site_config_json"].encode("utf-8")).hexdigest()
-            if source is not None
-            else None
-        )
-        self.repository.save_analysis(
-            job_id,
-            text_hash=hashlib.sha256(text.encode("utf-8")).hexdigest(),
-            extractor_version=EXTRACTOR_VERSION,
-            analysis_status=result.analysis_status,
-            field_statuses=result.field_statuses,
-            requirements=result.requirements,
-            source_site_id=source["site_id"] if source is not None else None,
-            source_config_hash=source_config_hash,
-        )
+        extract_job_analysis(self.repository, job_id)
         return str(job["title"])
 
     def analyze_visible_unanalyzed(self) -> None:
@@ -1911,31 +1890,18 @@ class JobPulseWindow:
                         dialog.after(0, lambda: resultado_text.see("end"))
 
                         try:
-                            if platform_id == "ane":
-                                result = service.fetch_and_import(
-                                    site_id,
-                                    lambda s=site, p=port, d=dias: fetcher.fetch(
-                                        s, pages=s.get("site_config", {}).get("pages", pages),
-                                        port=p, dias=d
-                                    ),
-                                    run_kind="ane",
-                                )
-                            elif platform_id in ("indeed", "linkedin"):
-                                result = service.fetch_and_import(
-                                    site_id,
-                                    lambda s=site, p=port: fetcher.fetch(
-                                        s, pages=s.get("site_config", {}).get("pages", pages), port=p
-                                    ),
-                                    run_kind=platform_id,
-                                )
-                            else:
-                                result = service.fetch_and_import(
-                                    site_id,
-                                    lambda s=site: fetcher.fetch(
-                                        s, pages=s.get("site_config", {}).get("pages", pages)
-                                    ),
-                                    run_kind=platform_id,
-                                )
+                            # La firma de cada fetcher varia (async/sync,
+                            # `pages`, `port`): el dispatcher es la unica
+                            # fuente de verdad.
+                            from jobpulse_v15.scrape_dispatch import construir_llamada
+                            llamada = construir_llamada(
+                                platform_id, fetcher, site,
+                                pages=site_config.get("pages", pages),
+                                port=port, dias=dias,
+                            )
+                            result = service.fetch_and_import(
+                                site_id, llamada, run_kind=platform_id,
+                            )
 
                             new_count = result.get("jobs_new", 0)
                             total_offers += result.get("jobs_found", 0)

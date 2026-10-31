@@ -40,8 +40,14 @@ def notify(title: str, message: str) -> None:
         print("\a", end="", flush=True)
 
 
-async def run_scrape_async(sites: list[str], pages: int = 1) -> dict:
-    """Ejecuta el scrape de los sitios indicados (async)."""
+def run_scrape(sites: list[str], pages: int = 1) -> dict:
+    """Ejecuta el scrape de los sitios indicados.
+
+    Es SINCRONO a proposito: ``IngestionService.fetch_and_import`` resuelve
+    los fetchers ``async`` con ``asyncio.run``, que no puede llamarse desde
+    dentro de un event loop en ejecucion (por eso antes fallaban cinde y
+    procomer, y los sync con ``await`` reventaban).
+    """
     from jobpulse_v15.ingestion import IngestionService
     from jobpulse_v15.ane import AneFetcher
     from jobpulse_v15.cinde import CindeFetcher
@@ -57,6 +63,7 @@ async def run_scrape_async(sites: list[str], pages: int = 1) -> dict:
     from jobpulse_v15.successfactors import SuccessFactorsFetcher
     from jobpulse_v15.harvie import HarvieFetcher
     from jobpulse_v15.elempleo import ElempleoFetcher
+    from jobpulse_v15.scrape_dispatch import construir_llamada, necesita_navegador
 
     FETCHER_MAP = {
         "ane": AneFetcher,
@@ -75,80 +82,87 @@ async def run_scrape_async(sites: list[str], pages: int = 1) -> dict:
         "elempleo": ElempleoFetcher,
     }
 
-    # Platforms that need browser (CDP port)
-    BROWSER_PLATFORMS = {"ane", "indeed", "linkedin", "harvie", "elempleo"}
-
     db = Database()
     repo = Repository(db)
     service = IngestionService(repo)
 
     results = {"total_found": 0, "total_new": 0, "errors": 0, "by_site": {}}
 
-    for site_id in sites:
-        site = repo.get_site(site_id)
-        if not site:
-            results["by_site"][site_id] = {"error": "Sitio no existe"}
-            results["errors"] += 1
-            continue
-        if not site.get("enabled"):
-            results["by_site"][site_id] = {"status": "pausado"}
-            continue
+    # O7.2: si la corrida incluye sitios de navegador, CDP tiene que estar
+    # arriba. Si el Brave diario ya esta en 9222 no se toca; si no, se abre
+    # uno y se cierra al terminar (solo el que abrio esta corrida).
+    mgr_brave = None
+    port = 9222
+    plataformas = {
+        (repo.get_site(sid) or {}).get("platform_id", "") for sid in sites
+    }
+    if plataformas & {"ane", "indeed", "linkedin", "elempleo"}:
+        from jobpulse_v15.browser_manager import asegurar_brave, cdp_vivo
+        if cdp_vivo(port):
+            print("Brave CDP ya activo en 9222 (no se toca).")
+        else:
+            print("Abriendo Brave con CDP (se cerrara al terminar)...")
+            try:
+                mgr_brave = asegurar_brave(port)
+            except Exception as exc:
+                print(f"  AVISO: no se pudo abrir Brave ({exc}).")
+                print("  Los sitios de navegador fallaran con ECONNREFUSED.")
 
-        platform = site["platform_id"]
-        fetcher_cls = FETCHER_MAP.get(platform)
-        if not fetcher_cls:
-            results["by_site"][site_id] = {"error": f"No hay fetcher para {platform}"}
-            results["errors"] += 1
-            continue
+    try:
+        for site_id in sites:
+            site = repo.get_site(site_id)
+            if not site:
+                results["by_site"][site_id] = {"error": "Sitio no existe"}
+                results["errors"] += 1
+                continue
+            if not site.get("enabled"):
+                results["by_site"][site_id] = {"status": "pausado"}
+                continue
 
-        fetcher = fetcher_cls()
-        cfg = site.get("site_config") or {}
-        pg = cfg.get("pages", 1) if platform == "workday" else 1
+            platform = site["platform_id"]
+            fetcher_cls = FETCHER_MAP.get(platform)
+            if not fetcher_cls:
+                results["by_site"][site_id] = {"error": f"No hay fetcher para {platform}"}
+                results["errors"] += 1
+                continue
 
-        print(f"\n=== {site_id} ({platform}) ===")
-        try:
-            if platform in BROWSER_PLATFORMS:
-                # Browser fetchers need port and are async
-                if platform == "ane":
-                    offers = await fetcher.fetch(site, pages=pg, port=9222)
-                elif platform in ("indeed", "linkedin"):
-                    offers = await fetcher.fetch(site, pages=pg, port=9222)
-                elif platform in ("harvie", "elempleo"):
-                    offers = await fetcher.fetch(site, port=9222)
-                else:
-                    offers = await fetcher.fetch(site, port=9222)
-                result = service.fetch_and_import(site_id, lambda: offers, run_kind=platform)
-            elif platform == "workday":
-                offers = fetcher.fetch(site, pages=pg)
-                result = service.fetch_and_import(site_id, lambda: offers, run_kind=platform)
-            else:
-                offers = fetcher.fetch(site)
-                result = service.fetch_and_import(site_id, lambda: offers, run_kind=platform)
+            fetcher = fetcher_cls()
+            cfg = site.get("site_config") or {}
+            pg = cfg.get("pages", pages) if platform in ("workday", "workable") else pages
 
-            results["by_site"][site_id] = result
-            results["total_found"] += result.get("jobs_found", 0)
-            results["total_new"] += result.get("jobs_new", 0)
-            print(f"  OK: {result.get('jobs_new', 0)} nuevas, {result.get('jobs_duplicate', 0)} duplicados")
-        except Exception as e:
-            results["by_site"][site_id] = {"error": str(e)}
-            results["errors"] += 1
-            print(f"  ERROR: {e}")
+            print(f"\n=== {site_id} ({platform}) ===")
+            try:
+                llamada = construir_llamada(
+                    platform, fetcher, site, pages=pg, port=port
+                )
+                result = service.fetch_and_import(
+                    site_id, llamada, run_kind=platform
+                )
+
+                results["by_site"][site_id] = result
+                results["total_found"] += result.get("jobs_found", 0)
+                results["total_new"] += result.get("jobs_new", 0)
+                print(f"  OK: {result.get('jobs_new', 0)} nuevas, {result.get('jobs_duplicate', 0)} duplicados")
+            except Exception as e:
+                results["by_site"][site_id] = {"error": str(e)}
+                results["errors"] += 1
+                print(f"  ERROR: {e}")
+    finally:
+        if mgr_brave is not None:
+            try:
+                mgr_brave.stop_brave_sync()
+                print("Brave cerrado (lo abrio esta corrida).")
+            except Exception as exc:
+                print(f"  AVISO: no se pudo cerrar Brave ({exc}).")
 
     return results
 
 
-def run_scrape(sites: list[str], pages: int = 1) -> dict:
-    """Wrapper síncrono para run_scrape_async."""
-    import asyncio
-    return asyncio.run(run_scrape_async(sites, pages))
-
-
 def run_analysis() -> int:
     """Ejecuta análisis por reglas en todos los pendientes."""
-    from jobpulse_v15.ingestion import IngestionService
+    from jobpulse_v15.analysis_flow import extract_job_analysis
     db = Database()
     repo = Repository(db)
-    service = IngestionService(repo)
 
     pendientes = repo.search_jobs(review_reason="analysis_missing", limit=10000)
     print(f"\n=== ANÁLISIS POR REGLAS: {len(pendientes)} pendientes ===")
@@ -156,7 +170,7 @@ def run_analysis() -> int:
     ok = 0
     for job in pendientes:
         try:
-            service.analyze_job(str(job["job_id"]))
+            extract_job_analysis(repo, str(job["job_id"]))
             ok += 1
         except Exception as e:
             print(f"  Error analizando {job['job_id']}: {e}")
