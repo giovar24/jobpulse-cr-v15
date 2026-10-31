@@ -39,6 +39,7 @@ class FakeIAClient:
     def __init__(self, fallar=False):
         self.llamadas = 0
         self.fallar = fallar
+        self.prompts_pedidos = []
 
     async def chat_json(self, messages, schema=None, temperature=0.0,
                         max_tokens=0):
@@ -46,6 +47,7 @@ class FakeIAClient:
         if self.fallar:
             raise RuntimeError("servidor caido")
         system = messages[0]["content"]
+        self.prompts_pedidos.append(system)
         return dict(RESPUESTAS.get(system, {"ok": True}))
 
 
@@ -326,6 +328,120 @@ class TestPaseCompleto(unittest.TestCase):
         self.assertIn("error", r)
         self.assertIn("servidor cayo", r["error"])
         self.assertEqual(len(r.get("ciclos", [])), 1)
+
+
+class TestWorkModePorPatrones(unittest.TestCase):
+    """Modalidad declarada de forma literal: se resuelve sin llamar a la IA."""
+
+    detectar = staticmethod(iae.work_mode_por_patrones)
+
+    # ── Etiquetas #LI- (declaracion del reclutador) ───────────────
+    def test_etiquetas_li_de_linkedin(self):
+        casos = {
+            "#LI-Onsite Required Skills:": "onsite",
+            "#LI-ONSITE Required Skills:": "onsite",
+            "# R POCR #LI-ONSITE Required Skills:": "onsite",
+            "#RPOCRA #LI-Onsite Required Skills:": "onsite",
+            "#LI-Hybrid - Why You Should Join Us": "hybrid",
+            "#LI-Remote -": "remote",
+        }
+        for texto, esperado in casos.items():
+            with self.subTest(texto=texto):
+                self.assertEqual(self.detectar(texto), esperado)
+
+    # ── Frases que describen la modalidad del PUESTO ─────────────
+    def test_frases_de_modalidad_del_puesto(self):
+        casos = {
+            "Ability to work in a hybrid work environment.": "hybrid",
+            "Hybrid work arrangement requiring on-site presence.": "hybrid",
+            "This is a hybrid position based in Ultra Park II.": "hybrid",
+            "Modelo híbrido. Beneficios: seguro médico.": "hybrid",
+            "Esquema híbrido de trabajo.": "hybrid",
+            "employees are required to work 100% onsite.": "onsite",
+            "This role is 100% remote.": "remote",
+            "Fully remote position.": "remote",
+            "Trabajo totalmente remoto.": "remote",
+        }
+        for texto, esperado in casos.items():
+            with self.subTest(texto=texto):
+                self.assertEqual(self.detectar(texto), esperado)
+
+    # ── Lo que NO es modalidad: antes daba falsos positivos ──────
+    def test_no_confunde_otros_usos_de_las_palabras(self):
+        falsos = (
+            "Access to an on-site fitness center.",
+            "Familiarity with hybrid identity (Azure AD/Entra ID).",
+            "Experience working in Agile, Waterfall, or hybrid project environments.",
+            "Advanced RAG pipelines with hybrid search.",
+            "Use dynamic presentation skills in onsite and/or virtual training.",
+            "We offer a dynamic, hybrid-friendly culture.",
+            "Over-the-Phone (OPI) and Video Remote Interpreter (VRI).",
+            "Teletrabajo ocasional según necesidad del negocio.",
+        )
+        for texto in falsos:
+            with self.subTest(texto=texto):
+                self.assertIsNone(self.detectar(texto))
+
+    def test_sin_texto_devuelve_none(self):
+        self.assertIsNone(self.detectar(None, "", "   "))
+        self.assertIsNone(self.detectar())
+
+    def test_recorre_varios_textos_y_gana_el_primero(self):
+        # La etiqueta suele estar en la descripcion, no en los requisitos.
+        self.assertEqual(
+            self.detectar("sin marca", "#LI-Hybrid"), "hybrid"
+        )
+        self.assertEqual(
+            self.detectar("#LI-Onsite", "#LI-Hybrid"), "onsite"
+        )
+
+    # ── La etiqueta esta fuera del recorte de 2000 chars que ve la IA ──
+    def test_lee_mas_alla_del_recorte_de_la_ia(self):
+        relleno = "x" * 4000
+        self.assertEqual(
+            self.detectar(f"{relleno} #LI-Onsite Required Skills:"),
+            "onsite",
+        )
+
+
+class TestWorkModeSinLlamarALaIA(unittest.TestCase):
+    """``enrich_job_fields`` usa la regla y no gasta la llamada al modelo."""
+
+    def test_no_consulta_el_modelo_si_hay_etiqueta(self):
+        cliente = FakeIAClient()
+        job = {
+            "job_id": "P-1",
+            "title": "Operario de Manufactura",
+            "city": "Heredia",
+            "region": "Heredia",
+            "work_mode": "unknown",
+            "date_published": "2026-10-20",
+            "description_raw": "Descripcion larga. #LI-ONSITE Required Skills:",
+        }
+        filled = asyncio.run(iae.enrich_job_fields(job, cliente))
+        self.assertEqual(filled.get("work_mode"), "onsite")
+        # work_mode no se pidio al modelo: no hubo respuesta "onsite" del fake
+        # que pudiera justificarlo (el fake tambien diria onsite), asi que se
+        # comprueba contando llamadas: ninguna de modalidad.
+        self.assertFalse(
+            getattr(cliente, "prompts_pedidos", []).count(
+                iae.WORK_MODE_PROMPT
+            )
+        )
+
+    def test_si_no_hay_etiqueta_si_consulta_el_modelo(self):
+        cliente = FakeIAClient()
+        job = {
+            "job_id": "P-2",
+            "title": "Analista",
+            "city": "Heredia",
+            "region": "Heredia",
+            "work_mode": "unknown",
+            "date_published": "2026-10-20",
+            "description_raw": "Buscamos una persona ordenada.",
+        }
+        filled = asyncio.run(iae.enrich_job_fields(job, cliente))
+        self.assertEqual(filled.get("work_mode"), "onsite")
 
 
 if __name__ == "__main__":

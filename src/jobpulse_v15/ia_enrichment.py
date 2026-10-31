@@ -18,7 +18,8 @@ import asyncio
 import json
 import logging
 import os
-from typing import Any, Dict, List, Optional
+import re
+from typing import Any, Dict, List, Optional, Tuple
 
 # Import IA client
 try:
@@ -133,6 +134,61 @@ WORK_MODE_PROMPT = """Detecta modalidad de trabajo EXPLÍCITA en el texto.
 
 Responde SOLO JSON: {"work_mode": "..."}"""
 
+# ─── Modalidad declarada de forma literal (regla determinista, sin IA) ───
+#
+# Antes del prompt se prueba una lista corta y conservadora de marcas
+# textuales que declaran la modalidad SIN ambigüedad. Dos motivos:
+#
+# 1. El prompt recibe la descripción truncada a 2000 chars
+#    (``enrich_job_fields``), y las etiquetas ``#LI-Onsite`` / ``#LI-Hybrid``
+#    de Workday suelen estar al final del aviso: el modelo no llega a verlas.
+# 2. El prompt exige modalidad EXPLÍCITA, y con razón: "on-site fitness
+#    center", "hybrid identity (Azure AD)" o "hybrid project environments"
+#    NO son modalidad. Aquí solo entran patrones que sí lo son.
+#
+# El orden importa: gana el primero que aparezca en la tupla, así que las
+# etiquetas ``#LI-`` (declaración del reclutador) van antes que las frases.
+_PATRONES_WORK_MODE: Tuple[Tuple[str, "re.Pattern[str]"], ...] = (
+    # Etiquetas de LinkedIn que el reclutador escribe en el aviso.
+    ("remote", re.compile(r"#\s*(?:LI|RPOCR)\s*[-_]?\s*(?:LI\s*[-_]?\s*)?remote\b", re.I)),
+    ("hybrid", re.compile(r"#\s*(?:LI|RPOCR)\s*[-_]?\s*(?:LI\s*[-_]?\s*)?hybrid\b", re.I)),
+    ("onsite", re.compile(r"#\s*(?:LI|RPOCR)\s*[-_]?\s*(?:LI\s*[-_]?\s*)?onsite\b", re.I)),
+    # Frases que describen la modalidad del PUESTO (no del edificio ni del
+    # proyecto). "híbrido" suelto no vale: "modelo híbrido" sí.
+    ("hybrid", re.compile(
+        r"hybrid\s+(?:work\s+)?(?:arrangement|work\s+environment|position|role|schedule)"
+        r"|modelo\s+h[ií]brido|esquema\s+h[ií]brido|modalidad\s+h[ií]brida",
+        re.I,
+    )),
+    ("remote", re.compile(
+        r"100\s*%\s*(?:remote|remot[oa])|fully\s+remote|totalmente\s+remot[oa]"
+        r"|100\s*%\s*teletrabajo",
+        re.I,
+    )),
+    ("onsite", re.compile(
+        r"100\s*%\s*(?:on[-\s]?site|presencial)|100\s*%\s*en\s+(?:la\s+)?oficina",
+        re.I,
+    )),
+)
+
+
+def work_mode_por_patrones(*textos: Optional[str]) -> Optional[str]:
+    """Devuelve ``remote``/``hybrid``/``onsite`` si el texto lo declara literal.
+
+    Recibe uno o más textos (descripción, requisitos…) y devuelve ``None``
+    cuando no hay una marca inequívoca: en ese caso decide la IA. Pensada
+    para ejecutarse sobre el texto COMPLETO, no sobre el recorte de 2000
+    chars que ve el modelo.
+    """
+    for texto in textos:
+        if not texto:
+            continue
+        for modalidad, patron in _PATRONES_WORK_MODE:
+            if patron.search(texto):
+                return modalidad
+    return None
+
+
 DATE_PROMPT = """Extrae fecha de publicación EXPLÍCITA (ISO YYYY-MM-DD).
 Formatos válidos: "2024-10-15", "15 octubre 2024", "15 de octubre de 2024".
 NO uses fechas relativas ("hace 3 días", "2 weeks ago").
@@ -233,10 +289,21 @@ async def enrich_job_fields(job: Dict[str, Any], client: IAClient) -> Dict[str, 
             filled["region"] = result["region"]
     
     # 2. WORK_MODE (crítico)
+    # Primero la regla determinista sobre el texto COMPLETO (la etiqueta
+    # #LI-* suele ir al final, fuera del recorte de 2000 chars). Solo si no
+    # hay marca literal se consulta al modelo.
     if job.get("work_mode") in (None, "", "unknown"):
-        result = await _extract_field(client, WORK_MODE_PROMPT, full_text, WORK_MODE_SCHEMA, "work_mode")
-        if result and result.get("work_mode") != "unknown":
-            filled["work_mode"] = result["work_mode"]
+        declarado = work_mode_por_patrones(
+            job.get("description_raw"),
+            job.get("requirements_raw"),
+            job.get("title"),
+        )
+        if declarado:
+            filled["work_mode"] = declarado
+        else:
+            result = await _extract_field(client, WORK_MODE_PROMPT, full_text, WORK_MODE_SCHEMA, "work_mode")
+            if result and result.get("work_mode") != "unknown":
+                filled["work_mode"] = result["work_mode"]
     
     # 3. DATE_PUBLISHED (crítico)
     if job.get("date_published") in (None, ""):
