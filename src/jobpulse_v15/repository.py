@@ -12,6 +12,7 @@ from urllib.parse import urlparse
 
 from jobpulse_v15 import areas
 from jobpulse_v15 import ciclo_vida
+from jobpulse_v15 import conceptos
 from jobpulse_v15.db import Database
 
 
@@ -1595,23 +1596,31 @@ class Repository:
                     for category, status in normalized_statuses.items()
                 ],
             )
+            # El codigo canonico se resuelve AL INSERTAR: la migracion 010 solo
+            # hizo un backfill one-time, asi que sin esto todo requisito nuevo
+            # queda en NULL y el Paso 5 lo ignora (total_req = 0).
+            requisitos_con_codigo, sin_concepto = conceptos.resolver(
+                connection, normalized_requirements
+            )
             connection.executemany(
                 """
                 INSERT INTO job_requirements (
                     analysis_id, category, value_code, value_text, qualifier,
                     requirement_level, education_status, minimum, maximum,
-                    unit, evidence, origin, confidence
+                    unit, evidence, origin, confidence, codigo_canonico
                 ) VALUES (
                     :analysis_id, :category, :value_code, :value_text,
                     :qualifier, :requirement_level, :education_status,
-                    :minimum, :maximum, :unit, :evidence, :origin, :confidence
+                    :minimum, :maximum, :unit, :evidence, :origin, :confidence,
+                    :codigo_canonico
                 )
                 """,
                 [
                     {"analysis_id": analysis_id, **requirement}
-                    for requirement in normalized_requirements
+                    for requirement in requisitos_con_codigo
                 ],
             )
+            conceptos.encolar_sin_concepto(connection, sin_concepto)
         return analysis_id
 
     def search_jobs(
