@@ -1606,7 +1606,11 @@ class TestManualJobStateUI(unittest.TestCase):
         )
         showwarning.assert_called_once()
         self.assertIn("Analizadas: 1/2", showwarning.call_args.args[1])
-        self.assertIn("no tiene texto para analizar", showwarning.call_args.args[1])
+        # Mensaje de la implementacion unica (analysis_flow.extract_job_analysis).
+        self.assertIn(
+            "no tiene descripcion ni requisitos para analizar",
+            showwarning.call_args.args[1],
+        )
         showinfo.assert_not_called()
 
     def test_manual_data_edit_persists_without_changing_source_location(self):
