@@ -21,6 +21,10 @@ TABLES_TO_CLEAR = [
     "source_run_sites",
     "source_runs",
     "source_job_memory",
+    # Derivados por vacante: dependen de `jobs` con FK NO ACTION, asi que si
+    # se quedan sirven de huerfanos (y `db check` reportaria violaciones FK).
+    "job_match",
+    "job_area",
     # IA/enriquecimiento
     "candidate_profile_import_snapshots",
 ]
@@ -35,6 +39,12 @@ TABLES_TO_KEEP = [
     "source_sites_review_log",
     "user_job_state",
     "applications",
+    # Taxonomias del sistema (no dependen de las vacantes)
+    "area",
+    "area_regla",
+    "concepto",
+    "concepto_no_normalizado",
+    "nivel_escala",
 ]
 
 def main() -> int:
@@ -73,12 +83,29 @@ def main() -> int:
 
         # Vacuum para liberar espacio
         conn.execute("VACUUM")
+
+        # Comprobacion: lo que debe seguir vivo para que el sistema funcione.
+        conservadas = []
+        for table in TABLES_TO_KEEP:
+            if table in existing:
+                count = conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
+                conservadas.append((table, count))
+
+        # Sin huerfanos: toda FK debe seguir apuntando a algo real.
+        huerfanos = conn.execute(
+            """SELECT COUNT(*) FROM job_match m
+               WHERE NOT EXISTS (SELECT 1 FROM jobs j WHERE j.job_id = m.job_id)"""
+        ).fetchone()[0]
         conn.close()
 
         print(f"\n✅ Limpieza completada. Tablas borradas: {len(cleared)}")
         for c in cleared:
             print(f"   - {c}")
-        print("\n✅ Mantenidas intactas: perfil usuario, sitios, plataformas, credenciales")
+        print("\n✅ Mantenidas intactas (perfil, configuración y taxonomías):")
+        for table, count in conservadas:
+            print(f"   - {table}: {count} filas")
+        if huerfanos:
+            print(f"\n⚠️  {huerfanos} filas huerfanas en job_match")
 
     except Exception as e:
         conn.rollback()
