@@ -4,7 +4,8 @@ LITERAL, cada vacante de la corrida vigente.
 
 Para cada vacante `descartada` (y cada `educacion_no_confirmada`) comprueba:
 
-1. que el `job_id` aparezca en ``docs/PASO5_EVIDENCIA_2026-10-29.md``;
+1. que el `job_id` aparezca en el documento de evidencia de la corrida
+   vigente (``docs/PASO5_EVIDENCIA_*.md``);
 2. que la FRASE LITERAL que confirma el titulo aparezca en el documento;
 3. que esa frase sea un substring LITERAL del texto de la oferta en la BD
    (``requirements_raw`` + ``description_raw``) -> no es un resumen.
@@ -15,6 +16,7 @@ siguen documentadas con frase literal.
 Uso: .\\.venv\\Scripts\\python.exe -X utf8 verificar_evidencia.py [doc]
 Salida: 0 si todo cuadra, 1 si hay discrepancias.
 """
+import re
 import sqlite3
 import sys
 from pathlib import Path
@@ -23,17 +25,57 @@ REPO = Path(__file__).resolve().parent
 sys.path.insert(0, str(REPO / "src"))
 from jobpulse_v15 import matching
 
+DB = REPO / "data" / "jobpulse_v15.db"
+
+
+def _corrida_vigente() -> str | None:
+    """Corrida vigente en la BD (``job_match.valida = 1``)."""
+    try:
+        conn = sqlite3.connect(DB)
+        conn.row_factory = sqlite3.Row
+        fila = conn.execute(
+            "SELECT corrida_id FROM job_match WHERE valida = 1 "
+            "ORDER BY corrida_id DESC LIMIT 1"
+        ).fetchone()
+        conn.close()
+    except sqlite3.Error:
+        return None
+    return fila["corrida_id"] if fila else None
+
+
+def _corrida_de_doc(ruta: Path) -> str | None:
+    """Corrida que documenta un archivo de evidencia (primera linea)."""
+    try:
+        with ruta.open(encoding="utf-8") as fh:
+            primera = fh.readline()
+    except OSError:
+        return None
+    match = re.search(r"corrida `(\d{8}_\d{6})`", primera)
+    return match.group(1) if match else None
+
+
 def _doc_por_defecto() -> Path:
-    """Documento de evidencia MAS RECIENTE (si no, el del 29-10)."""
+    """Documento de evidencia de la CORRIDA VIGENTE (si no, el mas reciente).
+
+    Elegir por NOMBRE de archivo fallaba: una corrida nueva del mismo dia
+    dejaba un documento viejo con el nombre mas alto y la verificacion daba
+    falsos fallos.
+    """
     candidatos = sorted(
         (REPO / "docs").glob("PASO5_EVIDENCIA_*.md"),
         key=lambda ruta: ruta.name,
     )
-    return candidatos[-1] if candidatos else REPO / "docs" / "PASO5_EVIDENCIA_2026-10-29.md"
+    if not candidatos:
+        return REPO / "docs" / "PASO5_EVIDENCIA_2026-10-29.md"
+    vigente = _corrida_vigente()
+    if vigente:
+        for ruta in reversed(candidatos):
+            if _corrida_de_doc(ruta) == vigente:
+                return ruta
+    return candidatos[-1]
 
 
 DOC = Path(sys.argv[1] if len(sys.argv) > 1 else _doc_por_defecto())
-DB = REPO / "data" / "jobpulse_v15.db"
 
 # Las 13 que la corrida 20261029_183231 promovio a 'descartada' (el usuario
 # pidio confirmarlas por consulta con frase literal, no resumidas).

@@ -1,5 +1,10 @@
 # -*- coding: utf-8 -*-
-"""Genera ``docs/PASO5_EVIDENCIA_2026-10-29.md`` desde la BD.
+"""Genera el documento de evidencia de la corrida VIGENTE del Paso 5.
+
+Por omisión escribe ``docs/PASO5_EVIDENCIA_<fecha de la corrida>.md`` (p. ej.
+``PASO5_EVIDENCIA_2026-10-30.md``); el nombre lo decide la corrida vigente, no
+una fecha fija, para que una corrida nueva no pise el documento de otro día.
+Se puede indicar otro archivo como argumento.
 
 Todo el texto citado es LITERAL de ``jobs.requirements_raw`` +
 ``jobs.description_raw``. El documento incluye:
@@ -16,6 +21,7 @@ Todo el texto citado es LITERAL de ``jobs.requirements_raw`` +
 
 Uso: .\\.venv\\Scripts\\python.exe -X utf8 generar_evidencia_paso5.py [salida]
 """
+import re
 import sqlite3
 import sys
 from pathlib import Path
@@ -24,9 +30,29 @@ sys.path.insert(0, str(Path(__file__).resolve().parent / "src"))
 from jobpulse_v15 import matching
 
 DB = Path(__file__).resolve().parent / "data" / "jobpulse_v15.db"
+DOCS = Path(__file__).resolve().parent / "docs"
+
+conn = sqlite3.connect(DB)
+conn.row_factory = sqlite3.Row
+
+vigente = conn.execute(
+    "SELECT corrida_id FROM job_match WHERE valida = 1 ORDER BY corrida_id DESC LIMIT 1"
+).fetchone()["corrida_id"]
+
+
+def _fecha_de_corrida(corrida_id: str) -> str:
+    """``20261030_174949`` -> ``2026-10-30`` (para el nombre del documento)."""
+    match = re.match(r"^(\d{4})(\d{2})(\d{2})_", corrida_id)
+    if not match:
+        return "sin-fecha"
+    return "%s-%s-%s" % match.groups()
+
+
+# El nombre del documento lo decide la CORRIDA VIGENTE (no una fecha fija):
+# una corrida nueva reescribe el documento de su dia y NO pisa el de otro dia.
 SALIDA = Path(
     sys.argv[1] if len(sys.argv) > 1
-    else Path(__file__).resolve().parent / "docs" / "PASO5_EVIDENCIA_2026-10-29.md"
+    else DOCS / ("PASO5_EVIDENCIA_%s.md" % _fecha_de_corrida(vigente))
 )
 
 # ---------------------------------------------------------------------------
@@ -121,15 +147,8 @@ MEDICION = [
      "Preferred Qualifications + Bachelor's degree"),
 ]
 
-conn = sqlite3.connect(DB)
-conn.row_factory = sqlite3.Row
-
-vigente = conn.execute(
-    "SELECT corrida_id FROM job_match WHERE valida = 1 ORDER BY corrida_id DESC LIMIT 1"
-).fetchone()["corrida_id"]
 corridas = [r["corrida_id"] for r in conn.execute(
     "SELECT DISTINCT corrida_id FROM job_match ORDER BY corrida_id")]
-
 
 def texto_de(job_id: str) -> str:
     job = conn.execute(
