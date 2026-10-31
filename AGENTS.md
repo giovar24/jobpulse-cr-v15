@@ -93,11 +93,15 @@ Cuando el usuario dice "vamos a otra sesión":
 .\.venv\Scripts\python.exe -X utf8 -m jobpulse_v15 areas classify [--dry-run]
 
 # Evidencia / verificación del matching (exit 0 = TODO CUADRA)
+# El GENERADOR nombra el archivo según la CORRIDA VIGENTE
+# (PASO5_EVIDENCIA_<fecha>.md) y el VERIFICADOR elige el doc de esa corrida
+# (no el de nombre más alto): si no, una corrida nueva da falsos fallos.
 .\.venv\Scripts\python.exe -X utf8 generar_evidencia_paso5.py
 .\.venv\Scripts\python.exe -X utf8 verificar_evidencia.py
 .\.venv\Scripts\python.exe -X utf8 generar_revision_pendientes.py
 
 # Diagnóstico BD (SQLite: data/jobpulse_v15.db)
+.\.venv\Scripts\python.exe -X utf8 -m jobpulse_v15 db check   # integrity + FK (exit≠0 si falla)
 .\.venv\Scripts\python.exe tools\estado_bd.py                  # resumen
 .\.venv\Scripts\python.exe tools\progreso_enriquecimiento.py   # % por campo
 .\.venv\Scripts\python.exe tools\huecos_restantes.py           # basura vs recuperable
@@ -109,12 +113,51 @@ Cuando el usuario dice "vamos a otra sesión":
 .\.venv\Scripts\python.exe -X utf8 clean_run.py SI
 
 # Tests: pytest vive en el python del SISTEMA (el venv NO lo tiene). Suite
-# completa ~2 min (verificada 2026-10-30: 358 passed).
+# completa ~70 s (verificada 2026-10-30: 398 passed).
 python -m pytest tests/ -q
 
 # UI
 .\.venv\Scripts\python.exe -m jobpulse_v15.ui
 ```
+
+## Verificar que el scrape llega bien a la BD (receta)
+
+El scraping NO es una sola llamada: una vacante nueva solo "existe" para el
+motor cuando pasa por las 4 etapas. Para comprobarlo con datos frescos:
+
+```powershell
+# 1. Scraping explícito (solo con red; los tableros API no necesitan browser)
+.\.venv\Scripts\python.exe -X utf8 -m jobpulse_v15 scrape workday --site workday-abbott --pages 1
+#    Salida: run_id, jobs_found, jobs_new, jobs_duplicate, jobs_skipped.
+#    jobs_new = 0 y jobs_duplicate = N → la oferta ya estaba: se ACTUALIZA
+#    (last_seen_at) y no se duplica. jobs_new > 0 → se insertó de verdad.
+
+# 2. Análisis (idempotente: solo lo que falta)
+.\.venv\Scripts\python.exe -X utf8 -m jobpulse_v15 analysis extract-pending --limit 10 [--dry-run]
+
+# 3. Matching: CORRIDA NUEVA (nunca UPDATE de la anterior)
+.\.venv\Scripts\python.exe -X utf8 run_paso5.py
+.\.venv\Scripts\python.exe -X utf8 generar_evidencia_paso5.py
+.\.venv\Scripts\python.exe -X utf8 verificar_evidencia.py    # exit 0 = TODO CUADRA
+
+# 4. Comprobaciones en SQL (la BD manda)
+```
+
+Qué mirar después (es lo que fallaba antes del 2026-10-30):
+
+| Comprobación | Query / dónde | Señal de problema |
+|---|---|---|
+| La vacante existe | `jobs` + `job_source_records` + `source_job_memory` | `jobs_new` > 0 pero no aparece |
+| Tiene área | `job_area` (se clasifica **al guardar**, `Repository.save_job`) | `job_area` sin fila → clasificación rota |
+| Tiene análisis | `job_analysis` (`is_current = 1`) + `job_requirements` | `analysis extract-pending` los lista como pendientes |
+| El matching la ve | `job_match` de la corrida vigente: `total_req > 0` | `total_req = 0` + `sin_requisitos` → requisitos **sin `codigo_canonico`** (ver Matching) |
+| El estado cuadra | `GROUP BY estado` de la corrida vigente = nº de jobs | la suma no cuadra → la corrida quedó a medias |
+| La BD está sana | `-m jobpulse_v15 db check` | `integrity_check != ok` o FK violadas |
+
+Ojo: un requisito sin concepto queda con `codigo_canonico = NULL` **a
+propósito** (se encola en `concepto_no_normalizado`) → esa vacante puede
+evaluarse con menos requisitos de los que tiene. Para saber si es un bug o
+una taxonomía incompleta, mira la cola.
 
 ## Scrapers de navegador: ANE, Indeed, LinkedIn (y Elempleo vía CDP)
 
@@ -130,11 +173,13 @@ cualquiera de estos sitios. Reglas de oro:
    El barrido de la UI abre/cierra Brave solo (solo si ella lo abrió).
 2. **ANE (ane.cr)**: sesión obligatoria; sin sesión el barrido se omite limpio
    (no es error). Re-login desde la UI (botón "Re-login ANE") o via CLI:
-   `.\.venv\Scripts\python.exe login_ane.py` (lee `credencial("ANE")` del
-   keyring de Windows; nada en código ni `.env`) → re-barrido
-   `.\.venv\Scripts\python.exe run_scrapes.py ane`. ANE **republica vacantes
-   con IDs nuevos** (minoría; desc. idéntica + fecha movida): revisar con
-   `quality duplicates`, dedupe manual — nunca automerge.
+   `.\.venv\Scripts\python.exe login_ane.py` → re-barrido
+   `.\.venv\Scripts\python.exe run_scrapes.py ane`. La credencial se resuelve
+   en este orden (`credenciales.py::credencial`): **keyring de Windows**
+   (Administrador de Credenciales) → `data/empresas/credenciales.json` →
+   `.env` (`ANE_USER`/`ANE_PASSWORD`). NUNCA en código ni en el repo.
+   ANE **republica vacantes con IDs nuevos** (minoría; desc. idéntica + fecha
+   movida): revisar con `quality duplicates`, dedupe manual — nunca automerge.
 3. **Indeed (cr.indeed.com)**: SSO Google. El popup de alertas intercepta
    clics — resuelto con `_cerrar_popups`; popup nuevo → agregar su selector
    en `_POPUP_SELECTORES`.
@@ -176,8 +221,23 @@ una corrida emitida.
   degree" = ciclo corto (2) · "% de completitud" = parciales (3 sin título).
 - **Umbrales congelados** (cobertura 0.60 / puntaje 0.80): no tocar sin
   acuerdo explícito.
-- Las sumas de estado se confirman por `GROUP BY estado` — la BD manda sobre
+- **Las sumas de estado se confirman por `GROUP BY estado`** — la BD manda sobre
   cualquier resumen transcribido.
+- **`codigo_canonico` se resuelve AL GUARDAR** (`src/jobpulse_v15/conceptos.py`,
+  tests `tests/test_conceptos.py`): `Repository.save_analysis` mapea
+  `value_code` → `concepto.codigo_canonico` (variante = `LOWER(TRIM(value_code))`,
+  misma regla que el backfill de la migración 010). El Paso 5 **descarta los
+  requisitos sin código** (`AND codigo_canonico IS NOT NULL`): sin código la
+  vacante se evalúa con `total_req = 0` y cae en `sin_requisitos` **sin
+  avisar**. Antes de 2026-10-30 el código solo lo rellenaba la migración 010
+  (backfill one-time) → todo requisito nuevo nacía en NULL. **Nunca insertes
+  requisitos por SQL directo**: usa `Repository.save_analysis`.
+  - Variante sin concepto → `codigo_canonico = NULL` (correcto) y se encola en
+    `concepto_no_normalizado` (`veces` acumula) para crecer la taxonomía.
+    Mapean hoy: `six_sigma`, `java`, `tableau`, `autocad`, `c++`, `c#`,
+    `typescript`, `solidworks` (skills) y `b3`/`b4`/`d3` (licencias).
+  - La migración `017` (filas `concepto` de master/MBA/associate/técnico
+    superior) sigue PENDIENTE: sin ella el nivel educativo no es granular.
 - **Pendiente ABIERTO**: las `educacion_no_confirmada` solo las firma una
   SEGUNDA persona con `docs/PASO5_REVISION_PENDIENTES.md` (el veredicto del
   autor de la regla se descarta por sesgo). NO actualizar estados hasta esa
@@ -254,7 +314,7 @@ desmarca (pestaña **“Áreas de empleo”** en `ui_perfil.py` → hechos
     respuesta fue null/"no mencionado"; la caché de disco los repite
     instantáneo. Errores REALES = WARNING "IA extract {campo} fallo tras 3
     intentos".
-15. **`matched` suele ser 0 en BD real**: 370/447 análisis son `partial` y el
+15. **`matched` suele ser 0 en BD real**: 372/449 análisis son `partial` y el
     repo exige `complete` → `needs_review`, así que no filtrar por `matched`
     a ciegas (usar `ui.elegir_filtro_compatibilidad`). `solo_vigentes` oculta
     publicaciones con `date_published` fuera de la ventana de 6 meses aunque
@@ -262,26 +322,32 @@ desmarca (pestaña **“Áreas de empleo”** en `ui_perfil.py` → hechos
 16. **`jobs.requirements_raw` es NULL en casi todos los Workday**: el texto
     real está en `description_raw` (~4–5k chars) → buscar en ambos campos.
 
-## Estado de referencia (verificado 2026-10-30)
+## Estado de referencia (verificado 2026-10-30, tras scraping real)
 
-- Suite: **358 tests verdes** (ejecutada hoy).
-- BD (`data/jobpulse_v15.db`): **447 jobs**, esquema versión 15 (migración
-  `015_job_match_valida.sql` aplicada). Corrida vigente **`20261029_205348`**
-  (`valida=1`; las 6 previas quedan `valida=0`): calificada 102 ·
-  revisar_a_mano 94 · sin_requisitos 141 · descartada 80 ·
-  datos_insuficientes 30 (= 447, verificado GROUP BY). Para conteos por
-  fuente/por campo usar `tools/estado_bd.py` / `tools/progreso_enriquecimiento.py` —
-  NO confiar en números congelados de handoffs viejos.
+- Suite: **398 tests verdes** (`python -m pytest tests/ -q`); `test_matching.py`
+  79, `test_areas.py` 20.
+- BD (`data/jobpulse_v15.db`): **449 jobs**, esquema versión **16** (migraciones
+  `016_areas.sql`; la `017` de la capa B sigue pendiente). `db check` →
+  `integrity_check: ok`, 0 violaciones FK.
+- Corrida vigente **`20261030_174949`** (`valida=1`; las 9 previas quedan
+  `valida=0`; 10 corridas en total): calificada 105 · revisar_a_mano 90 ·
+  sin_requisitos 141 · descartada 83 · datos_insuficientes 30 (= 449,
+  verificado por `GROUP BY estado`).
+- 30 `educacion_no_confirmada` ABIERTAS (las firma una segunda persona).
 - Modelo local canónico: **Gemma 3n E2B QAT** (8k ctx, MTP draft, puerto
   8081); Qwen 3.5 2B descartado (~6.5x más lento). Ver
   `docs/IA_ENRIQUECIMIENTO.md`.
 - Fuentes activas: 7/7 plataformas ATS validadas (83/122 tableros con jobs CR,
   seeds versionados en `src/jobpulse_v15/seeds/*.json`) + ANE/Indeed/
-  LinkedIn/Elempleo (browser) + Harvie/CINDE/Procomer.
-- Pipeline real: scrape (`fetchers/*`) → análisis reglas (`analysis.py`) →
+  LinkedIn/Elempleo (browser) + Harvie/CINDE/Procomer. 129 sitios habilitados.
+- Pipeline real: scrape (adaptadores **en el paquete raíz**:
+  `workday.py`, `greenhouse.py`, `ashby.py`, `lever.py`, `recruitee.py`,
+  `workable.py`, `successfactors.py`, `ane.py`, `indeed.py`, `linkedin.py`,
+  `elempleo.py`, `harvie.py`, `cinde.py`, `procomer.py`; `providers/` solo
+  tiene el login automático) → análisis reglas (`analysis.py`) →
   enriquecimiento IA (`ia_enrichment.py`; veredicto `ia_estado.py`) →
   matching (`matching.py`) → UI de perfil (`ui_perfil.py`, sobre
   `candidate_profile_facts`).
-- Pendientes: ver "Pendiente inmediato" del handoff más reciente (las 19
-  `educacion_no_confirmada` abiertas, Paso 7, O8 ciclo de vida, O5.3
-  re-barrido basura, O2/O4/O9).
+- Pendientes: ver "Pendiente inmediato" del handoff más reciente (las 30
+  `educacion_no_confirmada`, capa B `codigo_canonico` + migración `017`, Paso 7,
+  O8.2 ciclo de vida, O5.3 re-barrido basura, O2/O4/O9).
