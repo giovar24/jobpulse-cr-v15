@@ -14,6 +14,7 @@ from jobpulse_v15 import areas
 from jobpulse_v15 import ciclo_vida
 from jobpulse_v15 import conceptos
 from jobpulse_v15.db import Database
+from jobpulse_v15.ubicaciones_cr import resolver_direccion
 
 
 REQUIREMENT_CATEGORIES = {
@@ -670,6 +671,21 @@ class Repository:
         if work_mode not in {None, "onsite", "hybrid", "remote", "unknown"}:
             raise ValueError("work_mode no es un valor permitido.")
 
+        # Catalogo geografico compartido: si el aviso es de Costa Rica y no
+        # trae ciudad/provincia, se resuelven aqui con la jerarquia
+        # pais -> provincia -> canton -> distrito. Asi TODOS los adaptadores
+        # (no solo Workday) guardan la ubicacion normalizada.
+        if not optional_fields["city"] and not optional_fields["region"]:
+            country_code = (optional_fields["country"] or "").strip().casefold()
+            if country_code in {"cr", "cri"} and optional_fields["location_raw"]:
+                resuelto = resolver_direccion(
+                    optional_fields["location_raw"],
+                    descripcion=optional_fields["description_raw"],
+                    work_mode=work_mode,
+                )
+                optional_fields["city"] = resuelto["city"]
+                optional_fields["region"] = resuelto["region"]
+
         salary_min = self._optional_number(job.get("salary_min"), "salary_min")
         salary_max = self._optional_number(job.get("salary_max"), "salary_max")
         if salary_min is not None and salary_max is not None and salary_min > salary_max:
@@ -1320,6 +1336,7 @@ class Repository:
         query = """
             SELECT j.job_id, j.city, j.region, j.location_raw, s.site_id,
                 s.country AS site_country, s.site_config_json,
+                j.description_raw, j.work_mode,
                 r.raw_payload_json
             FROM job_source_records AS r
             JOIN jobs AS j ON j.job_id = r.job_id
@@ -1367,6 +1384,111 @@ class Repository:
                 ) from exc
             records.append(record)
         return records
+
+    def list_location_records(
+        self, platform_id: str | None = None
+    ) -> list[dict[str, Any]]:
+        """Lista de vacantes con su ubicacion, de TODAS las plataformas.
+
+        Se usa para el backfill con el catalogo geografico compartido
+        (``ubicaciones_cr``): los campos de ciudad/provincia se pueden
+        completar y corregir sin volver a raspar.
+        """
+        query = """
+            SELECT j.job_id, j.city, j.region, j.location_raw, j.country,
+                j.work_mode, j.description_raw,
+                s.platform_id, s.site_id
+            FROM jobs AS j
+            JOIN job_source_records AS r ON r.job_id = j.job_id
+            JOIN source_sites AS s ON s.site_id = r.site_id
+        """
+        parameters: tuple[str, ...] = ()
+        if platform_id is not None:
+            self._required_text(platform_id, "platform_id")
+            query += " WHERE s.platform_id = ?"
+            parameters = (platform_id.strip(),)
+        query += " ORDER BY j.job_id, s.site_id"
+
+        with self.database.connection() as connection:
+            rows = connection.execute(query, parameters).fetchall()
+        return [dict(row) for row in rows]
+
+    def list_work_mode_records(
+        self, platform_id: str | None = None
+    ) -> list[dict[str, Any]]:
+        """Vacantes SIN modalidad declarada, de TODAS las plataformas.
+
+        Se usa para el backfill de la modalidad con la regla determinista
+        (``ia_enrichment.work_mode_por_patrones``): la marca literal del
+        aviso se puede aplicar sin llamar a la IA y sin volver a raspar.
+        """
+        query = """
+            SELECT j.job_id, j.title, j.work_mode, j.description_raw,
+                j.requirements_raw, s.platform_id, s.site_id
+            FROM jobs AS j
+            JOIN job_source_records AS r ON r.job_id = j.job_id
+            JOIN source_sites AS s ON s.site_id = r.site_id
+            WHERE j.work_mode IS NULL OR TRIM(j.work_mode) = ''
+               OR j.work_mode = 'unknown'
+        """
+        parameters: tuple[str, ...] = ()
+        if platform_id is not None:
+            self._required_text(platform_id, "platform_id")
+            query += " AND s.platform_id = ?"
+            parameters = (platform_id.strip(),)
+        query += " ORDER BY j.job_id, s.site_id"
+
+        with self.database.connection() as connection:
+            rows = connection.execute(query, parameters).fetchall()
+        return [dict(row) for row in rows]
+
+    def set_job_work_mode(self, job_id: str, work_mode: str) -> bool:
+        """Escribe la modalidad SOLO si el campo esta vacio.
+
+        No sobreescribe un valor ya conocido (ni uno editado a mano): el
+        backfill determinista solo RELENA huecos. Devuelve ``True`` si
+        escribio.
+        """
+        self._required_text(job_id, "job_id")
+        if work_mode not in {"onsite", "hybrid", "remote"}:
+            raise ValueError("work_mode no es un valor permitido.")
+        with self.database.connection() as connection:
+            cursor = connection.execute(
+                """
+                UPDATE jobs
+                SET work_mode = :work_mode, updated_at = CURRENT_TIMESTAMP
+                WHERE job_id = :job_id
+                  AND (work_mode IS NULL OR TRIM(work_mode) = ''
+                       OR work_mode = 'unknown')
+                """,
+                {"work_mode": work_mode, "job_id": job_id.strip()},
+            )
+            return cursor.rowcount == 1
+
+    def set_job_location(
+        self, job_id: str, *, city: str | None, region: str | None
+    ) -> bool:
+        """ESCRIBE ciudad/provincia (rellena o corrige).
+
+        A diferencia de ``update_missing_job_location``, esta variante
+        sobreescribe: se usa para corregir datos que el catalogo reconoce como
+        equivocados (basura del parser viejo o la region equivocada del
+        normalizador legacy).
+        """
+        self._required_text(job_id, "job_id")
+        city = self._optional_text(city)
+        region = self._optional_text(region)
+        with self.database.connection() as connection:
+            cursor = connection.execute(
+                """
+                UPDATE jobs
+                SET city = :city, region = :region,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE job_id = :job_id
+                """,
+                {"city": city, "region": region, "job_id": job_id.strip()},
+            )
+            return cursor.rowcount == 1
 
     def update_missing_job_location(
         self,

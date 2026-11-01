@@ -624,9 +624,10 @@ class TestNormalizeLocation(unittest.TestCase):
             self.norm("San Antonio, Belen, Heredia, Costa Rica"),
             {"city": "San Antonio", "region": "Heredia"},
         )
+        # "Belen" es el canton: se guarda con el nombre oficial ("Belén").
         self.assertEqual(
             self.norm("Belen, Heredia"),
-            {"city": "Belen", "region": "Heredia"},
+            {"city": "Belén", "region": "Heredia"},
         )
 
     def test_guion_bajo_como_separador(self):
@@ -666,11 +667,12 @@ class TestNormalizeLocation(unittest.TestCase):
             with self.subTest(texto=texto):
                 self.assertEqual(self.norm(texto), esperado)
 
-    def test_provincia_delante_con_detalle_desconocido_no_inventa_ciudad(self):
-        # "La Garita" es un distrito, no un canton: no se usa como ciudad.
+    def test_provincia_delante_con_distrito_conocido_lo_guarda(self):
+        # "La Garita" es un distrito de Alajuela: con la division territorial
+        # completa ya se puede guardar (antes se descartaba por no ser canton).
         self.assertEqual(
             self.norm("Alajuela / Alajuela / La Garita"),
-            {"city": None, "region": "Alajuela"},
+            {"city": "La Garita", "region": "Alajuela"},
         )
 
     def test_no_guarda_planta_zona_ni_abreviatura_como_ciudad(self):
@@ -678,8 +680,6 @@ class TestNormalizeLocation(unittest.TestCase):
             "Costa Rica-Alajuela-Wet Plant": "Alajuela",
             "Costa Rica-Cartago-Dry Plant": "Cartago",
             "San Jose, Costa Rica Local Office": "San José",
-            # "Alajuela Coyol" es "Provincia + zona", no una ciudad.
-            "Alajuela Coyol, Alajuela, Costa Rica": "Alajuela",
         }
         for texto, provincia in casos.items():
             with self.subTest(texto=texto):
@@ -687,13 +687,23 @@ class TestNormalizeLocation(unittest.TestCase):
                     self.norm(texto), {"city": None, "region": provincia}
                 )
 
+    def test_zona_conocida_como_ciudad(self):
+        # "Alajuela Coyol" es "provincia + zona", pero la zona (Coyol Free
+        # Zone) esta en la tabla de lugares: la ciudad si se puede guardar.
+        self.assertEqual(
+            self.norm("Alajuela Coyol, Alajuela, Costa Rica"),
+            {"city": "Coyol", "region": "Alajuela"},
+        )
+
     # -- Canton conocido: completa la provincia -----------------------
     def test_canton_conocido_completa_la_provincia(self):
         casos = {
             "Grecia, Costa Rica": {"city": "Grecia", "region": "Alajuela"},
             "Santa Ana, Costa Rica": {"city": "Santa Ana", "region": "San José"},
+            # "San Antonio de Belen": el distrito (San Antonio) con su canton
+            # (Belen) resuelve la provincia de Heredia.
             "San Antonio de Belen, Costa Rica": {
-                "city": "San Antonio de Belen", "region": "Heredia",
+                "city": "San Antonio", "region": "Heredia",
             },
             "Liberia, Costa Rica": {"city": "Liberia", "region": "Guanacaste"},
         }
@@ -702,17 +712,22 @@ class TestNormalizeLocation(unittest.TestCase):
                 self.assertEqual(self.norm(texto), esperado)
 
     def test_canton_ambiguo_no_completa_la_provincia(self):
-        # Hay Lagunilla en Alajuela y en Heredia: se guarda la ciudad y se
-        # deja la provincia nula en vez de elegir una.
+        # "Lagunilla" no esta en la division territorial: se guarda la ciudad
+        # y se deja la provincia nula en vez de elegir una.
         self.assertEqual(
             self.norm("Lagunilla, Costa Rica"),
             {"city": "Lagunilla", "region": None},
         )
 
-    def test_canton_desconocido_no_inventa_la_provincia(self):
+    def test_distrito_conocido_completa_la_provincia(self):
+        # Con la division territorial completa, un distrito ya da la provincia.
         self.assertEqual(
             self.norm("Ulloa, Costa Rica"),
-            {"city": "Ulloa", "region": None},
+            {"city": "Ulloa", "region": "Heredia"},
+        )
+        self.assertEqual(
+            self.norm("Río Segundo, -A, Costa Rica"),
+            {"city": "Río Segundo", "region": "Alajuela"},
         )
 
     def test_sin_acentos_y_mayusculas(self):
@@ -726,7 +741,7 @@ class TestNormalizeLocation(unittest.TestCase):
         )
         self.assertEqual(
             self.norm("grecia, costa rica"),
-            {"city": "grecia", "region": "Alajuela"},
+            {"city": "Grecia", "region": "Alajuela"},
         )
 
     def test_texto_vacio_o_basura(self):

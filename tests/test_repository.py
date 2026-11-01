@@ -843,7 +843,9 @@ class TestRepository(unittest.TestCase):
                 "title": "Engineer",
                 "company": "Example",
                 "country": "CR",
-                "location_raw": "San Jose, Costa Rica",
+                # Sin lugar resoluble: el catalogo no puede deducir nada y el
+                # aviso queda pendiente de revision.
+                "location_raw": "Costa Rica",
             },
             site_id="intel-cr",
             source_job_id="unparsed-location",

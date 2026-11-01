@@ -382,6 +382,53 @@ class TestWorkModePorPatrones(unittest.TestCase):
             with self.subTest(texto=texto):
                 self.assertIsNone(self.detectar(texto))
 
+    # ── Casos REALES de la BD (detectados el 2026-10-31) ───────
+    def test_marcas_reales_de_la_bd(self):
+        casos = {
+            # Etiqueta del reclutador en español.
+            "#LI-Híbrido Primary Location San Jose, Costa Rica": "hybrid",
+            # Campo "Working Conditions" de TD SYNNEX.
+            "Working Conditions: Remote / Work-from-home.": "remote",
+            "Working Conditions: Professional environment (Hybrid).": "hybrid",
+            # Workday escribe "Hybrid Work : <regla>".
+            "Hybrid Work : Candidates will be expected to work from the"
+            " office at least 50% of the time.": "hybrid",
+            # El puesto, no el servicio.
+            "This is a remote role based out of Costa Rica.": "remote",
+            # Oficina + algo de remoto = híbrido.
+            "Zuora Costa Rica office (Heredia): Multiple office days with"
+            " some remote flexibility.": "hybrid",
+        }
+        for texto, esperado in casos.items():
+            with self.subTest(texto=texto):
+                self.assertEqual(self.detectar(texto), esperado)
+
+    # ── Lo que la regla NO debe resolver (conservador) ──────────
+    def test_no_usa_boilerplate_de_la_empresa_ni_del_servicio(self):
+        falsos = (
+            # Beneficio de un puesto 100% remoto: NO es híbrido.
+            "we currently offer a competitive pay structure and remote"
+            " flexibility",
+            # Puesto 100% presencial.
+            "This role is based in our Costa Rica office in Heredia, with"
+            " required office days every week.",
+            # Campañas de marketing, no modalidad.
+            "Experience managing both onsite (owned & operated) and offsite"
+            " (programmatic, social) campaigns.",
+            # "remoto" como característica del servicio.
+            "Four weeks of paid training (on-site or remote) covering"
+            " interpretation techniques.",
+            "rather than informal or loosely managed remote roles",
+            # Política general de la empresa (NO declara el puesto).
+            "Por eso ofrecemos un modelo de trabajo flexible que combina el"
+            " trabajo remoto con la colaboración presencial intencionada.",
+            "Our Approach to Flexible Work With Flex Work, we're combining"
+            " the best of both worlds: in-person time and remote.",
+        )
+        for texto in falsos:
+            with self.subTest(texto=texto):
+                self.assertIsNone(self.detectar(texto))
+
     def test_sin_texto_devuelve_none(self):
         self.assertIsNone(self.detectar(None, "", "   "))
         self.assertIsNone(self.detectar())

@@ -33,7 +33,15 @@ from jobpulse_v15.repository import (
     REQUIREMENT_CATEGORIES,
     Repository,
 )
-from jobpulse_v15.workday import MAX_PAGES, WorkdayFetcher, ciudad_es_basura
+from jobpulse_v15.workday import (
+    MAX_PAGES,
+    WorkdayFetcher,
+    ciudad_es_basura,
+)
+from jobpulse_v15.ubicaciones_cr import (
+    nombre_canonico,
+    resolver_direccion,
+)
 from jobpulse_v15.credenciales import (
     lista_sitios_login, resumen, faltantes,
     upsert_credencial, borrar_credencial, credencial,
@@ -712,6 +720,49 @@ def main() -> int:
     )
     normalize_workday.add_argument("--site", help="Limitar a un sitio Workday.")
     normalize_workday.add_argument(
+        "--apply",
+        action="store_true",
+        help="Guardar cambios; sin esta opcion solo muestra una simulacion.",
+    )
+    normalize_all = location_commands.add_parser(
+        "normalize",
+        help=(
+            "Completar y corregir ciudad/provincia de TODAS las plataformas "
+            "con el catalogo geografico (pais -> provincia -> canton -> "
+            "distrito)."
+        ),
+    )
+    normalize_all.add_argument(
+        "--platform", help="Limitar a una plataforma (workday, harvie, ...)."
+    )
+    normalize_all.add_argument(
+        "--apply",
+        action="store_true",
+        help="Guardar cambios; sin esta opcion solo muestra una simulacion.",
+    )
+
+    enrich = commands.add_parser(
+        "enrich",
+        help="Rellenar campos con REGLAS LOCALES (sin llamar a la IA).",
+    )
+    enrich_commands = enrich.add_subparsers(dest="enrich_command", required=True)
+    enrich_work_mode = enrich_commands.add_parser(
+        "work-mode",
+        help=(
+            "Rellenar la modalidad (remote/hybrid/onsite) de las vacantes que "
+            "la tienen vacia usando la marca literal del aviso."
+        ),
+    )
+    enrich_work_mode.add_argument(
+        "--platform", help="Limitar a una plataforma (workday, harvie, ...)."
+    )
+    enrich_work_mode.add_argument(
+        "--limit",
+        type=int,
+        default=0,
+        help="Maximo de vacantes a revisar (0 = todas).",
+    )
+    enrich_work_mode.add_argument(
         "--apply",
         action="store_true",
         help="Guardar cambios; sin esta opcion solo muestra una simulacion.",
@@ -2218,6 +2269,8 @@ def main() -> int:
                         location_text if isinstance(location_text, str) else "",
                         country,
                         country_query,
+                        descripcion=record.get("description_raw"),
+                        work_mode=record.get("work_mode"),
                     )
                     city_update = (
                         normalized["city"]
@@ -2275,6 +2328,135 @@ def main() -> int:
                     report["updates"].append(update)
                 if corregir_ciudad:
                     report["corrected_cities"] = len(corregir_ciudad)
+                print(json.dumps(report, ensure_ascii=False, indent=2))
+            elif args.command == "location" and args.location_command == "normalize":
+                # Backfill con el catalogo geografico compartido: completa lo
+                # que falta y corrige lo que el catalogo reconoce como
+                # equivocado (basura del parser viejo, regiones del
+                # normalizador legacy).
+                records = repository.list_location_records(args.platform)
+                report = {
+                    "mode": "apply" if args.apply else "dry_run",
+                    "records_scanned": len(records),
+                    "updates": [],
+                    "filled_city": 0,
+                    "filled_region": 0,
+                    "corrected_city": 0,
+                    "corrected_region": 0,
+                    "skipped_unchanged": 0,
+                    "skipped_no_location": 0,
+                }
+                seen: set[str] = set()
+                for record in records:
+                    job_id = record["job_id"]
+                    if job_id in seen:
+                        continue
+                    seen.add(job_id)
+                    country = (record["country"] or "").strip().casefold()
+                    if country not in {"cr", "cri"}:
+                        report["skipped_no_location"] += 1
+                        continue
+                    location_raw = record["location_raw"] or ""
+                    if not location_raw.strip():
+                        report["skipped_no_location"] += 1
+                        continue
+                    resuelto = resolver_direccion(
+                        location_raw,
+                        descripcion=record["description_raw"],
+                        work_mode=record["work_mode"],
+                    )
+                    city_actual = record["city"]
+                    region_actual = record["region"]
+                    ciudad_basura = ciudad_es_basura(city_actual, region_actual)
+                    canonica = nombre_canonico(city_actual) if city_actual else None
+                    if ciudad_basura:
+                        city = resuelto["city"]
+                    elif resuelto["city"] and (
+                        not city_actual
+                        or canonica is None
+                        or canonica != city_actual
+                    ):
+                        city = resuelto["city"]
+                    else:
+                        city = city_actual
+                    region = resuelto["region"] or region_actual
+                    if city == city_actual and region == region_actual:
+                        report["skipped_unchanged"] += 1
+                        continue
+                    if not city_actual and city:
+                        report["filled_city"] += 1
+                    elif city != city_actual:
+                        report["corrected_city"] += 1
+                    if not region_actual and region:
+                        report["filled_region"] += 1
+                    elif region != region_actual:
+                        report["corrected_region"] += 1
+                    update = {
+                        "job_id": job_id,
+                        "platform_id": record["platform_id"],
+                        "location_raw": location_raw,
+                        "city_before": city_actual,
+                        "city": city,
+                        "region_before": region_actual,
+                        "region": region,
+                    }
+                    if args.apply:
+                        update["updated"] = repository.set_job_location(
+                            job_id, city=city, region=region
+                        )
+                    report["updates"].append(update)
+                print(json.dumps(report, ensure_ascii=False, indent=2))
+            elif args.command == "enrich" and args.enrich_command == "work-mode":
+                # Backfill de la modalidad con la REGLA determinista: la marca
+                # literal del aviso ("#LI-Híbrido", "Working Conditions:
+                # Remote / Work-from-home") se aplica sin llamar a la IA.
+                # Solo RELENA huecos: nunca sobreescribe una modalidad ya
+                # conocida ni una editada a mano.
+                from jobpulse_v15.ia_enrichment import work_mode_por_patrones
+
+                records = repository.list_work_mode_records(args.platform)
+                if args.limit and args.limit > 0:
+                    records = records[: args.limit]
+                report = {
+                    "mode": "apply" if args.apply else "dry_run",
+                    "records_scanned": len(records),
+                    "detected": 0,
+                    "updated": 0,
+                    "without_mark": 0,
+                    "by_work_mode": {},
+                    "updates": [],
+                }
+                seen: set[str] = set()
+                for record in records:
+                    job_id = record["job_id"]
+                    if job_id in seen:
+                        continue
+                    seen.add(job_id)
+                    modalidad = work_mode_por_patrones(
+                        record["description_raw"],
+                        record["requirements_raw"],
+                        record["title"],
+                    )
+                    if not modalidad:
+                        report["without_mark"] += 1
+                        continue
+                    report["detected"] += 1
+                    report["by_work_mode"][modalidad] = (
+                        report["by_work_mode"].get(modalidad, 0) + 1
+                    )
+                    update = {
+                        "job_id": job_id,
+                        "platform_id": record["platform_id"],
+                        "work_mode_before": record["work_mode"],
+                        "work_mode": modalidad,
+                    }
+                    if args.apply:
+                        update["updated"] = repository.set_job_work_mode(
+                            job_id, modalidad
+                        )
+                        if update["updated"]:
+                            report["updated"] += 1
+                    report["updates"].append(update)
                 print(json.dumps(report, ensure_ascii=False, indent=2))
             # === credenciales ===
             elif args.command == "credenciales":

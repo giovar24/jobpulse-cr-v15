@@ -149,10 +149,49 @@ Responde SOLO JSON: {"work_mode": "..."}"""
 # El orden importa: gana el primero que aparezca en la tupla, así que las
 # etiquetas ``#LI-`` (declaración del reclutador) van antes que las frases.
 _PATRONES_WORK_MODE: Tuple[Tuple[str, "re.Pattern[str]"], ...] = (
-    # Etiquetas de LinkedIn que el reclutador escribe en el aviso.
-    ("remote", re.compile(r"#\s*(?:LI|RPOCR)\s*[-_]?\s*(?:LI\s*[-_]?\s*)?remote\b", re.I)),
-    ("hybrid", re.compile(r"#\s*(?:LI|RPOCR)\s*[-_]?\s*(?:LI\s*[-_]?\s*)?hybrid\b", re.I)),
-    ("onsite", re.compile(r"#\s*(?:LI|RPOCR)\s*[-_]?\s*(?:LI\s*[-_]?\s*)?onsite\b", re.I)),
+    # Etiquetas de LinkedIn/Workday que el reclutador escribe en el aviso.
+    # Admiten tildes y plurales: "#LI-Híbrido" es la misma declaración que
+    # "#LI-Hybrid" (Kimberly-Clark escribe la etiqueta en español).
+    ("remote", re.compile(r"#\s*(?:LI|RPOCR)\s*[-_]?\s*(?:LI\s*[-_]?\s*)?remot[eo]a?\b", re.I)),
+    ("hybrid", re.compile(r"#\s*(?:LI|RPOCR)\s*[-_]?\s*(?:LI\s*[-_]?\s*)?h(?:y|[ií])brid[oa]?\b", re.I)),
+    ("onsite", re.compile(r"#\s*(?:LI|RPOCR)\s*[-_]?\s*(?:LI\s*[-_]?\s*)?on[-\s]?site\b", re.I)),
+    # "Working Conditions: Remote / Work-from-home" (TD SYNNEX y similares):
+    # el campo de condiciones de trabajo DECLARA la modalidad del puesto.
+    ("remote", re.compile(
+        r"working\s+conditions\s*:?\s*(?:\(\s*)?"
+        r"(?:remote\b|work[-\s]?from[-\s]?home\b|work\s+from\s+home\b)",
+        re.I,
+    )),
+    ("remote", re.compile(
+        r"condiciones\s+de\s+trabajo\s*:?\s*(?:\(\s*)?"
+        r"(?:remot[eo]a?\b|teletrabajo\b)",
+        re.I,
+    )),
+    # "Working Conditions: Professional environment (Hybrid)."
+    ("hybrid", re.compile(
+        r"working\s+conditions\s*:?\s*[^\n]{0,60}?\bh(?:y|[ií])brid[oa]?\b",
+        re.I,
+    )),
+    ("hybrid", re.compile(
+        r"condiciones\s+de\s+trabajo\s*:?\s*[^\n]{0,60}?\bh(?:y|[ií])brid[oa]?\b",
+        re.I,
+    )),
+    # "Hybrid Work: Candidates will be expected to work from the office at
+    # least 50% of the time." (la modalidad, con su regla, escrita).
+    ("hybrid", re.compile(r"hybrid\s+work\s*:", re.I)),
+    # "This is a remote role based out of Costa Rica." (el puesto, no el
+    # servicio: "Video Remote Interpreter" NO entra aquí).
+    ("remote", re.compile(
+        r"(?:this|it)\s+is\s+a\s+remote\s+(?:role|position|job)\b", re.I)),
+    # "Multiple office days with some remote flexibility." (presencia en
+    # oficina + remoto = híbrido). "required office days every week" NO
+    # entra: es 100% presencial. "remote flexibility" suelto tampoco: puede
+    # ser un beneficio ("...pay structure and remote flexibility") de un
+    # puesto 100% remoto.
+    ("hybrid", re.compile(
+        r"(?:multiple|several)\s+office\s+days\b[^.\n]{0,60}\bremote\b",
+        re.I,
+    )),
     # Frases que describen la modalidad del PUESTO (no del edificio ni del
     # proyecto). "híbrido" suelto no vale: "modelo híbrido" sí.
     ("hybrid", re.compile(
