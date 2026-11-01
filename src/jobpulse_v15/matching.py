@@ -80,11 +80,18 @@ from datetime import datetime
 from typing import Iterable, Sequence
 
 from jobpulse_v15 import areas
+from jobpulse_v15 import idiomas
 
 UMBRAL_COBERTURA = 0.60
 UMBRAL_PUNTAJE = 0.80
 
 IDIOMA_ORDEN = {"A1": 1, "A2": 2, "B1": 3, "B2": 4, "C1": 5, "C2": 6}
+
+# REGLA DE IDIOMA (acordada 2026-10-31): el requisito de idioma de un aviso
+# es **el idioma en que esta escrito**, salvo que el aviso pida uno o varios
+# idiomas como requisito (los que pide el aviso son los requisitos).
+# El mapeo idioma -> codigo canonico vive en ``idiomas`` (fuente unica).
+EVIDENCIA_IDIOMA_DEL_AVISO = "idioma del aviso"
 
 ESTADO_CALIFICADA = "calificada"
 ESTADO_REVISAR = "revisar_a_mano"
@@ -984,6 +991,9 @@ class Requisito:
     # Frase literal del aviso donde se encontro el requisito: es el ancla
     # para leer el NIVEL que declara el texto (no el codigo canonico).
     evidence: str | None = None
+    # True cuando el requisito NO lo pide el aviso sino que se deduce de la
+    # REGLA de idioma (el aviso esta escrito en ese idioma).
+    implicito: bool = False
 
 
 @dataclass
@@ -1017,6 +1027,7 @@ class EvaluadorPaso5:
         self.facts = self._cargar_facts()
         self.total_anos = self._cargar_experiencia()
         self.requisitos_por_job = self._cargar_requisitos()
+        self.idioma_aviso_por_job = self._cargar_idioma_aviso()
         self.textos_por_job = self._cargar_textos()
         self.jobs_con_analisis = self._cargar_jobs_con_analisis()
         # Filtro por area de empleo: las areas marcadas por el usuario y el
@@ -1088,6 +1099,15 @@ class EvaluadorPaso5:
                 )
             )
         return por_job
+
+    def _cargar_idioma_aviso(self) -> dict[str, str]:
+        """Idioma declarado (o detectado) de cada aviso."""
+        return {
+            row["job_id"]: row["posting_language"]
+            for row in self.connection.execute(
+                "SELECT job_id, posting_language FROM jobs"
+            )
+        }
 
     def _cargar_textos(self) -> dict[str, str]:
         textos: dict[str, str] = {}
@@ -1180,6 +1200,67 @@ class EvaluadorPaso5:
                 return "no_verificable"
             return nivel_fact >= nivel_req
         return False
+
+    def cumple_idioma_del_aviso(self, codigo: str):
+        """Cumple el requisito IMPLICITO: el idioma en que esta escrito el aviso.
+
+        * ``True``: el perfil registra ese idioma.
+        * ``"no_verificable"``: el perfil NO registra ningun idioma -> no se
+          puede afirmar que no lo tenga (nunca se descarta por falta de
+          informacion).
+        * ``False``: el perfil registra otros idiomas, pero no este.
+        """
+        if not self.facts["language"]:
+            return "no_verificable"
+        return any(f["codigo_canonico"] == codigo for f in self.facts["language"])
+
+    def codigo_idioma_del_aviso(self, job_id: str) -> str | None:
+        """Codigo canonico del idioma del aviso (``None`` si no se sabe)."""
+        return idiomas.codigo_canonico_del_idioma(
+            self.idioma_aviso_por_job.get(job_id) or ""
+        )
+
+    def requisitos_efectivos(self, job_id: str) -> list[Requisito]:
+        """Requisitos del aviso con la REGLA DE IDIOMA aplicada.
+
+        * Los idiomas que el aviso **pide** (nivel ``required``/``inferred``/
+          ``ambiguous``) son los requisitos de idioma.
+        * Un idioma solo ``preferred`` **no** es un requisito: no bloquea.
+        * Si el aviso **no pide** ningun idioma, el requisito de idioma es **el
+          idioma del aviso**: hay que poder trabajar en el idioma en que esta
+          escrito.
+        * Si el aviso no tiene NINGUN otro requisito, no se agrega el idioma
+          implicito: el aviso se queda en ``sin_requisitos`` (no se puede
+          calificar una oferta solo porque su idioma se cumple).
+        """
+        base = self.requisitos_por_job.get(job_id, [])
+        idiomas_pedidos = [
+            requisito
+            for requisito in base
+            if requisito.category == "language"
+            and requisito.requirement_level != "preferred"
+        ]
+        otros = [requisito for requisito in base if requisito.category != "language"]
+        efectivos = otros + idiomas_pedidos
+        if otros and not idiomas_pedidos:
+            codigo = self.codigo_idioma_del_aviso(job_id)
+            if codigo:
+                efectivos.append(
+                    Requisito(
+                        requirement_id=-1,
+                        category="language",
+                        value_code=codigo,
+                        value_text=codigo,
+                        qualifier=None,
+                        requirement_level="required",
+                        minimum=None,
+                        codigo_canonico=codigo,
+                        education_status=None,
+                        evidence=EVIDENCIA_IDIOMA_DEL_AVISO,
+                        implicito=True,
+                    )
+                )
+        return efectivos
 
     def cumple_experience(self, minimum: float | None):
         if self.total_anos is None or minimum is None:
@@ -1337,7 +1418,7 @@ class EvaluadorPaso5:
                 no_v_count=0,
                 nc_count=0,
             )
-        requisitos = self.requisitos_por_job.get(job_id, [])
+        requisitos = self.requisitos_efectivos(job_id)
         if not requisitos:
             return Resultado(
                 job_id=job_id,
@@ -1369,7 +1450,11 @@ class EvaluadorPaso5:
             if categoria == "skill":
                 ok = self.cumple_skill(req.codigo_canonico)
             elif categoria == "language":
-                ok = self.cumple_language(req.codigo_canonico, req.qualifier)
+                if req.implicito:
+                    # REGLA DE IDIOMA: el aviso esta escrito en ese idioma.
+                    ok = self.cumple_idioma_del_aviso(req.codigo_canonico)
+                else:
+                    ok = self.cumple_language(req.codigo_canonico, req.qualifier)
             elif categoria == "education":
                 estado_req, conf = self.evaluar_educacion(req, texto)
                 if estado_req == "cumple":

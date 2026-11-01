@@ -92,6 +92,11 @@ Cuando el usuario dice "vamos a otra sesión":
 .\.venv\Scripts\python.exe -X utf8 -m jobpulse_v15 areas list
 .\.venv\Scripts\python.exe -X utf8 -m jobpulse_v15 areas classify [--dry-run]
 
+# Idioma del aviso (determinista, SIN IA): solo rellena los 'undetermined'.
+# Es el dato de la REGLA de requisito de idioma del matching (ver Matching).
+.\.venv\Scripts\python.exe -X utf8 -m jobpulse_v15 enrich posting-language
+.\.venv\Scripts\python.exe -X utf8 -m jobpulse_v15 enrich posting-language --apply
+
 # Evidencia / verificación del matching (exit 0 = TODO CUADRA)
 # El GENERADOR nombra el archivo según la CORRIDA VIGENTE
 # (PASO5_EVIDENCIA_<fecha>.md) y el VERIFICADOR elige el doc de esa corrida
@@ -113,7 +118,7 @@ Cuando el usuario dice "vamos a otra sesión":
 .\.venv\Scripts\python.exe -X utf8 clean_run.py SI
 
 # Tests: pytest vive en el python del SISTEMA (el venv NO lo tiene). Suite
-# completa ~70 s (verificada 2026-10-30: 398 passed).
+# completa ~3.5 min (verificada 2026-11-01: 486 passed + 179 subtests).
 python -m pytest tests/ -q
 
 # UI
@@ -190,9 +195,36 @@ cualquiera de estos sitios. Reglas de oro:
 ## Matching / Paso 5 — reglas de negocio duras
 
 Módulo real: `src/jobpulse_v15/matching.py` (tests: `tests/test_matching.py`,
-79 casos con frases literales de la BD). Cada cambio de regla = **corrida
+87 casos con frases literales de la BD). Cada cambio de regla = **corrida
 NUEVA** en `job_match` (`corrida_id` + `valida`); nunca `UPDATE` in-place de
 una corrida emitida.
+
+### Regla de IDIOMA del aviso (2026-11-01)
+
+**El requisito de idioma de un aviso es EL IDIOMA EN QUE ESTÁ ESCRITO el
+aviso**, salvo que el aviso **pida** uno o varios idiomas como requisito; en
+ese caso mandan los que pide. Implementación: `matching.requisitos_efectivos`
+(tests `TestReglaIdiomaDelAviso`) + `idiomas.py` (detector).
+
+- El idioma del aviso sale de `jobs.posting_language` (lo declara la fuente, o
+  lo detecta **deterministamente** `idiomas.detectar_idioma_del_aviso`: cuenta
+  palabras funcionales es/en, sin IA; `mixed`/`undetermined` si no se
+  distingue).
+- `es` → `espanol`, `en` → `ingles` (`idiomas.CODIGO_IDIOMA`).
+- Idioma pedido con `requirement_level='preferred'` **NO es requisito** (misma
+  regla dura: "Preferred" no bloquea) → manda el idioma del aviso.
+- **`mixed`/`undetermined` NO generan requisito** (no hay un idioma único).
+- **El idioma del aviso solo cuenta si el aviso tiene OTROS requisitos**: una
+  oferta no se califica solo porque su idioma se cumpla (si no hay más
+  requisitos queda `sin_requisitos`).
+- Perfil **sin ningún idioma registrado** → `no_verificable` (**nunca**
+  faltante). Con otros idiomas pero sin este → `revisar_a_mano` +
+  `idioma_no_comparable`.
+- **`posting_language` de la fuente no se pisa**: la detección solo rellena
+  `undetermined` (origin `detected`), al guardar (`save_job`) y con el backfill
+  `enrich posting-language` (idempotente, dry-run por defecto).
+- La **comparación de la UI** aplica la MISMA regla
+  (`Repository._requisitos_con_regla_de_idioma`): UI y CLI no divergen.
 
 - `descartada` **solo** si el TEXTO de la oferta confirma título universitario
   obligatorio, sin negación y sin alternativa (en la cláusula/grupo completo);
@@ -321,18 +353,29 @@ desmarca (pestaña **“Áreas de empleo”** en `ui_perfil.py` → hechos
     se hayan scrapeado hoy.
 16. **`jobs.requirements_raw` es NULL en casi todos los Workday**: el texto
     real está en `description_raw` (~4–5k chars) → buscar en ambos campos.
+17. **`jobs.posting_language` es NOT NULL**: en tests hay que darle un valor
+    (`undetermined` si no se quiere idioma); un `INSERT` sin él revienta con
+    `IntegrityError`. `mixed` es un valor VÁLIDO y **real** (el aviso mezcla
+    idiomas): simplemente no genera requisito en el matching. La columna
+    `concepto` **no** tiene `nombre`: es `codigo_canonico` + `variante`.
 
-## Estado de referencia (verificado 2026-10-31, tras reset + scrape desde cero)
+## Estado de referencia (verificado 2026-11-01, con la regla de idioma del aviso)
 
-- Suite: **471 tests verdes** + 179 subtests (`python -m pytest tests/ -q`);
-  `test_matching.py` 79, `test_areas.py` 20, `test_ubicaciones_cr.py` 28.
+- Suite: **486 tests verdes** + 179 subtests (`python -m pytest tests/ -q`, ~3.5
+  min); `test_matching.py` 87, `test_areas.py` 20, `test_ubicaciones_cr.py` 28,
+  `test_idiomas.py` 7.
 - BD (`data/jobpulse_v15.db`): **553 jobs** (rescateados desde cero con
   `clean_run.py SI`), esquema versión **16** (migraciones `016_areas.sql`; la
   `017` de la capa B sigue pendiente). `db check` → `integrity_check: ok`,
   0 violaciones FK.
-- Corrida vigente **`20261031_214155`** (`valida=1`): calificada 177 ·
-  sin_requisitos 138 · revisar_a_mano 106 · descartada 89 ·
-  datos_insuficientes 43 (= 553, verificado por `GROUP BY estado`).
+- Corrida vigente **`20261101_084012`** (`valida=1`): calificada 179 ·
+  sin_requisitos 140 · revisar_a_mano 106 · descartada 89 ·
+  datos_insuficientes 39 (= 553, verificado por `GROUP BY estado`). La anterior
+  **`20261031_214155`** queda `valida=0` para comparar el efecto de la regla.
+- `posting_language` (553, 0 `undetermined`): **es/source 222 · en/detected
+  267 · es/detected 41 · mixed/detected 23**. `mixed` no genera requisito de
+  idioma. Requisitos vigentes **1066** (196 de idioma; **80 sin
+  `codigo_canonico`**).
 - 30 `educacion_no_confirmada` ABIERTAS (las firma una segunda persona).
 - Llenado del corpus nuevo **sin pase de IA**: `region` 77.8 % · `city`
   47.9 % · `work_mode` 48.3 % · `employment_type` 50.8 % · `salary_min` 0 %
@@ -353,9 +396,11 @@ desmarca (pestaña **“Áreas de empleo”** en `ui_perfil.py` → hechos
   matching (`matching.py`) → UI de perfil (`ui_perfil.py`, sobre
   `candidate_profile_facts`).
 - Ubicación: catálogo único `ubicaciones_cr` (jerarquía país→provincia→cantón→
-  distrito + tabla de lugares); backfills deterministas `location normalize`
-  y `enrich work-mode` (idempotentes, dry-run por defecto).
+  distrito + tabla de lugares); backfills deterministas `location normalize`,
+  `enrich work-mode` e `enrich posting-language` (idempotentes, dry-run por
+  defecto, sin IA).
 - Pendientes: ver "Pendiente inmediato" del handoff más reciente (las 30
   `educacion_no_confirmada`, capa B `codigo_canonico` + migración `017`, Paso 7,
   O8.2 ciclo de vida, O5.3 re-barrido basura, extractor de salario, sucursal de
-  Harvie en el título, O2/O4/O9).
+  Harvie en el título, O2/O4/O9, y el Paso 5 desde la UI sin persistir
+  `job_match`).

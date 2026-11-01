@@ -47,13 +47,22 @@ def _insertar_job(
     job_id: str,
     descripcion: str,
     requirements_raw: str | None = None,
+    posting_language: str | None = None,
 ) -> None:
     connection.execute(
         """
-        INSERT INTO jobs (job_id, title, company, description_raw, requirements_raw)
-        VALUES (?, ?, ?, ?, ?)
+        INSERT INTO jobs (job_id, title, company, description_raw, requirements_raw,
+                          posting_language)
+        VALUES (?, ?, ?, ?, ?, ?)
         """,
-        (job_id, "Puesto de prueba", "Acme CR", descripcion, requirements_raw),
+        (
+            job_id,
+            "Puesto de prueba",
+            "Acme CR",
+            descripcion,
+            requirements_raw,
+            posting_language or "undetermined",
+        ),
     )
     connection.execute(
         """
@@ -1215,6 +1224,198 @@ class TestMecanicasGenerales(unittest.TestCase):
         self.connection.commit()
         con_universidad = matching.EvaluadorPaso5(self.connection).evaluar_job("huntsman")
         self.assertNotEqual(con_universidad.estado, matching.ESTADO_DESCARTADA)
+
+
+class TestReglaIdiomaDelAviso(unittest.TestCase):
+    """REGLA (2026-10-31): el requisito de idioma es el idioma del aviso, salvo
+    que el aviso pida uno o varios idiomas como requisito."""
+
+    def setUp(self):
+        self.tmpdir = tempfile.TemporaryDirectory()
+        self.connection = _crear_base(self.tmpdir.name)
+        _insertar_fact(self.connection, "excel", "excel", "skill")
+
+    def tearDown(self):
+        self.connection.close()
+        self.tmpdir.cleanup()
+
+    def _evaluar(self, job_id):
+        return matching.EvaluadorPaso5(self.connection).evaluar_job(job_id)
+
+    def test_el_idioma_del_aviso_es_el_requisito(self):
+        # Aviso en ingles, sin idiomas pedidos: el requisito es INGLES.
+        _insertar_job(
+            self.connection,
+            "job-en",
+            "Excel Advanced and customer service.",
+            posting_language="en",
+        )
+        _insertar_requisito(
+            self.connection, "job-en", "excel", "excel", "required", category="skill"
+        )
+        self.connection.commit()
+        evaluador = matching.EvaluadorPaso5(self.connection)
+        requisitos = evaluador.requisitos_efectivos("job-en")
+        codigos = {r.codigo_canonico for r in requisitos if r.category == "language"}
+        self.assertEqual(codigos, {"ingles"})
+
+    def test_el_idioma_del_aviso_cubierto_no_falla(self):
+        _insertar_fact(self.connection, "ingles", "ingles", "language")
+        _insertar_job(
+            self.connection,
+            "job-en",
+            "Excel Advanced and customer service.",
+            posting_language="en",
+        )
+        _insertar_requisito(
+            self.connection, "job-en", "excel", "excel", "required", category="skill"
+        )
+        self.connection.commit()
+        resultado = self._evaluar("job-en")
+        self.assertEqual(resultado.total_req, 2)
+        self.assertEqual(resultado.faltantes, [])
+        self.assertNotEqual(resultado.motivo, matching.MOTIVO_IDIOMA)
+
+    def test_si_el_aviso_pide_otro_idioma_manda_el_que_pide(self):
+        # Aviso en ingles que PIDE espanol: el requisito es espanol.
+        _insertar_fact(self.connection, "espanol", "espanol", "language")
+        _insertar_job(
+            self.connection,
+            "job-pedido",
+            "Se requiere espanol. Excel Advanced and customer service.",
+            posting_language="en",
+        )
+        _insertar_requisito(
+            self.connection,
+            "job-pedido",
+            "es",
+            "espanol",
+            "required",
+            category="language",
+        )
+        _insertar_requisito(
+            self.connection,
+            "job-pedido",
+            "excel",
+            "excel",
+            "required",
+            category="skill",
+        )
+        self.connection.commit()
+        evaluador = matching.EvaluadorPaso5(self.connection)
+        codigos = {
+            r.codigo_canonico
+            for r in evaluador.requisitos_efectivos("job-pedido")
+            if r.category == "language"
+        }
+        self.assertEqual(codigos, {"espanol"})
+
+    def test_idioma_preferred_no_es_requisito(self):
+        # "Spanish preferred" NO es un requisito: manda el idioma del aviso.
+        _insertar_job(
+            self.connection,
+            "job-preferred",
+            "Excel Advanced and customer service.",
+            posting_language="en",
+        )
+        _insertar_requisito(
+            self.connection,
+            "job-preferred",
+            "es",
+            "espanol",
+            "preferred",
+            category="language",
+        )
+        _insertar_requisito(
+            self.connection,
+            "job-preferred",
+            "excel",
+            "excel",
+            "required",
+            category="skill",
+        )
+        self.connection.commit()
+        evaluador = matching.EvaluadorPaso5(self.connection)
+        requisitos = evaluador.requisitos_efectivos("job-preferred")
+        idiomas = [r for r in requisitos if r.category == "language"]
+        self.assertEqual(len(idiomas), 1)
+        self.assertEqual(idiomas[0].codigo_canonico, "ingles")
+        self.assertTrue(idiomas[0].implicito)
+
+    def test_aviso_sin_otros_requisitos_queda_sin_requisitos(self):
+        # El idioma del aviso NO califica por si solo una oferta.
+        _insertar_fact(self.connection, "ingles", "ingles", "language")
+        _insertar_job(
+            self.connection,
+            "job-sin",
+            "Customer service and Excel.",
+            posting_language="en",
+        )
+        self.connection.commit()
+        resultado = self._evaluar("job-sin")
+        self.assertEqual(resultado.estado, matching.ESTADO_SIN_REQUISITOS)
+
+    def test_perfil_sin_idiomas_no_se_puede_afirmar_que_no_cumple(self):
+        # El perfil no registra ningun idioma: no verificable, NO faltante.
+        _insertar_job(
+            self.connection,
+            "job-sin-idiomas",
+            "Excel Advanced and customer service.",
+            posting_language="en",
+        )
+        _insertar_requisito(
+            self.connection,
+            "job-sin-idiomas",
+            "excel",
+            "excel",
+            "required",
+            category="skill",
+        )
+        self.connection.commit()
+        resultado = self._evaluar("job-sin-idiomas")
+        self.assertNotEqual(resultado.motivo, matching.MOTIVO_IDIOMA)
+        self.assertEqual(resultado.faltantes, [])
+
+    def test_idioma_del_aviso_que_el_perfil_no_tiene_manda_a_revision(self):
+        _insertar_fact(self.connection, "espanol", "espanol", "language")
+        _insertar_job(
+            self.connection,
+            "job-ingles",
+            "Excel Advanced and customer service.",
+            posting_language="en",
+        )
+        _insertar_requisito(
+            self.connection,
+            "job-ingles",
+            "excel",
+            "excel",
+            "required",
+            category="skill",
+        )
+        self.connection.commit()
+        resultado = self._evaluar("job-ingles")
+        self.assertEqual(resultado.estado, matching.ESTADO_REVISAR)
+        self.assertEqual(resultado.motivo, matching.MOTIVO_IDIOMA)
+
+    def test_idioma_mixto_no_da_requisito(self):
+        _insertar_job(
+            self.connection,
+            "job-mixto",
+            "Excel Advanced and customer service.",
+            posting_language="mixed",
+        )
+        _insertar_requisito(
+            self.connection,
+            "job-mixto",
+            "excel",
+            "excel",
+            "required",
+            category="skill",
+        )
+        self.connection.commit()
+        evaluador = matching.EvaluadorPaso5(self.connection)
+        requisitos = evaluador.requisitos_efectivos("job-mixto")
+        self.assertEqual([r for r in requisitos if r.category == "language"], [])
 
 
 if __name__ == "__main__":

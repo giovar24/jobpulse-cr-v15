@@ -767,6 +767,28 @@ def main() -> int:
         action="store_true",
         help="Guardar cambios; sin esta opcion solo muestra una simulacion.",
     )
+    enrich_posting_language = enrich_commands.add_parser(
+        "posting-language",
+        help=(
+            "Detectar el idioma en que esta escrito cada aviso (es/en/mixed) "
+            "para las vacantes que la fuente no lo declara. Es lo que aplica "
+            "la regla de requisito de idioma del matching."
+        ),
+    )
+    enrich_posting_language.add_argument(
+        "--platform", help="Limitar a una plataforma (workday, harvie, ...)."
+    )
+    enrich_posting_language.add_argument(
+        "--limit",
+        type=int,
+        default=0,
+        help="Maximo de vacantes a revisar (0 = todas).",
+    )
+    enrich_posting_language.add_argument(
+        "--apply",
+        action="store_true",
+        help="Guardar cambios; sin esta opcion solo muestra una simulacion.",
+    )
     args = parser.parse_args()
 
     database = Database(args.db)
@@ -2453,6 +2475,58 @@ def main() -> int:
                     if args.apply:
                         update["updated"] = repository.set_job_work_mode(
                             job_id, modalidad
+                        )
+                        if update["updated"]:
+                            report["updated"] += 1
+                    report["updates"].append(update)
+                print(json.dumps(report, ensure_ascii=False, indent=2))
+            elif args.command == "enrich" and args.enrich_command == "posting-language":
+                # Backfill del IDIOMA DEL AVISO con la REGLA determinista: se
+                # cuenta el texto (palabras funcionales, sin IA). Es el dato
+                # que aplica la REGLA de requisitos de idioma del matching:
+                # el aviso esta escrito en el idioma que hay que poder
+                # trabajar, salvo que el aviso pida otro(s).
+                from jobpulse_v15.idiomas import detectar_idioma_del_aviso
+
+                records = repository.list_posting_language_records(args.platform)
+                if args.limit and args.limit > 0:
+                    records = records[: args.limit]
+                report = {
+                    "mode": "apply" if args.apply else "dry_run",
+                    "records_scanned": len(records),
+                    "detected": 0,
+                    "updated": 0,
+                    "undetermined": 0,
+                    "by_language": {},
+                    "updates": [],
+                }
+                seen: set[str] = set()
+                for record in records:
+                    job_id = record["job_id"]
+                    if job_id in seen:
+                        continue
+                    seen.add(job_id)
+                    idioma = detectar_idioma_del_aviso(
+                        record["title"],
+                        record["description_raw"],
+                        record["requirements_raw"],
+                    )
+                    if idioma == "undetermined":
+                        report["undetermined"] += 1
+                        continue
+                    report["detected"] += 1
+                    report["by_language"][idioma] = (
+                        report["by_language"].get(idioma, 0) + 1
+                    )
+                    update = {
+                        "job_id": job_id,
+                        "platform_id": record["platform_id"],
+                        "posting_language_before": record["posting_language"],
+                        "posting_language": idioma,
+                    }
+                    if args.apply:
+                        update["updated"] = repository.set_job_posting_language(
+                            job_id, idioma
                         )
                         if update["updated"]:
                             report["updated"] += 1

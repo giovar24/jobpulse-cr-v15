@@ -13,6 +13,7 @@ from urllib.parse import urlparse
 from jobpulse_v15 import areas
 from jobpulse_v15 import ciclo_vida
 from jobpulse_v15 import conceptos
+from jobpulse_v15 import idiomas
 from jobpulse_v15.db import Database
 from jobpulse_v15.ubicaciones_cr import resolver_direccion
 
@@ -670,6 +671,20 @@ class Repository:
         work_mode = job.get("work_mode")
         if work_mode not in {None, "onsite", "hybrid", "remote", "unknown"}:
             raise ValueError("work_mode no es un valor permitido.")
+
+        # Idioma del aviso: si la fuente NO lo declara, se detecta de forma
+        # determinista (palabras funcionales del texto, sin IA). Es el dato
+        # que aplica la REGLA de requisitos de idioma del matching: el aviso
+        # esta escrito en el idioma que hay que poder trabajar.
+        if posting_language in (None, "undetermined"):
+            detectado = idiomas.detectar_idioma_del_aviso(
+                title,
+                optional_fields["description_raw"],
+                optional_fields["requirements_raw"],
+            )
+            if detectado != "undetermined":
+                posting_language = detectado
+                language_origin = "detected"
 
         # Catalogo geografico compartido: si el aviso es de Costa Rica y no
         # trae ciudad/provincia, se resuelven aqui con la jerarquia
@@ -1441,6 +1456,66 @@ class Repository:
         with self.database.connection() as connection:
             rows = connection.execute(query, parameters).fetchall()
         return [dict(row) for row in rows]
+
+    def list_posting_language_records(
+        self, platform_id: str | None = None
+    ) -> list[dict[str, Any]]:
+        """Vacantes SIN idioma declarado, de TODAS las plataformas.
+
+        Se usa para el backfill determinista del idioma del aviso
+        (``idiomas.detectar_idioma_del_aviso``): el idioma se puede completar
+        sin volver a raspar y sin llamar a la IA.
+        """
+        query = """
+            SELECT j.job_id, j.title, j.posting_language, j.posting_language_origin,
+                j.description_raw, j.requirements_raw, s.platform_id, s.site_id
+            FROM jobs AS j
+            JOIN job_source_records AS r ON r.job_id = j.job_id
+            JOIN source_sites AS s ON s.site_id = r.site_id
+            WHERE j.posting_language IS NULL OR j.posting_language = 'undetermined'
+        """
+        parameters: tuple[str, ...] = ()
+        if platform_id is not None:
+            self._required_text(platform_id, "platform_id")
+            query += " AND s.platform_id = ?"
+            parameters = (platform_id.strip(),)
+        query += " ORDER BY j.job_id, s.site_id"
+
+        with self.database.connection() as connection:
+            rows = connection.execute(query, parameters).fetchall()
+        return [dict(row) for row in rows]
+
+    def set_job_posting_language(
+        self, job_id: str, posting_language: str, origin: str = "detected"
+    ) -> bool:
+        """Escribe el idioma del aviso SOLO si aun no estaba declarado.
+
+        No sobreescribe un idioma que la FUENTE ya declaro (``origin='source'``):
+        el backfill determinista solo RELENA huecos. Devuelve ``True`` si
+        escribio.
+        """
+        self._required_text(job_id, "job_id")
+        if posting_language not in {"es", "en", "mixed"}:
+            raise ValueError("posting_language no es un valor permitido.")
+        if origin not in {"detected", "source"}:
+            raise ValueError("posting_language_origin no es un valor permitido.")
+        with self.database.connection() as connection:
+            cursor = connection.execute(
+                """
+                UPDATE jobs
+                SET posting_language = :posting_language,
+                    posting_language_origin = :origin,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE job_id = :job_id
+                  AND (posting_language IS NULL OR posting_language = 'undetermined')
+                """,
+                {
+                    "posting_language": posting_language,
+                    "origin": origin,
+                    "job_id": job_id.strip(),
+                },
+            )
+            return cursor.rowcount == 1
 
     def set_job_work_mode(self, job_id: str, work_mode: str) -> bool:
         """Escribe la modalidad SOLO si el campo esta vacio.
@@ -2530,7 +2605,13 @@ class Repository:
             raise ValueError(f"La vacante {job_id!r} no existe.")
         analysis = self.get_current_analysis(job_id)
         facts = self.list_candidate_profile_facts()
-        return self._compare_candidate_profile(job_id, job.get("title"), analysis, facts)
+        return self._compare_candidate_profile(
+            job_id,
+            job.get("title"),
+            analysis,
+            facts,
+            posting_language=str(job.get("posting_language") or ""),
+        )
 
     def compare_jobs_to_candidate_profile(
         self, jobs: Sequence[Mapping[str, Any]]
@@ -2539,11 +2620,13 @@ class Repository:
         if not isinstance(jobs, Sequence) or isinstance(jobs, (str, bytes)):
             raise ValueError("jobs debe ser una lista de vacantes.")
         normalized_jobs: dict[str, str] = {}
+        idioma_por_job: dict[str, str] = {}
         for job in jobs:
             if not isinstance(job, Mapping):
                 raise ValueError("Cada vacante debe ser un objeto.")
             job_id = self._required_text(job.get("job_id"), "job_id")
             normalized_jobs[job_id] = str(job.get("title") or "Vacante sin titulo")
+            idioma_por_job[job_id] = str(job.get("posting_language") or "")
         if not normalized_jobs:
             return {}
 
@@ -2612,7 +2695,11 @@ class Repository:
 
         return {
             job_id: self._compare_candidate_profile(
-                job_id, title, analyses.get(job_id), facts
+                job_id,
+                title,
+                analyses.get(job_id),
+                facts,
+                posting_language=idioma_por_job.get(job_id, ""),
             )
             for job_id, title in normalized_jobs.items()
         }
@@ -2623,6 +2710,7 @@ class Repository:
         job_title: Any,
         analysis: Mapping[str, Any] | None,
         facts: Sequence[Mapping[str, Any]],
+        posting_language: str = "",
     ) -> dict[str, Any]:
         result: dict[str, Any] = {
             "job_id": job_id,
@@ -2654,7 +2742,9 @@ class Repository:
         }
         if analysis is None:
             return result
-        for requirement in analysis["requirements"]:
+        for requirement in self._requisitos_con_regla_de_idioma(
+            analysis["requirements"], posting_language
+        ):
             category = str(requirement["category"])
             code = requirement.get("value_code")
             match_key = self._profile_match_key(str(code)) if code else ""
@@ -2678,6 +2768,47 @@ class Repository:
                 }
             )
         return result
+
+    @staticmethod
+    def _requisitos_con_regla_de_idioma(
+        requirements: Sequence[Mapping[str, Any]], posting_language: str
+    ) -> list[Mapping[str, Any]]:
+        """Aplica la REGLA DE IDIOMA a los requisitos de la comparacion de la UI.
+
+        Misma regla que el Paso 5 (``matching.requisitos_efectivos``): el
+        requisito de idioma es **el idioma del aviso**, salvo que el aviso
+        pida uno o varios idiomas como requisito. Un idioma solo "preferred"
+        no es un requisito.
+        """
+        lista = list(requirements)
+        idiomas_pedidos = [
+            requisito
+            for requisito in lista
+            if str(requisito.get("category")) == "language"
+            and str(requisito.get("requirement_level")) != "preferred"
+        ]
+        otros = [
+            requisito
+            for requisito in lista
+            if str(requisito.get("category")) != "language"
+        ]
+        if not otros or idiomas_pedidos:
+            return lista
+        codigo = idiomas.codigo_canonico_del_idioma(posting_language)
+        if not codigo:
+            return lista
+        implicito = {
+            "category": "language",
+            "value_code": codigo,
+            "value_text": codigo,
+            "qualifier": None,
+            "requirement_level": "required",
+            "minimum": None,
+            "education_status": None,
+            "evidence": "idioma del aviso",
+            "origin": "regla_idioma_del_aviso",
+        }
+        return lista + [implicito]
 
     @staticmethod
     def candidate_profile_status(comparison: Mapping[str, Any]) -> str:

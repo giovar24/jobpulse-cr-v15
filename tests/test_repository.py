@@ -429,6 +429,43 @@ class TestRepository(unittest.TestCase):
             "below_requirement",
         )
 
+    def test_la_comparacion_aplica_la_regla_del_idioma_del_aviso(self):
+        # Aviso en espanol y SIN idiomas pedidos: el requisito de idioma es
+        # el del aviso (espanol), no el que tenga el perfil.
+        self.add_job("job-regla-idioma", language="es")
+        self.repository.save_analysis(
+            "job-regla-idioma",
+            text_hash="regla-idioma-hash",
+            extractor_version="rules-1",
+            analysis_status="complete",
+            field_statuses={"skill": "found"},
+            requirements=[
+                {
+                    "category": "skill",
+                    "value_code": "excel",
+                    "value_text": "Excel",
+                    "requirement_level": "required",
+                    "evidence": "Excel required.",
+                    "origin": "rule",
+                    "confidence": 0.9,
+                },
+            ],
+        )
+        self.repository.save_candidate_profile_fact(
+            "language", "espanol", "Espanol", qualifier="Nativo"
+        )
+        comparison = self.repository.compare_job_to_candidate_profile(
+            "job-regla-idioma"
+        )
+        idiomas = [
+            item
+            for item in comparison["requirements"]
+            if item["category"] == "language"
+        ]
+        self.assertEqual(len(idiomas), 1)
+        self.assertEqual(idiomas[0]["value_code"], "espanol")
+        self.assertEqual(idiomas[0]["comparison_status"], "matched")
+
     def test_profile_comparison_marks_unregistered_and_inferred_as_review(self):
         self.add_job("job-profile-review")
         inferred = self.english_requirement(
