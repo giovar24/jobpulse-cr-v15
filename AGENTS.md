@@ -322,24 +322,28 @@ desmarca (pestaña **“Áreas de empleo”** en `ui_perfil.py` → hechos
 16. **`jobs.requirements_raw` es NULL en casi todos los Workday**: el texto
     real está en `description_raw` (~4–5k chars) → buscar en ambos campos.
 
-## Estado de referencia (verificado 2026-10-30, tras scraping real)
+## Estado de referencia (verificado 2026-10-31, tras reset + scrape desde cero)
 
-- Suite: **398 tests verdes** (`python -m pytest tests/ -q`); `test_matching.py`
-  79, `test_areas.py` 20.
-- BD (`data/jobpulse_v15.db`): **449 jobs**, esquema versión **16** (migraciones
-  `016_areas.sql`; la `017` de la capa B sigue pendiente). `db check` →
-  `integrity_check: ok`, 0 violaciones FK.
-- Corrida vigente **`20261030_174949`** (`valida=1`; las 9 previas quedan
-  `valida=0`; 10 corridas en total): calificada 105 · revisar_a_mano 90 ·
-  sin_requisitos 141 · descartada 83 · datos_insuficientes 30 (= 449,
-  verificado por `GROUP BY estado`).
+- Suite: **471 tests verdes** + 179 subtests (`python -m pytest tests/ -q`);
+  `test_matching.py` 79, `test_areas.py` 20, `test_ubicaciones_cr.py` 28.
+- BD (`data/jobpulse_v15.db`): **553 jobs** (rescateados desde cero con
+  `clean_run.py SI`), esquema versión **16** (migraciones `016_areas.sql`; la
+  `017` de la capa B sigue pendiente). `db check` → `integrity_check: ok`,
+  0 violaciones FK.
+- Corrida vigente **`20261031_214155`** (`valida=1`): calificada 177 ·
+  sin_requisitos 138 · revisar_a_mano 106 · descartada 89 ·
+  datos_insuficientes 43 (= 553, verificado por `GROUP BY estado`).
 - 30 `educacion_no_confirmada` ABIERTAS (las firma una segunda persona).
+- Llenado del corpus nuevo **sin pase de IA**: `region` 77.8 % · `city`
+  47.9 % · `work_mode` 48.3 % · `employment_type` 50.8 % · `salary_min` 0 %
+  (no hay extractor) · `skills`/`languages` 0 % (los llena solo la IA).
 - Modelo local canónico: **Gemma 3n E2B QAT** (8k ctx, MTP draft, puerto
   8081); Qwen 3.5 2B descartado (~6.5x más lento). Ver
   `docs/IA_ENRIQUECIMIENTO.md`.
-- Fuentes activas: 7/7 plataformas ATS validadas (83/122 tableros con jobs CR,
-  seeds versionados en `src/jobpulse_v15/seeds/*.json`) + ANE/Indeed/
-  LinkedIn/Elempleo (browser) + Harvie/CINDE/Procomer. 129 sitios habilitados.
+- Fuentes activas: 7/7 plataformas ATS validadas (seeds versionados en
+  `src/jobpulse_v15/seeds/*.json`) + ANE/Indeed/LinkedIn/Elempleo (browser) +
+  Harvie/CINDE/Procomer. 129 sitios habilitados; scrape de los 129 con
+  **0 errores** (ANE requiere sesión iniciada).
 - Pipeline real: scrape (adaptadores **en el paquete raíz**:
   `workday.py`, `greenhouse.py`, `ashby.py`, `lever.py`, `recruitee.py`,
   `workable.py`, `successfactors.py`, `ane.py`, `indeed.py`, `linkedin.py`,
@@ -348,6 +352,10 @@ desmarca (pestaña **“Áreas de empleo”** en `ui_perfil.py` → hechos
   enriquecimiento IA (`ia_enrichment.py`; veredicto `ia_estado.py`) →
   matching (`matching.py`) → UI de perfil (`ui_perfil.py`, sobre
   `candidate_profile_facts`).
+- Ubicación: catálogo único `ubicaciones_cr` (jerarquía país→provincia→cantón→
+  distrito + tabla de lugares); backfills deterministas `location normalize`
+  y `enrich work-mode` (idempotentes, dry-run por defecto).
 - Pendientes: ver "Pendiente inmediato" del handoff más reciente (las 30
   `educacion_no_confirmada`, capa B `codigo_canonico` + migración `017`, Paso 7,
-  O8.2 ciclo de vida, O5.3 re-barrido basura, O2/O4/O9).
+  O8.2 ciclo de vida, O5.3 re-barrido basura, extractor de salario, sucursal de
+  Harvie en el título, O2/O4/O9).

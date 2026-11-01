@@ -601,13 +601,20 @@ class TestNormalizeLocation(unittest.TestCase):
             "Heredia Costa Rica": "Heredia",
             "Heredia, -H, Costa Rica": "Heredia",
             "San Jose, Central, Costa Rica": "San José",
-            "Heredia, Heredia, Costa Rica": "Heredia",
         }
         for texto, provincia in casos.items():
             with self.subTest(texto=texto):
                 self.assertEqual(
                     self.norm(texto), {"city": None, "region": provincia}
                 )
+
+    def test_la_repeticion_si_es_el_contexto_de_la_ciudad(self):
+        # "Heredia, Heredia, Costa Rica" es el idioma "ciudad, canton, pais":
+        # la repeticion desambigua el homonimo y la ciudad SI es Heredia.
+        self.assertEqual(
+            self.norm("Heredia, Heredia, Costa Rica"),
+            {"city": "Heredia", "region": "Heredia"},
+        )
 
     def test_provincia_sola_no_ambigua_si_se_guarda(self):
         # No existe una ciudad llamada Guanacaste: el dato es la provincia.

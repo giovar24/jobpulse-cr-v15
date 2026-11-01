@@ -95,8 +95,48 @@ class TestResolverDireccion(unittest.TestCase):
             {"city": "Tres Ríos", "region": "Cartago"},
         )
 
+    def test_la_repeticion_es_el_idioma_ciudad_canton_pais(self):
+        # "Heredia, Heredia, Costa Rica" = ciudad, canton, pais: la repeticion
+        # desambigua el nombre homonimo de la provincia.
+        self.assertEqual(
+            self.resolver("Heredia, Heredia, Costa Rica"),
+            {"city": "Heredia", "region": "Heredia"},
+        )
+        self.assertEqual(
+            self.resolver("San José, San José, Costa Rica"),
+            {"city": "San José", "region": "San José"},
+        )
+        self.assertEqual(
+            self.resolver("San Jose-San Jose-Costa Rica"),
+            {"city": "San José", "region": "San José"},
+        )
+        # Sin repetir no se adivina.
+        self.assertEqual(
+            self.resolver("Alajuela, Costa Rica"),
+            {"city": None, "region": "Alajuela"},
+        )
+
+    def test_la_provincia_vale_aunque_venga_pegada(self):
+        # "Belen Heredia" sin coma: la provincia sigue siendo cierta.
+        self.assertEqual(
+            self.resolver("HCLTech, Belen Heredia."),
+            {"city": None, "region": "Heredia"},
+        )
+        self.assertEqual(
+            self.resolver("Costa Rica-Cartago-Wet Plant"),
+            {"city": None, "region": "Cartago"},
+        )
+
+    def test_lugares_de_provincias_distintas_no_son_ciudad(self):
+        # "Gravilias" (San Jose) + "Tres Rios" (Cartago) no es una ciudad.
+        for texto in ("Gravilias Tres Rios", "Sucursal Toyota Zapote",
+                      "El Lagar Barrio Cuba"):
+            with self.subTest(texto=texto):
+                self.assertIsNone(self.resolver(texto)["city"])
+
     def test_el_ruido_no_es_ciudad(self):
         casos = {
+
             "Costa Rica Remote": (None, None),
             "Global Service Center- Costa Rica": (None, None),
             "Costa Rica-Cartago-Wet Plant": (None, "Cartago"),

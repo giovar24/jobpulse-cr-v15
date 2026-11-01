@@ -83,7 +83,8 @@ _PALABRAS_DESCRIPTORAS = frozenset({
     "ubicacion", "planta", "plantas", "oficina", "sede", "campus", "center",
     "centre", "laboratories", "laboratorios", "labs", "logistics", "logistica",
     "engineering", "ingenieria", "administration", "administracion", "city",
-    "ciudad", "area", "area", "zone", "zona", "park", "parque",
+    "ciudad", "area", "area", "zone", "zona", "park", "parque", "barrio",
+    "sucursal", "tienda", "bodega", "local", "agencia",
 })
 
 
@@ -164,6 +165,12 @@ def ciudad_es_basura(
     ):
         # "Alajuela Coyol": la provincia repetida + zona no es una ciudad.
         # (Si la ciudad ES la provincia, no es basura: es un dato valido.)
+        return True
+    # "Gravilias Tres Rios" no es una ciudad sino DOS (un distrito de San Jose
+    # y otro de Cartago): un nombre compuesto de lugares de provincias
+    # distintas nunca es un lugar unico. Ojo: "San Jose" SI es un lugar (la
+    # capital) aunque tenga distritos homonimos en otras provincias.
+    if resolver(ciudad) is None and len(_provincias_de_un_lugar(ciudad)) > 1:
         return True
     return False
 
@@ -352,6 +359,31 @@ def _es_nombre_de_provincia(nombre: str) -> bool:
     return clave(nombre) in provincias()
 
 
+def _provincias_en_texto(parte: str) -> list[str]:
+    """Provincias que nombra ``parte``, aunque vengan pegadas a otra palabra.
+
+    Un tablero escribe "HCLTech, Belen Heredia" (sin coma entre el canton y la
+    provincia): el ``partir`` no puede separarlo, pero la PROVINCIA sigue
+    siendo un dato cierto porque el texto la nombra. Se buscan n-gramas de
+    hasta tres palabras (para "San Jose", "Perez Zeledon"... solo cuando el
+    nombre es de provincia).
+    """
+    palabras = (parte or "").split()
+    mapa = provincias()
+    halladas: list[str] = []
+    for tam in (3, 2, 1):
+        for inicio in range(len(palabras) - tam + 1):
+            nombre = mapa.get(clave(" ".join(palabras[inicio : inicio + tam])))
+            if nombre and nombre not in halladas:
+                halladas.append(nombre)
+    return halladas
+
+
+def _provincias_de_un_lugar(nombre: str) -> set[str]:
+    """Provincias en las que podria estar ``nombre`` segun el catalogo."""
+    return {opcion[1] for opcion in _resolver_en_palabras(nombre)}
+
+
 def resolver_direccion(
     texto: str, *, descripcion: str | None = None, work_mode: str | None = None
 ) -> dict[str, str | None]:
@@ -362,10 +394,16 @@ def resolver_direccion(
     - La **provincia** es un dato cierto cuando el texto la nombra, aunque su
       nombre tambien sea el de una ciudad ("San Jose, Costa Rica" -> region San
       Jose, ciudad nula): la ambiguedad afecta a la CIUDAD, no a la provincia.
+      Basta con que el texto la nombre, aunque venga pegada a otra palabra sin
+      separador ("HCLTech, Belen Heredia" -> region Heredia).
     - La **ciudad** se toma del lugar mas especifico que el texto nombre y que
-      sea inequivoco; si es solo la provincia no se repite como ciudad.
+      sea inequivoco; si es solo la provincia no se repite como ciudad. La
+      EXCEPCION es la repeticion "ciudad, canton, pais" ("Heredia, Heredia,
+      Costa Rica" -> ciudad Heredia): ahi la repeticion es el contexto.
     - Un **distrito ambiguo** se desambigua con el canton que lo acompania
       ("San Antonio, Belen, Heredia" -> San Antonio, Heredia).
+    - Un nombre compuesto por lugares de provincias distintas ("Gravilias Tres
+      Rios") no es una ciudad: no se guarda.
     - ``descripcion``: ULTIMO recurso para los campos de CIUDAD que la
       ubicacion no resuelve. Se busca un lugar conocido de
       ``seeds/lugares_cr.csv`` en el texto del aviso ("hybrid position based in
@@ -389,6 +427,11 @@ def resolver_direccion(
                 continue
             if opcion[1] not in provincias_nombradas:
                 provincias_nombradas.append(opcion[1])
+        # La provincia puede venir PEGADA a otra palabra ("Belen Heredia"):
+        # el texto la nombra y por tanto es un dato cierto.
+        for provincia in _provincias_en_texto(parte):
+            if provincia not in provincias_nombradas:
+                provincias_nombradas.append(provincia)
 
     # Segunda pasada: canton y distrito.
     for parte, opciones in opciones_por_parte:
@@ -419,7 +462,11 @@ def resolver_direccion(
                 continue
             opciones = elegida
         nivel, provincia, canton, nombre = max(
-            opciones, key=lambda item: item[0]
+            opciones,
+            # A igual nivel se prefiere el nombre que NO es el de la provincia:
+            # "Lagar San Ramon de Alajuela" -> San Ramon (la provincia no
+            # aporta ciudad, solo confirma la region).
+            key=lambda item: (item[0], not _es_nombre_de_provincia(item[3])),
         )
         candidato = (nivel, nombre, provincia, canton)
         if candidato not in hallazgos:
@@ -455,8 +502,23 @@ def resolver_direccion(
                 break
         if city is None and len(desconocidos) == 1:
             # Un unico lugar nombrado que no es la provincia: es la ciudad
-            # ("Alajuela - Coyol", "Four Seasons Costa Rica").
-            city = desconocidos[0]
+            # ("Alajuela - Coyol", "Four Seasons Costa Rica"). Salvo que sea
+            # una ENSALADA de lugares ("Gravilias Tres Rios" = un distrito de
+            # San Jose + otro de Cartago, "Sucursal Toyota Zapote"): ahi no hay
+            # una ciudad, hay dos, y no se guarda basura.
+            if len(_provincias_de_un_lugar(desconocidos[0])) <= 1:
+                city = desconocidos[0]
+
+    # "Heredia, Heredia, Costa Rica" es el idioma universal "ciudad, canton,
+    # pais": la REPETICION es el contexto que desambigua el nombre homonimo de
+    # la provincia. Sin repetir ("Heredia, Costa Rica") no se adivina: la
+    # ubicacion solo dice la provincia.
+    if city is None and provincias_nombradas:
+        claves_partes = [clave(parte) for parte in partes]
+        for nombre_provincia in provincias_nombradas:
+            if claves_partes.count(clave(nombre_provincia)) >= 2:
+                city = nombre_provincia
+                break
 
     # La tabla de LUGARES tambien se consulta en la propia ubicacion: un
     # tablero puede escribir "HCLTech, AFZ" o "Control Fronterizo | Peñas

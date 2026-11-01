@@ -1,4 +1,4 @@
-# Paso 5 — Evidencia del bloqueante educativo (corrida `20261031_114039`)
+# Paso 5 — Evidencia del bloqueante educativo (corrida `20261031_214155`)
 
 > Documento GENERADO por `generar_evidencia_paso5.py` (no editado a mano).
 > Todo el texto citado es **literal** de `jobs.requirements_raw` +
@@ -94,13 +94,13 @@ resultados sin tocar el código.
 
 ```
 corrida          filas  valida=1
-20261031_114039  552    552
+20261031_214155  553    553
 ```
 
-## 3. Conteo por estado y motivo (corrida vigente `20261031_114039`)
+## 3. Conteo por estado y motivo (corrida vigente `20261031_214155`)
 
 ```
-calificada             | cumple_umbral                          | 176
+calificada             | cumple_umbral                          | 177
 datos_insuficientes    | cobertura_insuficiente                 | 39
 datos_insuficientes    | educacion_no_cumple                    | 3
 datos_insuficientes    | skill_faltante                         | 1
@@ -1620,7 +1620,7 @@ corrida `20261029_171039` (106 vacantes en total):
   tres, ordenadas por `job_id`).
 
 Cada caso se revisó a mano contra la frase literal del aviso.
-`Estado final` es el de la corrida vigente `20261031_114039`.
+`Estado final` es el de la corrida vigente `20261031_214155`.
 
 | # | job_id | veredicto manual | por qué | estado final | motivo final |
 |---|---|---|---|---|---|
