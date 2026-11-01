@@ -21,6 +21,9 @@ import os
 import re
 from typing import Any, Dict, List, Optional, Tuple
 
+from jobpulse_v15.salario import contexto_salario, declara_salario
+from jobpulse_v15.ubicaciones_cr import ciudad_es_valida, es_provincia_valida
+
 # Import IA client
 try:
     from jobpulse_v15.ia_api import IAClient, IAError, IAModeloError, IACuotaError
@@ -244,7 +247,11 @@ Si no está explícito -> null.
 
 Responde SOLO JSON: {"employment_type": "..."}"""
 
-SALARY_PROMPT = """Extrae salario SOLO si está EXPLÍCITO con números.
+SALARY_PROMPT = """Extrae el SALARIO DEL PUESTO SOLO si está EXPLÍCITO con números.
+- "Estimated base salary: $19,984,600 CRC annually" -> min/max + CRC + annual.
+- "Hourly Rate: $10 to $23 USD per hour" -> min/max + USD + hourly.
+- IGNORA cifras de ingresos, funding, ventas, clientes o tamaño de la empresa.
+- IGNORA "paid time off", "paid shifts" y otros pagos que NO son salario.
 Responde: min, max, currency (CRC/USD), period (monthly/annual/hourly).
 Si no hay salario explícito -> todos null.
 
@@ -323,9 +330,17 @@ async def enrich_job_fields(job: Dict[str, Any], client: IAClient) -> Dict[str, 
         location_text = f"Ubicación: {location_raw}"
         result = await _extract_field(client, LOCATION_PROMPT, location_text, LOCATION_SCHEMA, "location")
         if result and result.get("city") is not None:
-            filled["city"] = result["city"]
+            # La IA tambien mete basura: una planta ("Dry Plant"), una sede
+            # ("BSC") o el nombre de la empresa no son ciudades. Pasa por la
+            # misma puerta que el catalogo (bug corregido el 2026-11-01: 5
+            # avisos con city="BSC" y 1 con "Dry Plant" venian de aqui).
+            if ciudad_es_valida(
+                result["city"], result.get("region"), job.get("company")
+            ):
+                filled["city"] = result["city"]
         if result and result.get("region") is not None:
-            filled["region"] = result["region"]
+            if es_provincia_valida(result["region"]):
+                filled["region"] = result["region"]
     
     # 2. WORK_MODE (crítico)
     # Primero la regla determinista sobre el texto COMPLETO (la etiqueta
@@ -359,8 +374,27 @@ async def enrich_job_fields(job: Dict[str, Any], client: IAClient) -> Dict[str, 
             filled["employment_type"] = result["employment_type"]
     
     # Salary
-    if job.get("salary_min") is None and job.get("salary_raw"):
-        result = await _extract_field(client, SALARY_PROMPT, full_text, SALARY_SCHEMA, "salary", 200)
+    # La puerta NO es `salary_raw`: las APIs de empleo casi nunca lo traen
+    # (0 de 354 avisos en la corrida por la UI del 2026-11-01) y los avisos
+    # que SI declaran la compensacion la esconden en la descripcion
+    # ("Estimated base salary: $19,984,600 CRC annually"). La señal es una
+    # MARCA de salario + una MONEDA en el texto (jobpulse_v15.salario), que
+    # es la MISMA regla que usa el contador de huecos (ia_estado).
+    if job.get("salary_min") is None and (
+        job.get("salary_raw")
+        or declara_salario(
+            job.get("description_raw"), job.get("requirements_raw")
+        )
+    ):
+        # Al modelo se le manda el FRAGMENTO alrededor de la marca: la
+        # seccion de compensacion suele ir al final del aviso, fuera de los
+        # 2000 primeros caracteres que ve el recorte por defecto.
+        contexto = contexto_salario(
+            job.get("description_raw"), job.get("requirements_raw")
+        )
+        result = await _extract_field(
+            client, SALARY_PROMPT, contexto or full_text, SALARY_SCHEMA, "salary", 200
+        )
         if result and result.get("salary_min") is not None:
             filled["salary_min"] = result["salary_min"]
             filled["salary_max"] = result["salary_max"]
@@ -407,7 +441,15 @@ def needs_secondary_enrichment(job: Dict[str, Any]) -> bool:
     """Verifica si el job necesita campos SECUNDARIOS (solo pase completo)."""
     return (
         not job.get("employment_type") or
-        (job.get("salary_min") is None and bool(job.get("salary_raw"))) or
+        (
+            job.get("salary_min") is None
+            and bool(
+                job.get("salary_raw")
+                or declara_salario(
+                    job.get("description_raw"), job.get("requirements_raw")
+                )
+            )
+        ) or
         not job.get("skills") or
         not job.get("languages")
     )

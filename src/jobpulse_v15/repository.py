@@ -15,7 +15,7 @@ from jobpulse_v15 import ciclo_vida
 from jobpulse_v15 import conceptos
 from jobpulse_v15 import idiomas
 from jobpulse_v15.db import Database
-from jobpulse_v15.ubicaciones_cr import resolver_direccion
+from jobpulse_v15.ubicaciones_cr import ciudad_es_valida, resolver_direccion
 
 
 REQUIREMENT_CATEGORIES = {
@@ -690,16 +690,50 @@ class Repository:
         # trae ciudad/provincia, se resuelven aqui con la jerarquia
         # pais -> provincia -> canton -> distrito. Asi TODOS los adaptadores
         # (no solo Workday) guardan la ubicacion normalizada.
-        if not optional_fields["city"] and not optional_fields["region"]:
-            country_code = (optional_fields["country"] or "").strip().casefold()
-            if country_code in {"cr", "cri"} and optional_fields["location_raw"]:
+        #
+        # Antes de resolver, se VALIDA la ciudad que entrega el adaptador: una
+        # planta ("Dry Plant"), una sede ("BSC"), un pais ("Brazil") o el
+        # nombre de la empresa ("LifeSync Amphenol") NO son ciudades. Sin esta
+        # validacion, la basura se guardaba y el ``COALESCE`` de los UPDATE
+        # la conservaba para siempre (9 avisos en la corrida del 2026-11-01).
+        ciudad_del_adaptador = optional_fields["city"]
+        empresa = optional_fields["company"]
+        if ciudad_del_adaptador and not ciudad_es_valida(
+            ciudad_del_adaptador, optional_fields["region"], empresa
+        ):
+            optional_fields["city"] = None
+
+        country_code = (optional_fields["country"] or "").strip().casefold()
+        if country_code in {"cr", "cri"} and optional_fields["location_raw"]:
+            if not optional_fields["city"] and not optional_fields["region"]:
                 resuelto = resolver_direccion(
                     optional_fields["location_raw"],
                     descripcion=optional_fields["description_raw"],
                     work_mode=work_mode,
+                    empresa=empresa,
                 )
                 optional_fields["city"] = resuelto["city"]
                 optional_fields["region"] = resuelto["region"]
+            elif not optional_fields["city"] and ciudad_del_adaptador is not None:
+                # La ciudad del adaptador era basura: se vuelve a resolver
+                # DESDE la ubicacion cruda (puede traer la provincia y el
+                # lugar correctos: "Costa Rica-Cartago-BSC" -> Cartago).
+                resuelto = resolver_direccion(
+                    optional_fields["location_raw"],
+                    descripcion=optional_fields["description_raw"],
+                    work_mode=work_mode,
+                    empresa=empresa,
+                )
+                optional_fields["city"] = resuelto["city"]
+                if not optional_fields["region"] and resuelto["region"]:
+                    optional_fields["region"] = resuelto["region"]
+
+        # Ultima validacion: lo que devuelve el catalogo tambien pasa por la
+        # puerta (una sede o un pais nunca son una ciudad).
+        if optional_fields["city"] and not ciudad_es_valida(
+            optional_fields["city"], optional_fields["region"], empresa
+        ):
+            optional_fields["city"] = None
 
         salary_min = self._optional_number(job.get("salary_min"), "salary_min")
         salary_max = self._optional_number(job.get("salary_max"), "salary_max")
@@ -1411,7 +1445,7 @@ class Repository:
         """
         query = """
             SELECT j.job_id, j.city, j.region, j.location_raw, j.country,
-                j.work_mode, j.description_raw,
+                j.work_mode, j.description_raw, j.company,
                 s.platform_id, s.site_id
             FROM jobs AS j
             JOIN job_source_records AS r ON r.job_id = j.job_id

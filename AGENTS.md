@@ -359,30 +359,41 @@ desmarca (pestaña **“Áreas de empleo”** en `ui_perfil.py` → hechos
     idiomas): simplemente no genera requisito en el matching. La columna
     `concepto` **no** tiene `nombre`: es `codigo_canonico` + `variante`.
 
-## Estado de referencia (verificado 2026-11-01, con la regla de idioma del aviso)
+## Estado de referencia (verificado 2026-11-01 tarde, tras la auditoría de la corrida por la UI)
 
-- Suite: **486 tests verdes** + 179 subtests (`python -m pytest tests/ -q`, ~3.5
-  min); `test_matching.py` 87, `test_areas.py` 20, `test_ubicaciones_cr.py` 28,
-  `test_idiomas.py` 7.
-- BD (`data/jobpulse_v15.db`): **553 jobs** (rescateados desde cero con
-  `clean_run.py SI`), esquema versión **16** (migraciones `016_areas.sql`; la
-  `017` de la capa B sigue pendiente). `db check` → `integrity_check: ok`,
-  0 violaciones FK.
-- Corrida vigente **`20261101_084012`** (`valida=1`): calificada 179 ·
-  sin_requisitos 140 · revisar_a_mano 106 · descartada 89 ·
-  datos_insuficientes 39 (= 553, verificado por `GROUP BY estado`). La anterior
-  **`20261031_214155`** queda `valida=0` para comparar el efecto de la regla.
-- `posting_language` (553, 0 `undetermined`): **es/source 222 · en/detected
-  267 · es/detected 41 · mixed/detected 23**. `mixed` no genera requisito de
-  idioma. Requisitos vigentes **1066** (196 de idioma; **80 sin
-  `codigo_canonico`**).
+- Suite: **511 tests verdes** + 190 subtests (`python -m pytest tests/ -q`,
+  ~1.5 min); `test_matching.py` 87, `test_areas.py` 20, `test_ubicaciones_cr.py`
+  35, `test_idiomas.py` 7, `test_salario.py` 11.
+- **3 bugs de extracción corregidos (01-11 tarde)**, tras la corrida por la UI
+  (354 avisos): (1) la UI no tenía `fetcher_map["harvie"]` → **189 avisos**
+  nunca raspados; (2) la puerta del extractor de salario exigía
+  `salary_raw`, que las APIs casi nunca traen (0 de 354) → **módulo nuevo
+  `salario.py`** (marca de salario + moneda, el MISMO regex para el extractor
+  Python y el contador SQL vía función SQLite `RE()`); (3) `save_job` no
+  validaba la ciudad del adaptador/IA → **9 avisos con ciudad basura**
+  (`BSC`×5, `Dry Plant`, `LifeSync Amphenol`×2, `Brazil`) corregidos con la
+  puerta `ciudad_es_valida` (adaptador + IA + catálogo) y backfill aplicado.
+- BD (`data/jobpulse_v15.db`): **VACIADA al cierre** con `clean_run.py SI`
+  (conserva perfil, 129 sitios, 20 áreas, taxonomía `concepto`) para la
+  **corrida manual nueva** del usuario; esquema versión **16** (la `017` de la
+  capa B sigue pendiente). Antes de vaciar (corrida de la UI): 354 jobs, 895
+  requisitos (47 sin `codigo_canonico`), `db check` ok.
+- Auditoría de la corrida de la UI: huecos por **falta de dato real** salvo los
+  3 bugs — city 136 (78 país/remoto · 49 por diseño · 9 sin dato) · region 102 ·
+  work_mode 182 (0 señales reales) · employment_type 9 · skills 2 · languages 8 ·
+  **salary_min 0 % (bug corregido: 18 avisos declaran compensación)** ·
+  date_published 100 % · 895 requisitos con evidencia literal **100 %** ·
+  `posting_language` **0 `undetermined`** · 19 descripciones basura (15 Indeed
+  login-wall → O5.3) · la UI **no persiste** `job_match`.
+- Corrida vigente del Paso 5 (BD anterior): **`20261101_084012`** (`valida=1`,
+  553 jobs): calificada 179 · sin_requisitos 140 · revisar_a_mano 106 ·
+  descartada 89 · datos_insuficientes 39. Queda en el historial; la BD nueva
+  se limpia de `job_match` al vaciar.
 - 30 `educacion_no_confirmada` ABIERTAS (las firma una segunda persona).
-- Llenado del corpus nuevo **sin pase de IA**: `region` 77.8 % · `city`
-  47.9 % · `work_mode` 48.3 % · `employment_type` 50.8 % · `salary_min` 0 %
-  (no hay extractor) · `skills`/`languages` 0 % (los llena solo la IA).
 - Modelo local canónico: **Gemma 3n E2B QAT** (8k ctx, MTP draft, puerto
   8081); Qwen 3.5 2B descartado (~6.5x más lento). Ver
-  `docs/IA_ENRIQUECIMIENTO.md`.
+  `docs/IA_ENRIQUECIMIENTO.md`. **IA APAGADA al cierre** (el vigilante registró
+  el apagado 12:35:28).
 - Fuentes activas: 7/7 plataformas ATS validadas (seeds versionados en
   `src/jobpulse_v15/seeds/*.json`) + ANE/Indeed/LinkedIn/Elempleo (browser) +
   Harvie/CINDE/Procomer. 129 sitios habilitados; scrape de los 129 con
@@ -392,15 +403,16 @@ desmarca (pestaña **“Áreas de empleo”** en `ui_perfil.py` → hechos
   `workable.py`, `successfactors.py`, `ane.py`, `indeed.py`, `linkedin.py`,
   `elempleo.py`, `harvie.py`, `cinde.py`, `procomer.py`; `providers/` solo
   tiene el login automático) → análisis reglas (`analysis.py`) →
-  enriquecimiento IA (`ia_enrichment.py`; veredicto `ia_estado.py`) →
-  matching (`matching.py`) → UI de perfil (`ui_perfil.py`, sobre
-  `candidate_profile_facts`).
+  enriquecimiento IA (`ia_enrichment.py`; veredicto `ia_estado.py`; señal de
+  salario `salario.py`) → matching (`matching.py`) → UI de perfil
+  (`ui_perfil.py`, sobre `candidate_profile_facts`).
 - Ubicación: catálogo único `ubicaciones_cr` (jerarquía país→provincia→cantón→
   distrito + tabla de lugares); backfills deterministas `location normalize`,
   `enrich work-mode` e `enrich posting-language` (idempotentes, dry-run por
-  defecto, sin IA).
-- Pendientes: ver "Pendiente inmediato" del handoff más reciente (las 30
-  `educacion_no_confirmada`, capa B `codigo_canonico` + migración `017`, Paso 7,
-  O8.2 ciclo de vida, O5.3 re-barrido basura, extractor de salario, sucursal de
-  Harvie en el título, O2/O4/O9, y el Paso 5 desde la UI sin persistir
-  `job_match`).
+  defecto, sin IA). `save_job` valida la ciudad con `ciudad_es_valida`
+  (planta/sede/país/empresa no son ciudad).
+- Pendientes: ver "Pendiente inmediato" del handoff más reciente (corrida
+  manual nueva, las 30 `educacion_no_confirmada`, capa B `codigo_canonico` +
+  migración `017`, O5.3 re-barrido basura, Paso 7, O8.2 ciclo de vida,
+  sucursal de Harvie en el título, O2/O4/O9, y el Paso 5 desde la UI sin
+  persistir `job_match`).

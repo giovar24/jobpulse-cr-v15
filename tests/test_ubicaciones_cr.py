@@ -250,6 +250,70 @@ class TestRuido(unittest.TestCase):
         self.assertFalse(u.es_costa_rica("CR", "Mexico"))
 
 
+class TestCiudadNoValida(unittest.TestCase):
+    """Lo que NO es una ciudad: planta, sede, pais o nombre de la empresa.
+
+    Bug corregido el 2026-11-01: en la corrida por la UI quedaron 9 avisos
+    con ciudad basura ("BSC" x5, "Dry Plant", "LifeSync Amphenol" x2,
+    "Brazil"): o la daba el adaptador, o la devolvia la IA, y el
+    ``COALESCE`` de los UPDATE la conservaba para siempre.
+    """
+
+    def test_planta_y_sede_no_son_ciudad(self):
+        self.assertFalse(u.es_ciudad_plausible("Dry Plant"))
+        self.assertFalse(u.es_ciudad_plausible("BSC"))
+        self.assertTrue(u.ciudad_es_basura("Dry Plant"))
+        self.assertTrue(u.ciudad_es_basura("BSC"))
+
+    def test_pais_no_es_ciudad(self):
+        self.assertFalse(u.es_ciudad_plausible("Brazil"))
+        self.assertFalse(u.es_ciudad_plausible("Mexico"))
+        self.assertTrue(u.ciudad_es_basura("Brazil"))
+        self.assertEqual(
+            u.resolver_direccion("Brazil (Remote)", descripcion=""),
+            {"city": None, "region": None},
+        )
+
+    def test_nombre_de_empresa_no_es_ciudad(self):
+        self.assertTrue(
+            u.coincide_con_empresa("LifeSync Amphenol", "LifeSync - Amphenol")
+        )
+        self.assertFalse(u.coincide_con_empresa("Heredia", "HCLTech"))
+        self.assertFalse(u.coincide_con_empresa(None, "HCLTech"))
+        self.assertTrue(
+            u.ciudad_es_basura("LifeSync Amphenol", None, "LifeSync - Amphenol")
+        )
+
+    def test_resolver_descarta_el_nombre_de_la_empresa(self):
+        self.assertEqual(
+            u.resolver_direccion(
+                "LifeSync Amphenol Costa Rica",
+                descripcion="",
+                empresa="LifeSync - Amphenol",
+            ),
+            {"city": None, "region": None},
+        )
+
+    def test_ciudad_es_valida(self):
+        self.assertTrue(u.ciudad_es_valida("Heredia"))
+        self.assertTrue(u.ciudad_es_valida("San Antonio", "Heredia"))
+        self.assertTrue(u.ciudad_es_valida("Lagunilla"))
+        self.assertFalse(u.ciudad_es_valida("BSC"))
+        self.assertFalse(u.ciudad_es_valida("Dry Plant"))
+        self.assertFalse(u.ciudad_es_valida("Brazil"))
+        self.assertFalse(u.ciudad_es_valida(None))
+        self.assertFalse(
+            u.ciudad_es_valida("LifeSync Amphenol", None, "LifeSync - Amphenol")
+        )
+
+    def test_region_debe_ser_provincia(self):
+        self.assertTrue(u.es_provincia_valida("Heredia"))
+        self.assertTrue(u.es_provincia_valida("San José"))
+        self.assertFalse(u.es_provincia_valida("Costa Rica"))
+        self.assertFalse(u.es_provincia_valida("Remote"))
+        self.assertFalse(u.es_provincia_valida(None))
+
+
 class TestAdaptadorWorkday(unittest.TestCase):
     """El adaptador de Workday usa el catalogo compartido."""
 

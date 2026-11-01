@@ -244,6 +244,60 @@ class TestRepository(unittest.TestCase):
                 "job-manual-validation", {"work_mode": "flexible"}
             )
 
+    def test_save_job_descarta_ciudad_basura_del_adaptador(self):
+        """Una planta, una sede, un pais o la empresa NO son ciudades.
+
+        Bug corregido el 2026-11-01: en la corrida por la UI quedaron 9
+        avisos con ciudad basura y el ``COALESCE`` de los UPDATE la
+        conservaba para siempre.
+        """
+        casos = [
+            ("job-ciudad-planta", "BSC", "Cartago", "Costa Rica-Cartago-BSC",
+             "Edwards", "Cartago"),
+            ("job-ciudad-seca", "Dry Plant", None,
+             "Costa Rica-Cartago-Dry Plant", "Edwards", "Cartago"),
+            ("job-ciudad-pais", "Brazil", None, "Brazil (Remote)",
+             "BairesDev", None),
+            ("job-ciudad-empresa", "LifeSync Amphenol", None,
+             "LifeSync Amphenol Costa Rica", "LifeSync - Amphenol", None),
+        ]
+        for job_id, city, region, location, company, esperado in casos:
+            with self.subTest(job_id=job_id):
+                self.repository.save_job(
+                    {
+                        "job_id": job_id,
+                        "title": "Puesto de prueba",
+                        "company": company,
+                        "country": "CR",
+                        "location_raw": location,
+                        "city": city,
+                        "region": region,
+                    },
+                    site_id="intel-cr",
+                    source_job_id=job_id,
+                )
+                job = self.repository.get_job(job_id)
+                self.assertIsNone(job["city"])
+                self.assertEqual(job["region"], esperado)
+
+    def test_save_job_conserva_ciudad_valida(self):
+        self.repository.save_job(
+            {
+                "job_id": "job-ciudad-ok",
+                "title": "Puesto de prueba",
+                "company": "HCLTech",
+                "country": "CR",
+                "location_raw": "San Antonio de Belen, Costa Rica",
+                "city": "San Antonio",
+                "region": "Heredia",
+            },
+            site_id="intel-cr",
+            source_job_id="job-ciudad-ok",
+        )
+        job = self.repository.get_job("job-ciudad-ok")
+        self.assertEqual(job["city"], "San Antonio")
+        self.assertEqual(job["region"], "Heredia")
+
     def test_save_job_validates_required_fields_and_salary_range(self):
         with self.assertRaisesRegex(ValueError, "job.title"):
             self.repository.save_job(

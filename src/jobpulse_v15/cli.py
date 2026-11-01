@@ -2386,10 +2386,13 @@ def main() -> int:
                         location_raw,
                         descripcion=record["description_raw"],
                         work_mode=record["work_mode"],
+                        empresa=record.get("company"),
                     )
                     city_actual = record["city"]
                     region_actual = record["region"]
-                    ciudad_basura = ciudad_es_basura(city_actual, region_actual)
+                    ciudad_basura = ciudad_es_basura(
+                        city_actual, region_actual, record.get("company")
+                    )
                     canonica = nombre_canonico(city_actual) if city_actual else None
                     if ciudad_basura:
                         city = resuelto["city"]

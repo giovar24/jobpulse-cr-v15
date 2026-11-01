@@ -24,6 +24,11 @@ import time
 from pathlib import Path
 from typing import Any, Dict, Mapping, Optional
 
+from jobpulse_v15.salario import (
+    predicado_sql_hueco as _predicado_sql_salario,
+    registrar_funciones as _registrar_funciones,
+)
+
 BD = Path(__file__).resolve().parents[2] / "data" / "jobpulse_v15.db"
 
 # Campos que el pase CRÍTICO debe llenar (city/region/work_mode/date_published)
@@ -38,7 +43,12 @@ SECUNDARIOS = {
     "employment_type": "employment_type IS NULL OR TRIM(COALESCE(employment_type,''))=''",
     "skills": "skills IS NULL OR skills='' OR skills='[]'",
     "languages": "languages IS NULL OR languages='' OR languages='{}'",
-    "salary": "salary_min IS NULL AND TRIM(COALESCE(salary_raw,''))<>''",
+    # El salario sigue pendiente si no se extrajo Y el texto DECLARA uno.
+    # La regla es la MISMA que usa el extractor (jobpulse_v15.salario): antes
+    # solo miraba `salary_raw`, que las APIs de empleo casi nunca traen
+    # (0 de 354 avisos) -> el panel daba 0 pendientes y el prompt nunca
+    # disparaba, aunque 14 avisos declararan su compensacion.
+    "salary": _predicado_sql_salario(),
 }
 # Descripción basura: la IA no puede extraer nada de eso (no es fallo de la IA)
 BASURA = "LENGTH(COALESCE(description_raw,'')) < 200"
@@ -47,6 +57,10 @@ BASURA = "LENGTH(COALESCE(description_raw,'')) < 200"
 def _connect() -> sqlite3.Connection:
     con = sqlite3.connect(str(BD))
     con.row_factory = sqlite3.Row
+    # RE(patron, texto): el MISMO regex que usa el extractor de salario, para
+    # que el panel y el extractor no puedan discrepar sobre que avisos
+    # declaran su compensacion.
+    _registrar_funciones(con)
     return con
 
 

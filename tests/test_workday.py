@@ -358,13 +358,15 @@ class TestWorkdayFetcher(unittest.TestCase):
                 },
             )
             # Ciudad BASURA del parser viejo (la ubicacion entera en `city`):
-            # debe corregirse, no conservarse para siempre.
+            # hoy `save_job` NO la deja guardar (la puerta de ubicacion la
+            # rechaza), pero los datos ya guardados antes del fix (2026-11-01)
+            # se corrigen con este backfill. Se simula con un UPDATE
+            # directo, como si el dato fuera heredado.
             basura_location = "GCG_Costa Rica_San Jose"
             repository.save_job(
                 {
                     "job_id": "workday-REQ777777",
                     "title": "Auxiliar de limpieza",
-                    "city": "GCG_Costa Rica_San Jose",
                     "location_raw": basura_location,
                 },
                 site_id="intel-cr",
@@ -374,6 +376,11 @@ class TestWorkdayFetcher(unittest.TestCase):
                     "detail": self.detail(basura_location),
                 },
             )
+            with database.connection() as connection:
+                connection.execute(
+                    "UPDATE jobs SET city = ? WHERE job_id = ?",
+                    ("GCG_Costa Rica_San Jose", "workday-REQ777777"),
+                )
             output = io.StringIO()
             command = [
                 "jobpulse-v15",

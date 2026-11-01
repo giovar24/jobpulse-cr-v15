@@ -248,6 +248,131 @@ class TestRunIAEnrichment(unittest.TestCase):
         self.assertIsNone(job["city"])
 
 
+class TestPuertaSalario(unittest.TestCase):
+    """El prompt de salario se dispara por el TEXTO, no por `salary_raw`.
+
+    Bug corregido el 2026-11-01: la puerta exigia `salary_raw`, que las APIs
+    de empleo casi nunca traen (0 de 354 avisos), y los 14 avisos que SI
+    declaraban su compensacion nunca se procesaban.
+    """
+
+    def setUp(self):
+        self.temp_dir = tempfile.TemporaryDirectory()
+        self.db_path = str(Path(self.temp_dir.name) / "test.db")
+        self.database = Database(self.db_path)
+        self.database.initialize()
+        self.repo = Repository(self.database)
+        self.repo.register_platform("test", "Test", "directos")
+        self.repo.register_site(
+            "test-site", "test", "Sitio test",
+            "https://example.test/jobs", run_groups=("all",),
+        )
+        self.cliente = FakeIAClient()
+
+    def tearDown(self):
+        self.temp_dir.cleanup()
+
+    def _job(self, job_id, description):
+        self.repo.save_job(
+            {
+                "job_id": job_id, "title": "Puesto con compensacion",
+                "company": "Test Corp", "country": "CR",
+                "city": "Heredia", "region": "Heredia",
+                "work_mode": "onsite", "date_published": "2026-10-21",
+                "description_raw": description,
+            },
+            site_id="test-site", source_job_id=job_id,
+            source_url=f"https://example.test/jobs/{job_id}",
+        )
+
+    def _run(self):
+        with patch.object(iae, "get_ia_client", return_value=self.cliente):
+            return asyncio.run(iae.run_ia_enrichment(
+                db_path=self.db_path, limit=50, only_critical=False,
+            ))
+
+    def test_salario_por_texto_sin_salary_raw(self):
+        self._job(
+            "S-1",
+            "Excelente puesto. Compensation: USD 1,400 - 1,600 per month "
+            "for the selected candidate.",
+        )
+        self.assertEqual(self.repo.get_job("S-1")["salary_raw"], None)
+        resultado = self._run()
+        self.assertIn(iae.SALARY_PROMPT, self.cliente.prompts_pedidos)
+        job = self.repo.get_job("S-1")
+        self.assertEqual(job["salary_min"], 1000000)
+        self.assertEqual(job["salary_currency"], "CRC")
+
+    def test_sin_declaracion_no_se_pide_salario(self):
+        self._job(
+            "S-2",
+            "We are a growing company with great benefits and a competitive "
+            "package for the right candidate.",
+        )
+        self._run()
+        self.assertNotIn(iae.SALARY_PROMPT, self.cliente.prompts_pedidos)
+
+    def test_needs_secondary_detecta_el_salario_por_texto(self):
+        self.assertTrue(iae.needs_secondary_enrichment({
+            "skills": ["SQL"], "languages": {"ingles": "B2"},
+            "employment_type": "Full-time",
+            "salary_min": None, "salary_raw": None,
+            "description_raw": "Compensation: USD 2,000 per month",
+        }))
+
+
+class TestCiudadDevueltaPorLaIA(unittest.TestCase):
+    """La IA tambien devuelve basura: una planta no es una ciudad."""
+
+    class _Cliente(FakeIAClient):
+        async def chat_json(self, messages, schema=None, temperature=0.0,
+                            max_tokens=0):
+            self.llamadas += 1
+            system = messages[0]["content"]
+            self.prompts_pedidos.append(system)
+            if system == iae.LOCATION_PROMPT:
+                return {"city": "Dry Plant", "region": "Cartago"}
+            return dict(RESPUESTAS.get(system, {"ok": True}))
+
+    def test_ciudad_basura_no_se_guarda(self):
+        job = {
+            "job_id": "L-1", "title": "Assoc Sewer",
+            "company": "Edwards", "country": "CR",
+            "location_raw": "Costa Rica-Cartago-Dry Plant",
+            "work_mode": "onsite", "date_published": "2026-10-21",
+            "description_raw": "Applies sewing skills in a production plant.",
+        }
+        cliente = self._Cliente()
+        filled = asyncio.run(iae.enrich_job_fields(job, cliente))
+        self.assertNotIn("city", filled)
+        # La region si es una provincia real del catalogo
+        self.assertEqual(filled.get("region"), "Cartago")
+
+    def test_ciudad_valida_si_se_guarda(self):
+        job = {
+            "job_id": "L-2", "title": "Puesto",
+            "company": "Edwards", "country": "CR",
+            "location_raw": "Grecia, Costa Rica",
+            "work_mode": "onsite", "date_published": "2026-10-21",
+            "description_raw": "Descripcion del puesto.",
+        }
+
+        class _Cliente(FakeIAClient):
+            async def chat_json(self, messages, schema=None, temperature=0.0,
+                                max_tokens=0):
+                self.llamadas += 1
+                system = messages[0]["content"]
+                self.prompts_pedidos.append(system)
+                if system == iae.LOCATION_PROMPT:
+                    return {"city": "Grecia", "region": "Alajuela"}
+                return dict(RESPUESTAS.get(system, {"ok": True}))
+
+        filled = asyncio.run(iae.enrich_job_fields(job, _Cliente()))
+        self.assertEqual(filled.get("city"), "Grecia")
+        self.assertEqual(filled.get("region"), "Alajuela")
+
+
 class TestPaseCompleto(unittest.TestCase):
     """O7.3: orquestación compartida CLI/UI (ciclos críticos + pase completo)."""
 

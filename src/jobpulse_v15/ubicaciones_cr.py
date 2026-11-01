@@ -71,6 +71,16 @@ _PALABRAS_NO_CIUDAD = frozenset({
     "headquarters", "hq", "site", "afz", "gcg", "zona franca", "free zone",
 })
 
+# Un PAIS no es una ciudad. Los tableros remotos overseas traen el pais en el
+# campo de ubicacion ("Brazil (Remote)"): se guarda como ciudad y no lo es.
+_PAISES_NO_CIUDAD = frozenset({
+    "brazil", "brasil", "mexico", "colombia", "argentina", "uruguay",
+    "paraguay", "chile", "peru", "panama", "costa rica", "usa", "united states",
+    "estados unidos", "spain", "espana", "portugal", "italy", "italia",
+    "germany", "alemania", "france", "francia", "india", "philippines",
+    "filipinas", "china", "japan", "japon", "canada", "australia",
+})
+
 # Palabras que delatan un descriptor corporativo y no un lugar: "Central",
 # "Ciudad del Este", "Global Service Center"... Un nombre que las contiene no
 # se guarda como ciudad.
@@ -122,8 +132,9 @@ def es_ciudad_plausible(parte: str, provincia: str | None = None) -> bool:
 
     Descarta el ruido que se colaba como ciudad: abreviaturas de relleno
     ("GCG", "-H"), plantas y sedes ("Wet Plant", "BSC", "Local Office"),
-    descriptores corporativos ("Central", "Ciudad del Este") y
-    "Provincia + zona" ("Alajuela Coyol").
+    descriptores corporativos ("Central", "Ciudad del Este"), PAISES
+    ("Brazil", "Mexico": un tablero remoto overseas trae el pais en el
+    campo de ubicacion) y "Provincia + zona" ("Alajuela Coyol").
     """
     nombre = clave(parte)
     if len(nombre) < 4 or any(caracter.isdigit() for caracter in nombre):
@@ -132,6 +143,8 @@ def es_ciudad_plausible(parte: str, provincia: str | None = None) -> bool:
         return False
     if nombre in _PALABRAS_NO_CIUDAD:
         return False
+    if nombre in _PAISES_NO_CIUDAD:
+        return False
     if any(clave(palabra) in _PALABRAS_DESCRIPTORAS for palabra in parte.split()):
         return False
     if provincia is not None and nombre.startswith(clave(provincia)):
@@ -139,8 +152,33 @@ def es_ciudad_plausible(parte: str, provincia: str | None = None) -> bool:
     return True
 
 
+def _tokens(valor: str) -> set[str]:
+    """Palabras de un nombre, sin acentos ni puntuacion."""
+    limpio = re.sub(r"[^\w\s]", " ", clave(valor or ""))
+    return {palabra for palabra in limpio.split() if palabra}
+
+
+def coincide_con_empresa(ciudad: str | None, empresa: str | None) -> bool:
+    """True si ``ciudad`` es en realidad el NOMBRE de la empresa.
+
+    "LifeSync Amphenol Costa Rica": la parte que no es pais es la empresa
+    ("LifeSync - Amphenol"), no un lugar. Se comparan las PALABRAS (sin
+    acentos ni puntuacion) para que "LifeSync Amphenol" y "LifeSync -
+    Amphenol" sean el mismo nombre.
+    """
+    if not ciudad or not empresa:
+        return False
+    tokens_ciudad = _tokens(ciudad)
+    tokens_empresa = _tokens(empresa)
+    if not tokens_ciudad or not tokens_empresa:
+        return False
+    return tokens_ciudad == tokens_empresa
+
+
 def ciudad_es_basura(
-    ciudad: str | None, region: str | None = None
+    ciudad: str | None,
+    region: str | None = None,
+    empresa: str | None = None,
 ) -> bool:
     """True si lo GUARDADO como ciudad no puede ser un lugar.
 
@@ -149,6 +187,10 @@ def ciudad_es_basura(
     legacy ("BSC", "Alajuela Coyol" = provincia + zona). Sirve para corregir
     datos ya guardados: si no se corrigieran, el ``COALESCE`` de ``save_job``
     los conservaria para siempre.
+
+    Tambien marca lo que no puede ser una ciudad aunque parezca un nombre
+    propio: un PAIS ("Brazil") y el NOMBRE de la empresa ("LifeSync
+    Amphenol").
     """
     if not ciudad:
         return False
@@ -158,7 +200,10 @@ def ciudad_es_basura(
         or "_" in ciudad
         or any(caracter.isdigit() for caracter in nombre)
         or nombre in _PALABRAS_NO_CIUDAD
+        or nombre in _PAISES_NO_CIUDAD
     ):
+        return True
+    if coincide_con_empresa(ciudad, empresa):
         return True
     if region and len(nombre) > len(clave(region)) and nombre.startswith(
         clave(region)
@@ -173,6 +218,63 @@ def ciudad_es_basura(
     if resolver(ciudad) is None and len(_provincias_de_un_lugar(ciudad)) > 1:
         return True
     return False
+
+
+def ciudad_es_valida(
+    ciudad: str | None,
+    region: str | None = None,
+    empresa: str | None = None,
+) -> bool:
+    """True si ``ciudad`` puede GUARDARSE como ciudad de una vacante.
+
+    Es la puerta que usa ``Repository.save_job`` para validar lo que entrega
+    el adaptador (o la IA): una planta ("Dry Plant"), una sede ("BSC"), un
+    pais ("Brazil") o el nombre de la empresa ("LifeSync Amphenol") no son
+    ciudades, aunque el tablero las mande en ese campo.
+
+    Solo se rechaza lo que NO PUEDE ser un lugar. A diferencia de
+    ``ciudad_es_basura`` (que existe para CORREGIR datos ya guardados y si
+    marca los nombres ambiguos de varias provincias), aqui no se descarta un
+    nombre por ser ambiguo: "San Antonio de Belen, Costa Rica" -> ciudad
+    "San Antonio", region "Heredia" es un dato valido. Tampoco se aplica el
+    filtro de descriptores ("Central", "Ciudad del Este"): ese filtro decide
+    si un TROZO DE TEXTO es un lugar (``es_ciudad_plausible``), no si un
+    campo ya estructurado se guarda.
+    """
+    if not ciudad:
+        return False
+    nombre = clave(ciudad)
+    if (
+        "costa rica" in nombre
+        or "_" in ciudad
+        or any(caracter.isdigit() for caracter in nombre)
+        or nombre in _PALABRAS_NO_CIUDAD
+        or nombre in _PAISES_NO_CIUDAD
+    ):
+        return False
+    if ciudad.isupper() and len(nombre) <= 5:
+        # "BSC", "GSC": una abreviatura, no un lugar.
+        return False
+    if coincide_con_empresa(ciudad, empresa):
+        return False
+    if region and len(nombre) > len(clave(region)) and nombre.startswith(
+        clave(region)
+    ):
+        # "Alajuela Coyol": la provincia repetida + zona no es una ciudad.
+        return False
+    return True
+
+
+def es_provincia_valida(region: str | None) -> bool:
+    """True si ``region`` es una PROVINCIA del catalogo.
+
+    La region es un dato de la division territorial: si no es una provincia
+    ("Costa Rica", "Remote", "Heredia, Costa Rica"), no se guarda.
+    """
+    if not region:
+        return False
+    opciones = candidatos(region) or _resolver_en_palabras(region)
+    return any(opcion[0] == NIVEL_PROVINCIA for opcion in opciones)
 
 
 def nombre_canonico(nombre: str) -> str | None:
@@ -385,7 +487,11 @@ def _provincias_de_un_lugar(nombre: str) -> set[str]:
 
 
 def resolver_direccion(
-    texto: str, *, descripcion: str | None = None, work_mode: str | None = None
+    texto: str,
+    *,
+    descripcion: str | None = None,
+    work_mode: str | None = None,
+    empresa: str | None = None,
 ) -> dict[str, str | None]:
     """Ciudad y provincia de una ubicacion de Costa Rica.
 
@@ -404,6 +510,9 @@ def resolver_direccion(
       ("San Antonio, Belen, Heredia" -> San Antonio, Heredia).
     - Un nombre compuesto por lugares de provincias distintas ("Gravilias Tres
       Rios") no es una ciudad: no se guarda.
+    - ``empresa``: el nombre de la empresa NO es un lugar. Sin este dato,
+      "LifeSync Amphenol Costa Rica" devolvia la ciudad "LifeSync Amphenol"
+      (la parte que no es pais se toma como lugar cuando es la unica).
     - ``descripcion``: ULTIMO recurso para los campos de CIUDAD que la
       ubicacion no resuelve. Se busca un lugar conocido de
       ``seeds/lugares_cr.csv`` en el texto del aviso ("hybrid position based in
@@ -436,7 +545,7 @@ def resolver_direccion(
     # Segunda pasada: canton y distrito.
     for parte, opciones in opciones_por_parte:
         if not opciones:
-            if es_ciudad_plausible(parte):
+            if es_ciudad_plausible(parte) and not coincide_con_empresa(parte, empresa):
                 desconocidos.append(parte)
             continue
         if any(opcion[0] == NIVEL_PROVINCIA for opcion in opciones):
@@ -454,7 +563,9 @@ def resolver_direccion(
             if not elegida:
                 resolucion = _candidato_por_distrito(parte, opciones)
                 if resolucion is None:
-                    if es_ciudad_plausible(parte):
+                    if es_ciudad_plausible(parte) and not coincide_con_empresa(
+                        parte, empresa
+                    ):
                         desconocidos.append(parte)
                     continue
                 distrito, opcion = resolucion

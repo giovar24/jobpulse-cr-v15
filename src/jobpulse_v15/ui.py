@@ -35,6 +35,7 @@ from jobpulse_v15.exports import (
     write_job_search_csv,
 )
 from jobpulse_v15.greenhouse import GreenhouseFetcher
+from jobpulse_v15.harvie import HarvieFetcher
 from jobpulse_v15.ingestion import IngestionError, IngestionService
 from jobpulse_v15.indeed import IndeedFetcher
 from jobpulse_v15.ui_perfil import CandidateProfileWindowCV
@@ -1817,6 +1818,10 @@ class JobPulseWindow:
                     "successfactors": SuccessFactorsFetcher(),
                     "workable": WorkableFetcher(),
                     "elempleo": ElempleoFetcher(),
+                    # Harvie (roster de ejemplo/plantilla): sin este fetcher el
+                    # barrido de la UI se saltaba el sitio entero (189 avisos
+                    # en la corrida del 2026-11-01: 354 de 553).
+                    "harvie": HarvieFetcher(),
                 }
 
                 total_offers = 0
