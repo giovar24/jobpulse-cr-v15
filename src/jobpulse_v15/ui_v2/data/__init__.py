@@ -14,8 +14,20 @@ from jobpulse_v15.ui_v2.data.jobs import (
     salario_texto,
     ubicacion_texto,
 )
+from jobpulse_v15.ui_v2.data.profile import (
+    CATEGORIAS,
+    ETIQUETAS_CATEGORIA,
+    ProfileFact,
+    ProfileQuery,
+    ProfileResumen,
+    ProfileStore,
+    etiqueta_categoria,
+    fact_desde_sugerencia,
+    origen_texto,
+)
 
 __all__ = [
+    # avisos
     "JobsStore",
     "RawDetail",
     "RawQuery",
@@ -26,4 +38,14 @@ __all__ = [
     "resumen_por_campo",
     "salario_texto",
     "ubicacion_texto",
+    # perfil
+    "CATEGORIAS",
+    "ETIQUETAS_CATEGORIA",
+    "ProfileFact",
+    "ProfileQuery",
+    "ProfileResumen",
+    "ProfileStore",
+    "etiqueta_categoria",
+    "fact_desde_sugerencia",
+    "origen_texto",
 ]

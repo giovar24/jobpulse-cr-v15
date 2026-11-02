@@ -14,14 +14,17 @@ from typing import Sequence, Type
 from jobpulse_v15.db import Database
 from jobpulse_v15.repository import Repository
 from jobpulse_v15.ui_v2.data.jobs import JobsStore
+from jobpulse_v15.ui_v2.data.profile import ProfileStore
 from jobpulse_v15.ui_v2.tabs.base import BaseTab, TabContext
 from jobpulse_v15.ui_v2.tabs.crudos import DatosCrudosTab
+from jobpulse_v15.ui_v2.tabs.perfil import PerfilTab
 from jobpulse_v15.ui_v2.theme import Metrics, Palette, Theme, apply_theme
 from jobpulse_v15.ui_v2.widgets import FlatButton
 
 # --- REGISTRO DE PESTAÑAS (único lugar que hay que tocar al agregar una) ---
 PESTANIAS: tuple[Type[BaseTab], ...] = (
     DatosCrudosTab,
+    PerfilTab,
 )
 
 
@@ -38,7 +41,10 @@ class AppShell:
         self.contexto = TabContext(
             repository=repository,
             theme=self.theme,
-            services={"jobs_store": JobsStore(repository)},
+            services={
+                "jobs_store": JobsStore(repository),
+                "profile_store": ProfileStore(repository),
+            },
         )
         self.instancias: list[BaseTab] = []
         self._marcos: dict[str, tk.Frame] = {}

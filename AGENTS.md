@@ -36,6 +36,7 @@ Cuando el usuario dice "vamos a otra sesión":
 | `docs/SITIOS_PROBLEMATICOS.md` | Guía ANE / Indeed / LinkedIn (login-wall, Cloudflare) |
 | `docs/PASO5_EVIDENCIA_*.md` | Evidencia literal del matching (GENERADO — no editar a mano) |
 | `docs/PASO5_REVISION_PENDIENTES.md` | Hoja de firma: `educacion_no_confirmada` (sin veredictos, regenerable) |
+| `docs/UI_V2_ARQUITECTURA.md` | UI v2 (plana y modular): capas, cómo agregar una pestaña, patrones de Tk |
 | `DESARROLLO_v15.md` | Arquitectura, objetivos O1–O10 (canónicos en §3), decisiones |
 | `README.md` | Setup equipo nuevo: venv, `pip install -e .`, `init-db`, backup |
 
@@ -118,11 +119,19 @@ Cuando el usuario dice "vamos a otra sesión":
 .\.venv\Scripts\python.exe -X utf8 clean_run.py SI
 
 # Tests: pytest vive en el python del SISTEMA (el venv NO lo tiene). Suite
-# completa ~3.5 min (verificada 2026-11-01: 486 passed + 179 subtests).
+# completa ~1.7 min (verificada 2026-11-02: 544 passed + 204 subtests).
 python -m pytest tests/ -q
 
-# UI
+# UI clásica (completa, intacta)
 .\.venv\Scripts\python.exe -m jobpulse_v15.ui
+
+# UI v2 (plana y modular; por ahora: Datos crudos + Perfil) — ver
+# docs/UI_V2_ARQUITECTURA.md. Agregar una pestaña = módulo + 1 línea en PESTANIAS.
+.\jobpulse-v15-v2.bat
+.\.venv\Scripts\python.exe -X utf8 -m jobpulse_v15.ui_v2
+
+# UI v2 SIN ventana (humo de verdad: monta el shell, refresca y cuenta filas)
+.\.venv\Scripts\python.exe -X utf8 -c "from jobpulse_v15.ui_v2.app import crear_app; r,s=crear_app(); [r.update() for _ in range(20)]; t=s.pestana_activa(); t.refresh(); print(t.key, len(t._widgets['tabla'].get_children())); r.destroy()"
 ```
 
 ## Verificar que el scrape llega bien a la BD (receta)
@@ -369,12 +378,41 @@ desmarca (pestaña **“Áreas de empleo”** en `ui_perfil.py` → hechos
     01-11): la cifra no llegaba al extractor.
 20. **El TÍTULO de un aviso NO es una fuente de ubicación**: el catálogo
     devuelve el título entero como ciudad ("Senior Accountant"). No hacerlo.
+21. **Fuentes Tk con espacio van entre LLAVES** (`{Segoe UI} 10`), no en tupla
+    ni entre comillas. Tk parte la especificación por espacios: `Segoe UI` se
+    lee como familia `Segoe` + tamaño `UI` → `expected integer but got "UI"`.
+    Síntoma traicionero: la app **arranca bien** pero los textos de algunos
+    widgets (p. ej. las FILAS de un `ttk.Treeview`) **no se pintan**. Aplica
+    igual a `option_add("*Font", …)` (lleva llaves y tamaño). Ver
+    `ui_v2/theme.py`.
+22. **Nunca mezclar `pack` y `grid` en el mismo padre**: es `TclError`. El
+    estado vacío de una tabla se posiciona con el MISMO gestor que la tabla
+    (`grid()`/`grid_remove()`, no `pack`/`pack_forget`).
+23. **El callback de `yscrollcommand` solo actualiza el scrollbar** (`bar.set`).
+    Tocar el canvas ahí dentro produce **reentrada infinita** (el
+    `scrollregion` se recalcula en `<Configure>`). Patrón en
+    `ui_v2/widgets.py::ScrollFrame`.
+24. **Crear un widget hijo NO lo coloca**: hay que `pack`/`grid`arlo. Un
+    componente sin gestor queda en **1x1 (invisible)** — pasó con `StatTile`
+    (la franja de métricas salía vacía). En tests sin ventana visible, verifica
+    con `widget.winfo_manager()` (no `winfo_ismapped()`, que da 0 si el root
+    está oculto).
 
-## Estado de referencia (verificado 2026-11-01 noche, tras la corrida manual del usuario)
+## Estado de referencia (verificado 2026-11-02, tras la UI v2 y su pestaña de Perfil)
 
-- Suite: **517 tests verdes** + 195 subtests (`python -m pytest tests/ -q`,
-  ~1.5 min); `test_matching.py` 87, `test_areas.py` 20, `test_ubicaciones_cr.py`
-  35, `test_idiomas.py` 7, `test_salario.py` 16.
+- Suite: **544 tests verdes** + 204 subtests (`python -m pytest tests/ -q`,
+  ~1.7 min); `test_matching.py` 87, `test_areas.py` 20, `test_ubicaciones_cr.py`
+  35, `test_idiomas.py` 7, `test_salario.py` 16, `test_ui_v2.py` 27.
+- **UI v2 (`src/jobpulse_v15/ui_v2/`, 2026-11-02)**: interfaz **plana y
+  modular** que convive con la UI clásica (`ui.py`, intacta). Lanzador
+  `jobpulse-v15-v2.bat` o `python -m jobpulse_v15.ui_v2`. Capas: `theme.py`
+  (única fuente de estilo), `widgets.py`, `dialogs.py`, `data/` (stores **sin
+  Tk**), `tabs/base.py` (contrato), `tabs/*.py`, `app.py` (shell + `PESTANIAS`).
+  Agregar una pestaña = módulo nuevo + 1 línea en `PESTANIAS`. Pestañas:
+  **Datos crudos** (avisos con valores originales + panel de texto crudo +
+  export CSV) y **Perfil** (importar CV con diálogo de revisión revertible +
+  alta/edición manual de `candidate_profile_facts`). Detalle y patrones de Tk:
+  `docs/UI_V2_ARQUITECTURA.md`; gotchas 21–24.
 - **4 bugs de extracción corregidos el 01-11**: (1, tarde) la UI no tenía
   `fetcher_map["harvie"]` → 189 avisos nunca raspados; (2, tarde) la puerta del
   extractor de salario exigía `salary_raw`, que las APIs casi nunca traen
@@ -433,14 +471,22 @@ desmarca (pestaña **“Áreas de empleo”** en `ui_perfil.py` → hechos
   tiene el login automático) → análisis reglas (`analysis.py`) →
   enriquecimiento IA (`ia_enrichment.py`; veredicto `ia_estado.py`; señal de
   salario `salario.py`) → matching (`matching.py`) → UI de perfil
-  (`ui_perfil.py`, sobre `candidate_profile_facts`).
+  (`ui_perfil.py`, sobre `candidate_profile_facts`; la UI v2 tiene su propia
+  pestaña de Perfil en `ui_v2/tabs/perfil.py`).
 - Ubicación: catálogo único `ubicaciones_cr` (jerarquía país→provincia→cantón→
   distrito + tabla de lugares); backfills deterministas `location normalize`,
   `enrich work-mode` e `enrich posting-language` (idempotentes, dry-run por
   defecto, sin IA). `save_job` valida la ciudad con `ciudad_es_valida`
   (planta/sede/país/empresa no son ciudad).
+- **Hueco del PERFIL (visible, capa B pendiente)**: `save_candidate_profile_facts`
+  **no** escribe `codigo_canonico` y el Paso 5 exige
+  `codigo_canonico IS NOT NULL` para skill/idioma/educación (`matching.py`
+  `_cargar_facts`). Por eso los 48 facts del perfil son **invisibles para el
+  motor** hasta resolver la capa B (reutilizable: `conceptos.resolver`). La UI
+  v2 lo muestra en la columna "Canónico" para no ocultarlo.
 - Pendientes: ver "Pendiente inmediato" del handoff más reciente (corrida
   manual nueva, las 30 `educacion_no_confirmada`, capa B `codigo_canonico` +
-  migración `017`, O5.3 re-barrido basura, Paso 7, O8.2 ciclo de vida,
-  sucursal de Harvie en el título, O2/O4/O9, y el Paso 5 desde la UI sin
-  persistir `job_match`).
+  migración `017` — **incluye ahora el `codigo_canonico` de los facts del
+  perfil**, O5.3 re-barrido basura, Paso 7, O8.2 ciclo de vida, sucursal de
+  Harvie en el título, O2/O4/O9, y el Paso 5 desde la UI sin persistir
+  `job_match`).

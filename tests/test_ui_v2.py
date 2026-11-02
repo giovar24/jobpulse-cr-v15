@@ -15,10 +15,12 @@ import tempfile
 import time
 import tkinter as tk
 import unittest
+import unittest.mock
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
+from jobpulse_v15.candidate_profile import CandidateProfileSuggestion
 from jobpulse_v15.db import Database
 from jobpulse_v15.repository import Repository
 from jobpulse_v15.ui_v2.app import AppShell, PESTANIAS
@@ -32,6 +34,13 @@ from jobpulse_v15.ui_v2.data.jobs import (
     salario_texto,
     ubicacion_texto,
 )
+from jobpulse_v15.ui_v2.data.profile import (
+    ProfileQuery,
+    ProfileStore,
+    fact_desde_sugerencia,
+)
+from jobpulse_v15.ui_v2.data.profile import exportar_csv as exportar_perfil_csv
+from jobpulse_v15.ui_v2.tabs import perfil as perfil_mod
 from jobpulse_v15.ui_v2.theme import apply_theme
 
 
@@ -278,6 +287,179 @@ class TestShellSinAvisos(unittest.TestCase):
         self.assertEqual(vacio.winfo_manager(), "grid")  # mismo gestor que el marco
         self.assertTrue(vacio.grid_info())
         self.assertEqual(pestana._widgets["estado"].cget("text").split()[0], "0")
+
+
+class TestPerfilStore(unittest.TestCase):
+    """La capa de datos del perfil no depende de Tk."""
+
+    def setUp(self):
+        self.temp_dir = tempfile.TemporaryDirectory()
+        self.database = Database(Path(self.temp_dir.name) / "perfil.db")
+        self.database.initialize()
+        self.repository = Repository(self.database)
+        self.store = ProfileStore(self.repository)
+
+    def tearDown(self):
+        self.temp_dir.cleanup()
+
+    def test_guarda_y_lista(self):
+        self.store.save("language", "en", "Inglés", qualifier="B2")
+        hechos = self.store.load()
+        self.assertEqual(len(hechos), 1)
+        self.assertEqual(hechos[0].category, "language")
+        self.assertEqual(hechos[0].value_code, "en")
+        self.assertEqual(hechos[0].nivel_legible, "B2")
+        self.assertEqual(hechos[0].origin, "manual")
+
+    def test_actualiza_por_categoria_y_codigo(self):
+        self.store.save("skill", "python", "Python")
+        self.store.save("skill", "python", "Python avanzado", qualifier="avanzado")
+        hechos = self.store.load()
+        self.assertEqual(len(hechos), 1)
+        self.assertEqual(hechos[0].value_text, "Python avanzado")
+
+    def test_elimina(self):
+        self.store.save("skill", "python", "Python")
+        fact_id = self.store.load()[0].fact_id
+        self.assertTrue(self.store.delete(fact_id))
+        self.assertEqual(self.store.load(), [])
+        self.assertFalse(self.store.delete(fact_id))
+
+    def test_estado_educacion_y_numero_solo_en_su_categoria(self):
+        self.store.save("education", "bachelor", "Bachillerato",
+                        education_status="completed")
+        self.store.save("experience", "total", "Experiencia", numeric_value="3", unit="years")
+        # En otra categoría el estado/numero se descartan (no rompen el guardado).
+        self.store.save("skill", "python", "Python",
+                        education_status="completed", numeric_value="9")
+        por_clave = {(h.category, h.value_code): h for h in self.store.load()}
+        self.assertEqual(por_clave[("education", "bachelor")].education_status, "completed")
+        self.assertEqual(por_clave[("experience", "total")].numeric_value, 3.0)
+        self.assertEqual(por_clave[("experience", "total")].nivel_legible, "3 years")
+        self.assertEqual(por_clave[("skill", "python")].education_status, "")
+        self.assertIsNone(por_clave[("skill", "python")].numeric_value)
+
+    def test_filtra_por_categoria_y_texto(self):
+        self.store.save("skill", "python", "Python")
+        self.store.save("language", "en", "Inglés")
+        self.assertEqual([h.value_code for h in self.store.load(ProfileQuery(categoria="skill"))],
+                         ["python"])
+        self.assertEqual([h.value_code for h in self.store.load(ProfileQuery(texto="ingl"))],
+                         ["en"])
+
+    def test_resumen(self):
+        self.store.save("skill", "python", "Python")
+        self.store.save("skill", "sql", "SQL")
+        self.store.save("language", "en", "Inglés")
+        resumen = self.store.resumen(self.store.load())
+        self.assertEqual(resumen.total, 3)
+        self.assertEqual(resumen.categorias_cubiertas, 2)
+        self.assertEqual(resumen.por_categoria["skill"], 2)
+        self.assertEqual(resumen.manuales, 3)
+        self.assertEqual(resumen.importados, 0)
+
+    def test_importa_y_revierte(self):
+        total = self.store.import_facts("cv.pdf", [
+            {"category": "skill", "value_code": "python", "value_text": "Python"},
+            {"category": "language", "value_code": "en", "value_text": "Inglés",
+             "qualifier": "B2"},
+        ])
+        self.assertEqual(total, 2)
+        self.assertEqual(self.store.resumen(self.store.load()).importados, 2)
+        self.assertEqual(len(self.store.importaciones()), 1)
+        resultado = self.store.revertir_ultima()
+        self.assertEqual(resultado["removed"], 2)
+        self.assertEqual(self.store.load(), [])
+
+    def test_fact_desde_sugerencia_respeta_categorias(self):
+        skill = fact_desde_sugerencia(CandidateProfileSuggestion(
+            category="skill", value_code="python", value_text="Python",
+        ))
+        self.assertEqual(skill["category"], "skill")
+        self.assertIsNone(skill["education_status"])
+        self.assertIsNone(skill["numeric_value"])
+        edu = fact_desde_sugerencia(CandidateProfileSuggestion(
+            category="education", value_code="bachelor", value_text="Bachillerato",
+            education_status="completed",
+        ))
+        self.assertEqual(edu["education_status"], "completed")
+
+    def test_exporta_csv(self):
+        self.store.save("skill", "python", "Python")
+        destino = Path(self.temp_dir.name) / "perfil.csv"
+        total = exportar_perfil_csv(self.store.load(), destino)
+        self.assertEqual(total, 1)
+        with destino.open(encoding="utf-8-sig") as archivo:
+            leido = list(csv.DictReader(archivo))
+        self.assertEqual(leido[0]["value_code"], "python")
+
+
+class TestPerfilTab(unittest.TestCase):
+    """La pestaña de perfil monta, lista y permite dar de alta."""
+
+    def setUp(self):
+        self.temp_dir = tempfile.TemporaryDirectory()
+        self.database = Database(Path(self.temp_dir.name) / "perfil-ui.db")
+        self.database.initialize()
+        self.repository = Repository(self.database)
+        self.root = _tkroot_reintentos()
+        self.theme = apply_theme(self.root)
+        self.shell = AppShell(self.root, self.repository, theme=self.theme)
+        self.shell.mostrar(1)  # pestaña "perfil"
+        self.pestana = self.shell.pestana_activa()
+        self.assertEqual(self.pestana.key, "perfil")
+        # Silencia los diálogos modales durante el test.
+        self._patch = unittest.mock.patch.object(
+            perfil_mod.messagebox, "showinfo",
+            side_effect=lambda *a, **k: None,
+        )
+        self._patch.start()
+        self.addCleanup(self._patch.stop)
+
+    def tearDown(self):
+        self.root.update_idletasks()
+        self.root.destroy()
+        gc.collect()
+        self.temp_dir.cleanup()
+
+    def _cargar_fact_manual(self):
+        self.pestana._widgets["categoria"].current(0)  # contact
+        self.pestana._set_entry("codigo", "nombre")
+        self.pestana._set_entry("valor", "Giovanni")
+        self.pestana.guardar()
+
+    def test_alta_manual_llena_la_tabla(self):
+        self._cargar_fact_manual()
+        self.assertEqual(len(self.pestana._widgets["tabla"].get_children()), 1)
+        self.assertEqual(self.repository.list_candidate_profile_facts()[0]["value_text"],
+                         "Giovanni")
+
+    def test_seleccionar_carga_el_formulario(self):
+        self._cargar_fact_manual()
+        tabla = self.pestana._widgets["tabla"]
+        tabla.selection_set(tabla.get_children()[0])
+        self.root.update()
+        self.assertEqual(self.pestana._get_entry("codigo"), "nombre")
+        self.assertEqual(self.pestana._get_entry("valor"), "Giovanni")
+        self.assertEqual(self.pestana._editando_id is not None, True)
+
+    def test_estado_educacion_solo_activo_en_education(self):
+        combos = self.pestana._widgets
+        combos["categoria"].current(0)  # contact
+        self.pestana._aplicar_categoria()
+        self.assertEqual(str(combos["estado_educacion"].cget("state")), "disabled")
+        categoria_educacion = list(
+            perfil_mod.CATEGORIAS
+        ).index("education")
+        combos["categoria"].current(categoria_educacion)
+        self.pestana._aplicar_categoria()
+        self.assertEqual(str(combos["estado_educacion"].cget("state")), "readonly")
+
+    def test_refresh_sin_datos_no_rompe(self):
+        self.pestana.refresh()
+        self.root.update()
+        self.assertEqual(self.pestana._widgets["tabla"].get_children(), ())
+        self.assertEqual(self.pestana._widgets["vacio"].winfo_manager(), "grid")
 
 
 if __name__ == "__main__":
