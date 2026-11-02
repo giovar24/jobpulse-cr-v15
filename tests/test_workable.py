@@ -82,6 +82,40 @@ Powered by [Workable](https://www.workable.com)
         self.assertEqual(offers[0]["job"]["date_published"], "2026-10-20")
         self.assertIn("Build reliable systems", offers[0]["job"]["description_raw"])
         self.assertIn("Fluent English required", offers[0]["job"]["description_raw"])
+        # La columna Salary de Workable con "—" NO es un dato de salario.
+        self.assertIsNone(offers[0]["job"]["salary_raw"])
+
+    def test_fetch_pasa_la_columna_salary_de_la_tabla(self):
+        """Bug corregido el 2026-11-01: la columna Salary se parseaba y se
+        DESCARTABA (el aviso llegaba sin `salary_raw` y la IA no veia la
+        cifra). Ahora viaja como texto, como en elempleo/indeed/ane."""
+        list_md = """# Acme — All Open Positions
+
+| Title | Department | Location | Type | Salary | Posted | Details |
+|-------|-----------|----------|------|--------|--------|---------|
+| Software Engineer | Engineering | San Jose, Costa Rica (Remote) | Full-time | USD 65,000–100,000 | 2026-10-20 | [View](https://apply.workable.com/acme/jobs/view/A1B2C3.md) |
+"""
+        detail_md = """# Software Engineer
+
+> Acme · San Jose, Costa Rica (Remote) · Full-time · Posted 2026-10-20
+
+**Workplace:** remote
+
+## Description
+
+Build reliable systems.
+"""
+
+        def mock_request_text(url):
+            if url.endswith("/jobs.md"):
+                return list_md
+            return detail_md
+
+        with patch.object(self.fetcher, "_request_text", side_effect=mock_request_text):
+            offers = self.fetcher.fetch(self.site)
+
+        self.assertEqual(len(offers), 1)
+        self.assertEqual(offers[0]["job"]["salary_raw"], "USD 65,000–100,000")
 
     def test_fetch_filters_countries_deduplicates_and_counts_manual_skips(self):
         list_md = """# Acme — All Open Positions

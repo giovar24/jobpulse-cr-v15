@@ -358,46 +358,74 @@ desmarca (pestaña **“Áreas de empleo”** en `ui_perfil.py` → hechos
     `IntegrityError`. `mixed` es un valor VÁLIDO y **real** (el aviso mezcla
     idiomas): simplemente no genera requisito en el matching. La columna
     `concepto` **no** tiene `nombre`: es `codigo_canonico` + `variante`.
+18. **`job_field_status` NO tiene categoría `salary`** (es education/
+    experience/language/license/skill): el estado del salary se mira en
+    `jobs.salary_min`. La regla "declara salario" vive en
+    `src/jobpulse_v15/salario.py` (**marca + CIFRA con moneda en la MISMA
+    frase**, ≤80 chars): "Compensation: Paid in USD" y "your hourly rate in
+    USD" NO son un dato de salario.
+19. **`workable.py` parsea la columna Salary de la tabla markdown** y la
+    pasa como `salary_raw` ("—" → `None`). No descartarla (bug corregido el
+    01-11): la cifra no llegaba al extractor.
+20. **El TÍTULO de un aviso NO es una fuente de ubicación**: el catálogo
+    devuelve el título entero como ciudad ("Senior Accountant"). No hacerlo.
 
-## Estado de referencia (verificado 2026-11-01 tarde, tras la auditoría de la corrida por la UI)
+## Estado de referencia (verificado 2026-11-01 noche, tras la corrida manual del usuario)
 
-- Suite: **511 tests verdes** + 190 subtests (`python -m pytest tests/ -q`,
+- Suite: **517 tests verdes** + 195 subtests (`python -m pytest tests/ -q`,
   ~1.5 min); `test_matching.py` 87, `test_areas.py` 20, `test_ubicaciones_cr.py`
-  35, `test_idiomas.py` 7, `test_salario.py` 11.
-- **3 bugs de extracción corregidos (01-11 tarde)**, tras la corrida por la UI
-  (354 avisos): (1) la UI no tenía `fetcher_map["harvie"]` → **189 avisos**
-  nunca raspados; (2) la puerta del extractor de salario exigía
-  `salary_raw`, que las APIs casi nunca traen (0 de 354) → **módulo nuevo
-  `salario.py`** (marca de salario + moneda, el MISMO regex para el extractor
-  Python y el contador SQL vía función SQLite `RE()`); (3) `save_job` no
+  35, `test_idiomas.py` 7, `test_salario.py` 16.
+- **4 bugs de extracción corregidos el 01-11**: (1, tarde) la UI no tenía
+  `fetcher_map["harvie"]` → 189 avisos nunca raspados; (2, tarde) la puerta del
+  extractor de salario exigía `salary_raw`, que las APIs casi nunca traen
+  (0 de 354) → **módulo nuevo `salario.py`** (el MISMO regex para el extractor
+  Python y el contador SQL vía función SQLite `RE()`); (3, tarde) `save_job` no
   validaba la ciudad del adaptador/IA → **9 avisos con ciudad basura**
-  (`BSC`×5, `Dry Plant`, `LifeSync Amphenol`×2, `Brazil`) corregidos con la
-  puerta `ciudad_es_valida` (adaptador + IA + catálogo) y backfill aplicado.
-- BD (`data/jobpulse_v15.db`): **VACIADA al cierre** con `clean_run.py SI`
-  (conserva perfil, 129 sitios, 20 áreas, taxonomía `concepto`) para la
-  **corrida manual nueva** del usuario; esquema versión **16** (la `017` de la
-  capa B sigue pendiente). Antes de vaciar (corrida de la UI): 354 jobs, 895
-  requisitos (47 sin `codigo_canonico`), `db check` ok.
-- Auditoría de la corrida de la UI: huecos por **falta de dato real** salvo los
-  3 bugs — city 136 (78 país/remoto · 49 por diseño · 9 sin dato) · region 102 ·
-  work_mode 182 (0 señales reales) · employment_type 9 · skills 2 · languages 8 ·
-  **salary_min 0 % (bug corregido: 18 avisos declaran compensación)** ·
-  date_published 100 % · 895 requisitos con evidencia literal **100 %** ·
-  `posting_language` **0 `undetermined`** · 19 descripciones basura (15 Indeed
-  login-wall → O5.3) · la UI **no persiste** `job_match`.
+  corregidos con la puerta `ciudad_es_valida` (adaptador + IA + catálogo);
+  (4, noche) la puerta del salary era **demasiado laxa** (marca + moneda a
+  cualquier distancia → 8 falsos positivos: "Compensation: Paid in USD", "your
+  hourly rate in USD", funding de "$26 million") → ahora exige **marca +
+  CIFRA con moneda en la misma frase** (≤80 chars, sin cruzar un punto), y
+  `contexto_salario` se centra en la **cifra** (no en la palabra). Además
+  `workable.py` ya no **descarta la columna Salary** de la tabla.
+- BD (`data/jobpulse_v15.db`): contiene la **corrida manual del usuario**
+  (**535 avisos**, no vaciada: es la evidencia en uso). Esquema versión **16**
+  (la `017` de la capa B sigue pendiente). Jobs 535 · `job_analysis` vigentes
+  535 · `job_area` 535 · `job_requirements` 1071 · **`job_match` 0** (la UI no
+  persiste el Paso 5: falta correr `run_paso5.py`) · `source_runs` 129 ·
+  `source_run_sites` 129 (67 ok · 61 zero_results · 1 error). `db check` ok.
+  Perfil/config conservados: 48 facts · 129 sitios · 14 plataformas · 20 áreas ·
+  51 reglas de área · 70 conceptos.
+- **Estimado de extracción (8 campos × 535 avisos = 4280 celdas)**:
+  **extraído 76.0 %** (3254) · **falta de dato real 23.9 %** (1023) ·
+  **error de extracción 0.07 %** (3). Por campo: date_published 100 % ·
+  skills 99.6 % · employment_type 92.1 % · languages 95.5 % · region 80.7 % ·
+  city 72.7 % · work_mode 65.8 % · salary_min 1.7 % (11 avisos declaran
+  compensación → 9 extraídos; los 2 que faltan son **fallos del modelo**:
+  "₡ 625000" y "$19,984,600 CRC", prompt ya endurecido). Los 3 casos de error
+  son de **prompt/modelo**, no de lógica.
+- Requisitos del corpus: **1071 vigentes, 0 sin `evidence`, 0 evidencia no
+  literal** → 100 % trazables. 22 descripciones basura (<200 chars, login-wall
+  → O5.3). `posting_language` con **0 `undetermined`**.
+- Los **61 `zero_results`** son correctos (tableros sin vacantes de CR,
+  verificado a mano en `bask-health-1`, `cynet-corp`, `utopia-life-worth-living`);
+  Workable los marca `needs_review` con `consecutive_zero_runs = 9`. El único
+  `error` es un aviso de Workday sin ubicación (`review_required`).
+- El **TÍTULO de un aviso no sirve como fuente de ubicación**: el catálogo
+  devuelve el título entero como ciudad ("Senior Accountant"). No hacerlo.
 - Corrida vigente del Paso 5 (BD anterior): **`20261101_084012`** (`valida=1`,
   553 jobs): calificada 179 · sin_requisitos 140 · revisar_a_mano 106 ·
-  descartada 89 · datos_insuficientes 39. Queda en el historial; la BD nueva
-  se limpia de `job_match` al vaciar.
+  descartada 89 · datos_insuficientes 39. Queda en el historial; el corpus
+  actual está **sin calificar**.
 - 30 `educacion_no_confirmada` ABIERTAS (las firma una segunda persona).
 - Modelo local canónico: **Gemma 3n E2B QAT** (8k ctx, MTP draft, puerto
   8081); Qwen 3.5 2B descartado (~6.5x más lento). Ver
-  `docs/IA_ENRIQUECIMIENTO.md`. **IA APAGADA al cierre** (el vigilante registró
-  el apagado 12:35:28).
+  `docs/IA_ENRIQUECIMIENTO.md`. **IA APAGADA al cierre** (puerto 8081 libre).
 - Fuentes activas: 7/7 plataformas ATS validadas (seeds versionados en
   `src/jobpulse_v15/seeds/*.json`) + ANE/Indeed/LinkedIn/Elempleo (browser) +
-  Harvie/CINDE/Procomer. 129 sitios habilitados; scrape de los 129 con
-  **0 errores** (ANE requiere sesión iniciada).
+  Harvie/CINDE/Procomer. 129 sitios habilitados; la corrida del 01-11
+  confirmó **Harvie entra desde la UI (181 avisos)**; ANE requiere sesión
+  iniciada (si no, se omite limpio).
 - Pipeline real: scrape (adaptadores **en el paquete raíz**:
   `workday.py`, `greenhouse.py`, `ashby.py`, `lever.py`, `recruitee.py`,
   `workable.py`, `successfactors.py`, `ane.py`, `indeed.py`, `linkedin.py`,

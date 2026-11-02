@@ -2,8 +2,8 @@
 """Tests de la señal de salario (jobpulse_v15.salario).
 
 Cubre la puerta que decide si un aviso DECLARA su compensacion (marca de
-salario + moneda) y que el contador de huecos (SQL) diga EXACTAMENTE lo
-mismo que el extractor (Python).
+salario + cifra con moneda en la misma frase) y que el contador de huecos
+(SQL) diga EXACTAMENTE lo mismo que el extractor (Python).
 
 Contexto: antes el prompt de salario solo se disparaba si el aviso traia el
 campo `salary_raw` de la fuente, y las APIs de empleo casi nunca lo traen
@@ -34,6 +34,53 @@ class TestDeclaraSalario(unittest.TestCase):
         # "compensation" generico sin cifra no es un dato de salario
         self.assertFalse(
             salario.declara_salario("We offer generous compensation and stock options")
+        )
+
+    def test_ignora_marca_con_moneda_pero_sin_cifra(self):
+        """Visto en la corrida del 2026-11-01: la puerta disparaba sin cifra.
+
+        "Compensation: Paid in USD" y "Compensation & Benefits USD" son
+        marcas SIN monto: el modelo devolvia null y el panel seguia contando
+        el aviso como hueco recuperable (8 de 19 falsos pendientes).
+        """
+        casos = [
+            "Compensation: Paid in USD",
+            "Compensation & Benefits USD Compensation Full-time, Monday to Friday",
+            "Compensation is provided in USD, and advanced English is required.",
+            # le pide la tarifa al CANDIDATO, no la declara
+            "b) your proposed best Translation per word rate and Proofreading"
+            " hourly rate in USD.",
+            "USD Compensation",
+        ]
+        for texto in casos:
+            with self.subTest(texto=texto):
+                self.assertFalse(salario.declara_salario(texto))
+
+    def test_ignora_cifra_de_funding_aunque_haya_salary_lejos(self):
+        """La cifra y la marca deben estar en la MISMA frase (<80 chars)."""
+        self.assertFalse(
+            salario.declara_salario(
+                "We've raised $26 million in Series B financing and are scaling"
+                " fast. What you will work on Own pre-hire compliance checks."
+            )
+        )
+        self.assertFalse(
+            salario.declara_salario(
+                "Competitive salary. We raised $200 million in funding."
+            )
+        )
+
+    def test_reconoce_el_caso_colones_y_el_de_dolar_con_codigo(self):
+        """Los 2 avisos que el modelo no extrajo en la corrida del 2026-11-01."""
+        self.assertTrue(
+            salario.declara_salario(
+                "Travel Required: No, Salary: ₡ 625000, Position Type: Full-time"
+            )
+        )
+        self.assertTrue(
+            salario.declara_salario(
+                "The estimated base salary for this role is $19,984,600 CRC annually"
+            )
         )
 
     def test_ignora_cifra_que_no_es_salario(self):
@@ -74,6 +121,26 @@ class TestContextoSalario(unittest.TestCase):
         self.assertIn("Compensation", contexto)
         self.assertLess(len(contexto), 2000)
 
+    def test_centra_en_la_cifra_no_en_la_palabra(self):
+        """La palabra sin cifra no debe gastar el fragmento.
+
+        Caso real (ashby-owner, corrida 2026-11-01): "salary" aparecia en un
+        parrafo de relleno y la cifra real ("$19,984,600 CRC annually") 700
+        chars despues; el recorte centrado en la palabra no llegaba y el
+        modelo devolvia null.
+        """
+        texto = (
+            "Great benefits and a competitive salary discussion. "
+            + "z" * 600
+            + " Pay and benefits The estimated base salary for this role is"
+            " $19,984,600 CRC annually. Other benefits include health coverage."
+        )
+        contexto = salario.contexto_salario(texto)
+        self.assertIn("19,984,600", contexto)
+
+    def test_ignora_la_marca_sin_cifra(self):
+        self.assertIsNone(salario.contexto_salario("Compensation: Paid in USD"))
+
     def test_devuelve_none_sin_marca(self):
         self.assertIsNone(salario.contexto_salario("Un aviso sincompensacion"))
 
@@ -99,6 +166,8 @@ class TestPredicadoSql(unittest.TestCase):
             (None, "", "Estimated base salary: $19,984,600 CRC annually", ""),
             (None, "", "We raised $200 million in funding", ""),
             (None, "", "We offer great compensation and learning programs", ""),
+            (None, "", "Compensation: Paid in USD", ""),
+            (None, "", "your proposed Proofreading hourly rate in USD.", ""),
             (None, "1 000 000 CRC", "", ""),
             (1000, "", "Compensation: USD 1,400 per month", ""),
         ]

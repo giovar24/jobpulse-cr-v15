@@ -250,6 +250,10 @@ Responde SOLO JSON: {"employment_type": "..."}"""
 SALARY_PROMPT = """Extrae el SALARIO DEL PUESTO SOLO si está EXPLÍCITO con números.
 - "Estimated base salary: $19,984,600 CRC annually" -> min/max + CRC + annual.
 - "Hourly Rate: $10 to $23 USD per hour" -> min/max + USD + hourly.
+- "Salary: ₡ 625000" -> 625000 + CRC + monthly (el símbolo ₡ es colón).
+- Si la cifra trae "$" Y además un código de moneda (CRC/USD), manda el
+  CÓDIGO: "$19,984,600 CRC" es CRC, no USD.
+- Si solo hay un valor -> min = max.
 - IGNORA cifras de ingresos, funding, ventas, clientes o tamaño de la empresa.
 - IGNORA "paid time off", "paid shifts" y otros pagos que NO son salario.
 Responde: min, max, currency (CRC/USD), period (monthly/annual/hourly).

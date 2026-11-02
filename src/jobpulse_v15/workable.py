@@ -121,6 +121,12 @@ class WorkableFetcher:
                         "posting_language": "undetermined",
                         "posting_language_origin": "unknown",
                         "description_raw": combined or None,
+                        # La tabla de Workable trae una columna Salary
+                        # ("USD 65,000-100,000"). Antes se parseaba y se
+                        # DESCARTABA: el aviso llegaba sin `salary_raw` y el
+                        # extractor de IA no veia la cifra. Se pasa tal cual
+                        # (el texto), como hacen elempleo/indeed/ane/procomer.
+                        "salary_raw": self._salary_texto(job.get("salary")),
                     },
                     "raw_payload": job,
                 }
@@ -308,3 +314,17 @@ class WorkableFetcher:
     @staticmethod
     def _optional_text(value: Any) -> str | None:
         return value.strip() if isinstance(value, str) and value.strip() else None
+
+    @staticmethod
+    def _salary_texto(value: Any) -> str | None:
+        """La columna Salary de la tabla de Workable, o None si no hay.
+
+        Workable escribe "—" (o "-") cuando la empresa no publica la cifra:
+        eso NO es un dato de salario y no debe viajar como `salary_raw`.
+        """
+        if not isinstance(value, str):
+            return None
+        texto = value.strip()
+        if not texto or texto in {"—", "-", "–", "N/A", "n/a"}:
+            return None
+        return texto

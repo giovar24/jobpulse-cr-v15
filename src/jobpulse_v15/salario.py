@@ -23,18 +23,26 @@ USD per hour"). La puerta era el bug: no faltaba el dato.
 
 LA REGLA
 --------
-Un aviso declara salario si en su texto hay
+Un aviso declara salario si en la MISMA frase (a menos de 80 caracteres, sin
+cruzar un punto) hay
 
 1. una MARCA literal de compensacion ("compensation", "salary", "salario",
    "remuneracion", "wage", "hourly rate", "pay range", "base pay",
    "stipend", "honorarios", "sueldo"), y
-2. una MONEDA ("$", "₡", "€", "USD", "CRC", "colones", "dolares").
+2. una CIFRA con moneda ("$20,000", "₡ 625000", "420,000 colones",
+   "USD 1,400").
 
-Las dos condiciones juntas evitan los falsos positivos: "compensation" en
-una frase generica ("great compensation package") sin cifra no es un dato,
-y una cifra sin marca ("raised $200 million in funding") no es un salario.
-La cifra y la moneda las juzga el modelo; aqui solo se decide si el aviso
-MERECE pasar por el prompt.
+Las tres condiciones juntas (marca + cifra + moneda) evitan los falsos
+positivos que la version anterior (marca + moneda, en cualquier punto del
+aviso) dejaba pasar:
+
+- "Compensation: Paid in USD" / "Compensation & Benefits USD" (sin cifra),
+- "your proposed ... hourly rate in USD" (le pide la tarifa al CANDIDATO),
+- "raised $26 million in Series B financing" junto a un "salary" lejano
+  (cifra de funding, no del puesto).
+
+Cual de las cifras es el salario lo juzga el modelo; aqui solo se decide si
+el aviso MERECE pasar por el prompt.
 """
 from __future__ import annotations
 
@@ -129,14 +137,23 @@ _RE_SALARIO = re.compile(
     r"\b(?:" + "|".join(_patron_tolerante(p) for p in PALABRAS_SALARIO) + r")\b",
     re.IGNORECASE,
 )
-_RE_MONEDA = re.compile(
+# Una CIFRA con moneda pegada ("$20,000", "₡ 625000", "420,000 colones",
+# "USD 1,400"). Un numero suelto no cuenta: "20,000 restaurant owners" o
+# "we've raised $26 million" no son el salario del puesto.
+_RE_MONTO = re.compile(
     r"(?:["
     + re.escape("".join(m for m in MARCAS_MONEDA if not m.isalpha()))
-    + r"]|\b(?:"
-    + "|".join(_patron_tolerante(m) for m in MARCAS_MONEDA if m.isalpha())
-    + r")\b)",
+    + r"]\s*\d[\d.,]*"
+    r"|\d[\d.,]*\s*(?:" + "|".join(_patron_tolerante(m) for m in MARCAS_MONEDA if m.isalpha()) + r")\b"
+    r"|\b(?:" + "|".join(_patron_tolerante(m) for m in ("usd", "crc")) + r")\b\s*\d[\d.,]*)",
     re.IGNORECASE,
 )
+
+# Distancia maxima entre la marca de salario y la cifra: la misma frase.
+# "estimated base salary for this role is $19,984,600 CRC annually" = 40
+# chars; "Salary: ₡ 625000" = 8. Cruzar un punto (o 80 chars) separa dos
+# frases distintas ("Competitive salary. We raised $200 million.").
+VENTANA_MONTO = 80
 
 # Fragmentos SQL equivalentes a las listas de arriba.
 _FRAGMENTOS_SALARIO_SQL = tuple(
@@ -152,11 +169,16 @@ _FRAGMENTOS_SALARIO_SQL = tuple(
 # conexion SQLite (ver ``registrar_funciones``): asi el panel de la UI y el
 # extractor NO pueden discrepar. Con LIKE habia diferencias ("%earn%"
 # encuentra "learning", "%pay%" encuentra "payroll").
-_PATRON_SALARIO_Y_MONEDA = (
-    "(?:" + _RE_SALARIO.pattern + ")[\\s\\S]*?(?:" + _RE_MONEDA.pattern + ")"
-    "|(?:" + _RE_MONEDA.pattern + ")[\\s\\S]*?(?:" + _RE_SALARIO.pattern + ")"
+_PATRON_SALARIO_Y_MONTO = (
+    r"(?:" + _RE_SALARIO.pattern + r")[^.]{0," + str(VENTANA_MONTO) + r"}?(?:"
+    + _RE_MONTO.pattern + r")"
+    r"|(?:" + _RE_MONTO.pattern + r")[^.]{0," + str(VENTANA_MONTO) + r"}?(?:"
+    + _RE_SALARIO.pattern + r")"
 )
-_RE_SALARIO_Y_MONEDA = re.compile(_PATRON_SALARIO_Y_MONEDA, re.IGNORECASE)
+# Nombre historico (lo usaban los tests y el predicado SQL): mismo patron.
+_PATRON_SALARIO_Y_MONEDA = _PATRON_SALARIO_Y_MONTO
+
+_RE_SALARIO_Y_MONTO = re.compile(_PATRON_SALARIO_Y_MONTO, re.IGNORECASE)
 
 
 def _re_sql(patron: str | None, valor: str | None) -> int:
@@ -179,7 +201,7 @@ def registrar_funciones(con: sqlite3.Connection) -> None:
 
 
 def declara_salario(*textos: Optional[str]) -> bool:
-    """True si el aviso DECLARA su compensacion (marca de salario + moneda).
+    """True si el aviso DECLARA su compensacion (marca + cifra + moneda).
 
     Acepta varios textos (descripcion, requisitos) y basta con que uno de
     ellos declare el salario.
@@ -187,29 +209,45 @@ def declara_salario(*textos: Optional[str]) -> bool:
     for texto in textos:
         if not texto:
             continue
-        if _RE_SALARIO_Y_MONEDA.search(texto):
+        if _RE_SALARIO_Y_MONTO.search(texto):
             return True
     return False
+
+
+def _cifras_declaradas(texto: str):
+    """Cifras monetarias cuya frase SI declara salario (yield del match)."""
+    for cifra in _RE_MONTO.finditer(texto):
+        inicio = max(0, cifra.start() - VENTANA_MONTO)
+        fin = min(len(texto), cifra.end() + VENTANA_MONTO)
+        if _RE_SALARIO_Y_MONTO.search(texto[inicio:fin]) is None:
+            continue
+        yield cifra
 
 
 def contexto_salario(
     *textos: Optional[str], ventana: int = 700, max_fragmentos: int = 2
 ) -> Optional[str]:
-    """Fragmento(s) del texto alrededor de la marca de salario.
+    """Fragmento(s) del texto alrededor de la CIFRA del salario.
 
     El modelo local ve una ventana corta: si la seccion de compensacion
     esta al final de un aviso largo (caso tipico: va despues de "What You
     Will Do"), mandarle solo los primeros 2000 caracteres perderia el
-    dato. Aqui se recorta el texto alrededor de la marca, que es lo que el
-    modelo tiene que leer.
+    dato. Aqui se recorta el texto alrededor de la CIFRA (no de la palabra
+    "salary"): una marca sin cifra cercana no es un dato y no debe gastar
+    uno de los dos fragmentos.
+
+    Antes se centraba en la palabra: en un aviso con "salary" en una frase
+    de relleno los dos fragmentos se gastaban ahi y el modelo nunca veia la
+    cifra real ("The estimated base salary for this role is $19,984,600 CRC
+    annually" se quedo sin extraer en la corrida del 2026-11-01).
     """
     fragmentos: list[str] = []
     for texto in textos:
         if not texto:
             continue
-        for match in _RE_SALARIO.finditer(texto):
-            inicio = max(0, match.start() - ventana // 2)
-            fin = min(len(texto), match.end() + ventana)
+        for cifra in _cifras_declaradas(texto):
+            inicio = max(0, cifra.start() - ventana // 2)
+            fin = min(len(texto), cifra.end() + ventana)
             fragmento = " ".join(texto[inicio:fin].split())
             if fragmento and fragmento not in fragmentos:
                 fragmentos.append(fragmento)
