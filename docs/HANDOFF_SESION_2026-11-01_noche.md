@@ -13,7 +13,7 @@ Hechos de la corrida:
   avisos de Harvie), 129/129 sitios intentados, **0 errores de scrape** salvo
   1 aviso sin ubicación (`workday-synnex`, marcado `review_required`).
 - El **servidor de IA sí trabajó**: `llama-server` (PID 10752) arrancó a las
-  18:11:54,过程ó el corpus y terminó a las ~18:55; el pase de enriquecimiento
+  18:11:54, procesó el corpus y terminó a las ~18:55; el pase de enriquecimiento
   llenó skills (533/535), languages (511/535), employment_type (493/535),
   work_mode (352/535), city (389/535), region (432/535).
 - **El fix del salario de la tarde FUNCIONÓ**: `salary_min` pasó de **0 % a
