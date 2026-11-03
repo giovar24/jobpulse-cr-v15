@@ -5,6 +5,7 @@ Uso: python run_scrapes.py cinde procomer [ane indeed linkedin]
 import sys
 
 from jobpulse_v15.ane import AneFetcher
+from jobpulse_v15.browser_manager import puerto_cdp_configurado
 from jobpulse_v15.cinde import CindeFetcher
 from jobpulse_v15.db import Database
 from jobpulse_v15.indeed import IndeedFetcher
@@ -13,12 +14,15 @@ from jobpulse_v15.linkedin import LinkedInFetcher
 from jobpulse_v15.procomer import ProcomerFetcher
 from jobpulse_v15.repository import Repository
 
+# El puerto CDP sale de la configuración (BRAVE_CDP_PORT en el .env).
+PUERTO_CDP = puerto_cdp_configurado()
+
 FETCHERS = {
-    "ane": (AneFetcher, "ane-cr", 9222),
+    "ane": (AneFetcher, "ane-cr", PUERTO_CDP),
     "cinde": (CindeFetcher, "cinde-cr", None),
     "procomer": (ProcomerFetcher, "procomer-cr", None),
-    "indeed": (IndeedFetcher, "indeed-cr", 9222),
-    "linkedin": (LinkedInFetcher, "linkedin-cr", 9222),
+    "indeed": (IndeedFetcher, "indeed-cr", PUERTO_CDP),
+    "linkedin": (LinkedInFetcher, "linkedin-cr", PUERTO_CDP),
 }
 
 db = Database()

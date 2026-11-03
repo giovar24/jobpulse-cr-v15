@@ -16,6 +16,61 @@ from playwright.async_api import Browser, BrowserContext, Playwright, async_play
 
 logger = logging.getLogger("jobpulse.browser")
 
+# Puerto CDP por defecto (el que usa el launcher del PC del usuario).
+PUERTO_CDP_DEFECTO = 9222
+# Clave del .env / entorno con el puerto CDP configurable.
+CLAVE_CDP_PORT = "BRAVE_CDP_PORT"
+CLAVE_BIN = "BRAVE_BIN"
+CLAVE_PERFIL = "BRAVE_PERFIL"
+
+
+def puerto_cdp_configurado() -> int:
+    """Puerto CDP configurado (``BRAVE_CDP_PORT``) o 9222.
+
+    Antes el puerto estaba fijo en 9222 en todos lados y la variable de
+    entorno no la leía nadie; ahora es la ÚNICA fuente (UI, CLI y scripts
+    la consultan) para que el puerto se pueda cambiar desde la interfaz.
+    Un valor inválido (no numérico o fuera del rango) cae al predeterminado.
+    """
+    valor = str(os.getenv(CLAVE_CDP_PORT, "")).strip()
+    if not valor:
+        return PUERTO_CDP_DEFECTO
+    try:
+        puerto = int(valor)
+    except ValueError:
+        return PUERTO_CDP_DEFECTO
+    if not (1024 <= puerto <= 65535):
+        return PUERTO_CDP_DEFECTO
+    return puerto
+
+
+def detectar_brave() -> Optional[str]:
+    """Ruta del ejecutable de Brave detectada (None si no se encuentra)."""
+    try:
+        return BraveManager._detect_brave()
+    except RuntimeError:
+        return None
+
+
+def perfiles_disponibles() -> list[str]:
+    """Nombres de los perfiles de Brave disponibles (``User Data/*``).
+
+    El perfil es el que tiene la sesión iniciada (ANE/Indeed/LinkedIn): por
+    eso la UI lo ofrece como lista en vez de una caja de texto libre.
+
+    Criterio: una carpeta es un perfil si tiene su archivo ``Preferences``
+    (los directorios de componentes de Brave —GPUPersistentCache, Safe
+    Browsing…— no lo tienen).
+    """
+    local_app = Path(os.getenv("LOCALAPPDATA", ""))
+    base = local_app / "BraveSoftware" / "Brave-Browser" / "User Data"
+    if not base.is_dir():
+        return []
+    ignorados = {"System Profile", "Guest Profile", "Crashpad"}
+    return sorted(p.name for p in base.iterdir()
+                  if p.is_dir() and p.name not in ignorados
+                  and (p / "Preferences").is_file())
+
 
 class BraveManager:
     """
@@ -29,13 +84,14 @@ class BraveManager:
         brave_bin: str | None = None,
         brave_perfil: str | None = None,
         host_resolver_rules: str | None = None,
-        cdp_port: int = 9222,
+        cdp_port: int | None = None,
         startup_timeout: float = 30.0,
     ) -> None:
-        self.brave_bin = brave_bin or os.getenv("BRAVE_BIN") or self._detect_brave()
-        self.brave_perfil = brave_perfil or os.getenv("BRAVE_PERFIL") or "Default"
+        self.brave_bin = brave_bin or os.getenv(CLAVE_BIN) or self._detect_brave()
+        self.brave_perfil = brave_perfil or os.getenv(CLAVE_PERFIL) or "Default"
         self.host_resolver_rules = host_resolver_rules
-        self.cdp_port = cdp_port
+        # Sin puerto explícito manda BRAVE_CDP_PORT (ver puerto_cdp_configurado).
+        self.cdp_port = int(cdp_port) if cdp_port else puerto_cdp_configurado()
         self.startup_timeout = startup_timeout
 
         self._playwright: Playwright | None = None
@@ -227,25 +283,33 @@ class BraveManager:
 PLATAFORMAS_NAVEGADOR = frozenset({"ane", "indeed", "linkedin", "elempleo"})
 
 
-def cdp_vivo(port: int = 9222, host: str = "127.0.0.1", timeout: float = 0.5) -> bool:
-    """True si hay un navegador escuchando CDP en ``host:port``."""
+def cdp_vivo(port: int | None = None, host: str = "127.0.0.1",
+             timeout: float = 0.5) -> bool:
+    """True si hay un navegador escuchando CDP en ``host:port``.
+
+    Sin ``port`` usa el configurado (``BRAVE_CDP_PORT``).
+    """
+    puerto = int(port) if port else puerto_cdp_configurado()
     try:
-        with socket.create_connection((host, port), timeout=timeout):
+        with socket.create_connection((host, puerto), timeout=timeout):
             return True
     except OSError:
         return False
 
 
-def asegurar_brave(cdp_port: int = 9222, **kwargs: Any) -> Optional[BraveManager]:
+def asegurar_brave(cdp_port: int | None = None, **kwargs: Any) -> Optional[BraveManager]:
     """Garantiza CDP vivo en ``cdp_port``; devuelve el manager SOLO si lo arrancó.
 
     ``None`` = ya había CDP arriba (Brave del usuario o del launcher): no se
     toca y no hay nada que cerrar. Si devuelve un ``BraveManager``, el caller
     debe llamar ``stop_brave_sync()`` al terminar (O7.2).
+
+    Sin ``cdp_port`` usa el configurado (``BRAVE_CDP_PORT``).
     """
-    if cdp_vivo(cdp_port):
+    puerto = int(cdp_port) if cdp_port else puerto_cdp_configurado()
+    if cdp_vivo(puerto):
         return None
-    mgr = BraveManager(cdp_port=cdp_port, **kwargs)
+    mgr = BraveManager(cdp_port=puerto, **kwargs)
     mgr.start_brave()
     return mgr
 
@@ -254,7 +318,7 @@ async def get_browser_context(
     brave_bin: str | None = None,
     brave_perfil: str | None = None,
     host_resolver_rules: str | None = None,
-    cdp_port: int = 9222,
+    cdp_port: int | None = None,
 ) -> tuple[BraveManager, BrowserContext]:
     """Helper: lanza Brave y devuelve (manager, context)."""
     mgr = BraveManager(

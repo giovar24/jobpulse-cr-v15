@@ -23,7 +23,7 @@ funciones sin comprometer lo que ya funciona**.
 | `ui_v2/theme.py` | `Palette`, `Metrics`, `Theme`, `apply_theme()`, `PALETAS` | ÚNICA fuente de color, tipografía y espaciado |
 | `ui_v2/widgets.py` | `Card`, `StatTile`, `Badge`, `SearchField`, `FlatButton`, `EmptyState`, `ScrollFrame`, `SectionTitle`, `KeyValue` | Componentes planos reutilizables |
 | `ui_v2/dialogs.py` | `RevisionImportacionDialog` (revisión de CV), `confirmar()` | Toplevels reutilizables; no tocan la BD |
-| `ui_v2/configuracion.py` | `cargar`/`guardar` (merge), `paleta_actual`, `directorio_csv`, `guardar_env` | Persistencia **SIN Tk**: `ui_config.json` (compartido con la UI clásica) y `.env` |
+| `ui_v2/configuracion.py` | `cargar`/`guardar` (merge), `paleta_actual`, `directorio_csv`, `guardar_env`, `leer_env`/`valor_env`, `puerto_cdp`, `guardar_navegador` | Persistencia **SIN Tk**: `ui_config.json` (compartido con la UI clásica) y `.env` |
 | `ui_v2/data/*.py` | `JobsStore`, `ProfileStore`, `AtsStore`, `FuentesStore`, `ScrapingStore` + dataclasses | **SIN Tkinter**: las pestañas no ven SQLite |
 | `ui_v2/tabs/base.py` | `BaseTab`, `TabContext` | El CONTRATO de una pestaña (+ helpers de hilos: cola + vigilante) |
 | `ui_v2/tabs/*.py` | `DatosCrudosTab`, `PerfilTab`, `VacantesTab`, `ScrapingTab`, `ConfiguracionTab` | Composición de widgets; hablan con el store |
@@ -153,13 +153,14 @@ que toca la arquitectura:
 
 ### Configuración (`tabs/configuracion.py`)
 
-Cinco tarjetas (una `Card` cada una), modeladas sobre la ventana de
+Seis tarjetas (una `Card` cada una), modeladas sobre la ventana de
 configuración de la UI clásica pero **planas** y sin Toplevel:
 
 | Tarjeta | Qué configura | Dónde se guarda |
 |---|---|---|
 | **IA local** | Estado/arranque/detención del servidor llama.cpp (puerto 8081) | — (proceso) |
 | **IA externa** | Proveedor LLM, base URL, modelo, API key y límites opt-in `IA_MAX_LLAMADAS` / `IA_RPM`; botones **Probar conexión** y **Listar modelos** | `.env` del proyecto (gitignored) |
+| **Navegador (Brave / CDP)** | Ruta del ejecutable, perfil con la sesión iniciada y puerto CDP; botones **Verificar CDP**, **Abrir Brave**, **Detener Brave** | `.env` del proyecto (`BRAVE_BIN` / `BRAVE_PERFIL` / `BRAVE_CDP_PORT`) |
 | **Sondas de scraping** | Activa/pausa fuentes (`source_sites.enabled`), con filtro por plataforma, selección múltiple, "todas" y aviso si no queda ninguna activa | BD (`source_sites`) |
 | **Apariencia** | Esquema de color (`theme.PALETAS`: claro azul / claro verde / oscuro) | `~/.jobpulse_v15/ui_config.json` (clave `paleta`) |
 | **Exportaciones CSV** | Directorio inicial de los diálogos "Exportar CSV" | `~/.jobpulse_v15/ui_config.json` (clave `csv_dir`) |
@@ -182,10 +183,34 @@ Reglas que esta pestaña respeta:
   **módulo** (`tabs.configuracion._HANDLE_SERVIDOR`), no en la instancia, para
   sobrevivir al rebuild; el botón "Detener" solo apaga ese handle. Un servidor
   que ya corría (arrancado a mano) **no se toca**.
-- **Hilos**: los workers (estado de la IA, arranque, prueba de conexión) **no
-  tocan Tk**: meten callbacks en una `queue.Queue` y el vigilante los ejecuta
-  en el hilo principal (`after` agendado desde el hilo principal, igual que
-  `VacantesTab`).
+- **O7.3 (navegador)**: mismo criterio para Brave: `_HANDLE_BRAVE` guarda solo
+  el navegador que abrió esta UI; el que ya estaba vivo (el del usuario) no se
+  toca ni se cierra. `asegurar_brave()` devuelve `None` cuando ya había CDP
+  arriba.
+- **Hilos**: los workers (estado de la IA, arranque, prueba de conexión, CDP)
+  **no tocan Tk**: meten callbacks en una `queue.Queue` y el vigilante los
+  ejecuta en el hilo principal (`after` agendado desde el hilo principal, igual
+  que `VacantesTab`).
+
+#### El puerto CDP es configurable de verdad (punto 2)
+
+Antes `9222` estaba **escrito a mano** en `browser_manager`, `cli.py`,
+`run_scrapes.py` y `run_full_flow.py`, y `BRAVE_CDP_PORT` no la leía nadie.
+Ahora hay una sola fuente:
+
+| Dónde | Cómo |
+|---|---|
+| `browser_manager.puerto_cdp_configurado()` | Lee `BRAVE_CDP_PORT` (entorno o `.env`); inválido o fuera de 1024–65535 → 9222 |
+| `browser_manager.BraveManager` / `cdp_vivo()` / `asegurar_brave()` | Sin puerto explícito usan el configurado |
+| `cli.py` (`scrape ane/linkedin/indeed --port`) | El `--port` por defecto es el configurado |
+| `run_scrapes.py` / `run_full_flow.py` | Idem |
+| UI v2 (tarjeta "Navegador") | Guarda en el `.env` **y** actualiza `os.environ` en el acto (`load_dotenv` no pisa lo ya presente: sin esto el cambio no rigiría hasta el reinicio) |
+| Pestaña "Scraping" | La casilla "Puerto CDP" arranca con el valor configurado |
+
+`crear_app()` carga el `.env` del proyecto al arrancar (`override=False`).
+Los perfiles de Brave se detectan en disco (`User Data/*` con su archivo
+`Preferences`); el desplegable los ofrece, pero el campo acepta cualquier
+nombre escrito a mano.
 
 > El `.env` y `ui_config.json` **no** son del repo: el `.env` está gitignored
 > y `ui_config.json` vive en el HOME del usuario.

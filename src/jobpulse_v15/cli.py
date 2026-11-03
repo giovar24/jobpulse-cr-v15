@@ -42,6 +42,7 @@ from jobpulse_v15.ubicaciones_cr import (
     nombre_canonico,
     resolver_direccion,
 )
+from jobpulse_v15.browser_manager import puerto_cdp_configurado
 from jobpulse_v15.credenciales import (
     lista_sitios_login, resumen, faltantes,
     upsert_credencial, borrar_credencial, credencial,
@@ -539,7 +540,8 @@ def main() -> int:
         "--pages", type=int, default=15, help="Páginas de listado a recorrer (default: 15)."
     )
     scrape_ane.add_argument(
-        "--port", type=int, default=9222, help="Puerto CDP de Brave (default: 9222)."
+        "--port", type=int, default=puerto_cdp_configurado(),
+        help="Puerto CDP de Brave (default: BRAVE_CDP_PORT o 9222).",
     )
     scrape_ane.add_argument(
         "--dias", type=int, default=30, help="Ventana de días hacia atrás (default: 30)."
@@ -590,7 +592,8 @@ def main() -> int:
         "--pages", type=int, default=2, help="Páginas de resultados a scroll (default: 2)."
     )
     scrape_linkedin.add_argument(
-        "--port", type=int, default=9222, help="Puerto CDP de Brave (default: 9222)."
+        "--port", type=int, default=puerto_cdp_configurado(),
+        help="Puerto CDP de Brave (default: BRAVE_CDP_PORT o 9222).",
     )
 
     # === Indeed (browser, búsqueda por término) ===
@@ -607,7 +610,8 @@ def main() -> int:
         "--pages", type=int, default=2, help="Páginas de resultados (default: 2)."
     )
     scrape_indeed.add_argument(
-        "--port", type=int, default=9222, help="Puerto CDP de Brave (default: 9222)."
+        "--port", type=int, default=puerto_cdp_configurado(),
+        help="Puerto CDP de Brave (default: BRAVE_CDP_PORT o 9222).",
     )
 
     search = commands.add_parser("search", help="Buscar vacantes guardadas.")

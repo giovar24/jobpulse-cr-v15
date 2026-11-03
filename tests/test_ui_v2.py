@@ -615,6 +615,76 @@ class TestConfiguracionPersistencia(unittest.TestCase):
         self.assertNotIn("IA_MODEL=a\nb", texto)
 
 
+class TestConfigNavegador(unittest.TestCase):
+    """Lectura/escritura de la config del navegador (BRAVE_*) SIN Tk."""
+
+    def setUp(self):
+        self.temp_dir = tempfile.TemporaryDirectory()
+        self.ruta_env = Path(self.temp_dir.name) / ".env"
+        parches = [
+            unittest.mock.patch.object(config_ui, "ENV", self.ruta_env),
+            unittest.mock.patch.dict(os.environ, {}, clear=False),
+        ]
+        for clave in ("BRAVE_BIN", "BRAVE_PERFIL", "BRAVE_CDP_PORT"):
+            os.environ.pop(clave, None)
+        for parche in parches:
+            parche.start()
+            self.addCleanup(parche.stop)
+
+    def tearDown(self):
+        self.temp_dir.cleanup()
+
+    def test_leer_env_parsea_el_archivo(self):
+        self.ruta_env.write_text(
+            "# comentario\nBRAVE_CDP_PORT=9333\nBRAVE_BIN=\"C:/brave.exe\"\n"
+            "LINEA_SIN_IGUAL\n",
+            encoding="utf-8",
+        )
+        valores = config_ui.leer_env()
+        self.assertEqual(valores["BRAVE_CDP_PORT"], "9333")
+        self.assertEqual(valores["BRAVE_BIN"], "C:/brave.exe")
+        self.assertNotIn("LINEA_SIN_IGUAL", valores)
+
+    def test_leer_env_sin_archivo_devuelve_vacio(self):
+        self.assertEqual(config_ui.leer_env(), {})
+
+    def test_valor_env_prefiere_el_entorno_sobre_el_archivo(self):
+        self.ruta_env.write_text("BRAVE_PERFIL=PerfilArchivo\n", encoding="utf-8")
+        os.environ["BRAVE_PERFIL"] = "PerfilEntorno"
+        self.assertEqual(config_ui.valor_env("BRAVE_PERFIL"), "PerfilEntorno")
+        os.environ.pop("BRAVE_PERFIL")
+        self.assertEqual(config_ui.valor_env("BRAVE_PERFIL"), "PerfilArchivo")
+
+    def test_puerto_cdp_desde_el_env_y_defecto(self):
+        self.ruta_env.write_text("BRAVE_CDP_PORT=9444\n", encoding="utf-8")
+        self.assertEqual(config_ui.puerto_cdp(), 9444)
+        self.ruta_env.write_text("BRAVE_CDP_PORT=abc\n", encoding="utf-8")
+        self.assertEqual(config_ui.puerto_cdp(),
+                         config_ui.PUERTO_CDP_DEFECTO)
+
+    def test_guardar_navegador_escribe_el_env_y_lo_aplica_al_entorno(self):
+        config_ui.guardar_navegador("C:/brave.exe", "Profile 1", 9555)
+        texto = self.ruta_env.read_text(encoding="utf-8")
+        self.assertIn("BRAVE_BIN=C:/brave.exe", texto)
+        self.assertIn("BRAVE_PERFIL=Profile 1", texto)
+        self.assertIn("BRAVE_CDP_PORT=9555", texto)
+        # Y rija en esta misma sesión (load_dotenv no vuelve a mandar).
+        self.assertEqual(os.environ["BRAVE_CDP_PORT"], "9555")
+        self.assertEqual(config_ui.puerto_cdp(), 9555)
+
+    def test_guardar_navegador_con_valores_vacios_limpia_el_entorno(self):
+        os.environ["BRAVE_BIN"] = "C:/viejo.exe"
+        config_ui.guardar_navegador("", "", 9222)
+        self.assertNotIn("BRAVE_BIN", os.environ)
+        self.assertEqual(os.environ["BRAVE_CDP_PORT"], "9222")
+
+    def test_guardar_navegador_no_pisa_las_claves_ajenas(self):
+        self.ruta_env.write_text("IA_MODEL=gemma\n", encoding="utf-8")
+        config_ui.guardar_navegador("C:/brave.exe", "Default", 9222)
+        self.assertIn("IA_MODEL=gemma",
+                      self.ruta_env.read_text(encoding="utf-8"))
+
+
 class TestFuentesStore(unittest.TestCase):
     """Sondas de scraping (source_sites) SIN Tk."""
 
@@ -686,6 +756,7 @@ class TestConfiguracionTab(unittest.TestCase):
             "https://acme.example.test", company_name="Acme", country="CR",
         )
         self.ruta_cfg = temp / "ui_config.json"
+        self.ruta_env = temp / ".env"
 
         # Nada de red, nada de diálogos modales, nada de .env real.
         self.showinfo = unittest.mock.MagicMock(side_effect=lambda *a, **k: None)
@@ -694,11 +765,14 @@ class TestConfiguracionTab(unittest.TestCase):
         # La pestaña actualiza os.environ al guardar: se restaura al final.
         self._env_ia = {clave: os.environ.get(clave) for clave in
                         ("IA_PROVEEDOR", "IA_BASE_URL", "IA_MODEL",
-                         "IA_API_KEY", "IA_MAX_LLAMADAS", "IA_RPM")}
+                         "IA_API_KEY", "IA_MAX_LLAMADAS", "IA_RPM",
+                         "BRAVE_BIN", "BRAVE_PERFIL", "BRAVE_CDP_PORT")}
         self.addCleanup(self._restaurar_env_ia)
         config_mod._HANDLE_SERVIDOR = None  # el global no se hereda entre tests
+        config_mod._HANDLE_BRAVE = None
         parches = [
             unittest.mock.patch.object(config_ui, "ARCHIVO", self.ruta_cfg),
+            unittest.mock.patch.object(config_ui, "ENV", self.ruta_env),
             unittest.mock.patch.object(config_mod, "servidor_arriba",
                                         return_value=False),
             unittest.mock.patch.object(config_mod, "confirmar",
@@ -717,6 +791,7 @@ class TestConfiguracionTab(unittest.TestCase):
             parche.start()
             self.addCleanup(parche.stop)
         self.addCleanup(setattr, config_mod, "_HANDLE_SERVIDOR", None)
+        self.addCleanup(setattr, config_mod, "_HANDLE_BRAVE", None)
 
         self.root = _tkroot_reintentos()
         self.theme = apply_theme(self.root)
@@ -756,10 +831,11 @@ class TestConfiguracionTab(unittest.TestCase):
         self.assertEqual(claves, ["crudos", "perfil", "vacantes", "scraping",
                                   "configuracion"])
 
-    def test_monta_las_cinco_tarjetas_y_lista_las_sondas(self):
+    def test_monta_las_seis_tarjetas_y_lista_las_sondas(self):
         self.root.update()
         for clave in ("ia_estado", "ia_proveedor", "tabla", "paleta",
-                      "sondas_hint"):
+                      "sondas_hint", "brave_bin", "brave_perfil",
+                      "brave_puerto", "brave_estado"):
             with self.subTest(widget=clave):
                 self.assertIn(clave, self.pestana._widgets)
         self.assertEqual(len(self.pestana._widgets["tabla"].get_children()), 2)
@@ -920,6 +996,74 @@ class TestConfiguracionTab(unittest.TestCase):
         self.assertIsNone(config_mod._HANDLE_SERVIDOR)
         self.assertFalse(self.showerror.called)
 
+    # -- navegador (Brave / CDP) --------------------------------------
+    def test_la_tarjeta_de_navegador_muestra_la_configuracion(self):
+        self.root.update()
+        self.ruta_env.write_text(
+            "BRAVE_BIN=C:/brave.exe\nBRAVE_PERFIL=Profile 1\n"
+            "BRAVE_CDP_PORT=9333\n", encoding="utf-8")
+        self.pestana._cargar_navegador()
+        self.assertEqual(self.pestana._get("brave_bin"), "C:/brave.exe")
+        self.assertEqual(self.pestana._get("brave_perfil"), "Profile 1")
+        self.assertEqual(self.pestana._get("brave_puerto"), "9333")
+
+    def test_guardar_navegador_escribe_el_env_y_lo_aplica(self):
+        self.root.update()
+        self.pestana._set("brave_bin", "C:/brave.exe")
+        self.pestana._set("brave_perfil", "Profile 1")
+        self.pestana._set("brave_puerto", "9333")
+        self.pestana.guardar_brave()
+        texto = self.ruta_env.read_text(encoding="utf-8")
+        self.assertIn("BRAVE_BIN=C:/brave.exe", texto)
+        self.assertIn("BRAVE_PERFIL=Profile 1", texto)
+        self.assertIn("BRAVE_CDP_PORT=9333", texto)
+        # Y rija en esta misma sesión.
+        self.assertEqual(os.environ["BRAVE_CDP_PORT"], "9333")
+        self.assertEqual(config_ui.puerto_cdp(), 9333)
+
+    def test_un_puerto_invalido_no_se_guarda(self):
+        self.root.update()
+        self.pestana._set("brave_puerto", "abc")
+        self.pestana.guardar_brave()
+        self.assertTrue(self.showwarning.called)
+        self.assertFalse(self.ruta_env.exists())
+
+    def test_verificar_cdp_informa_el_estado(self):
+        self.root.update()
+        self.pestana._set("brave_puerto", "9333")
+        with unittest.mock.patch("jobpulse_v15.browser_manager.cdp_vivo",
+                                  return_value=True):
+            self.pestana.verificar_cdp()
+            self.assertTrue(self._esperar(
+                lambda: "hay un navegador" in
+                self.pestana._widgets["brave_estado"].cget("text").lower()))
+        self.assertIn("9333",
+                      self.pestana._widgets["brave_estado"].cget("text"))
+
+    def test_abrir_y_detener_brave_solo_toca_el_que_abrio_la_ui(self):
+        """Como el servidor IA (O7.3): el navegador ajeno no se toca."""
+        self.root.update()
+        self.pestana._set("brave_puerto", "9333")
+        manager = unittest.mock.MagicMock()
+        with unittest.mock.patch("jobpulse_v15.browser_manager.asegurar_brave",
+                                  return_value=manager) as asegurar:
+            self.pestana.abrir_brave()
+            self.assertTrue(self._esperar(
+                lambda: config_mod._HANDLE_BRAVE is not None))
+        asegurar.assert_called_once_with(9333)
+        self.assertIs(config_mod._HANDLE_BRAVE, manager)
+
+        self.pestana.detener_brave()
+        self.assertTrue(self._esperar(
+            lambda: config_mod._HANDLE_BRAVE is None))
+        manager.stop_brave_sync.assert_called_once()
+
+    def test_detener_brave_sin_handle_propio_es_noop(self):
+        self.root.update()
+        self.assertIsNone(config_mod._HANDLE_BRAVE)
+        self.pestana.detener_brave()
+        self.assertIsNone(config_mod._HANDLE_BRAVE)
+
 
 class TestScrapingTab(unittest.TestCase):
     """La pestaña de Scraping monta, filtra por grupo y lanza el barrido."""
@@ -1022,6 +1166,28 @@ class TestScrapingTab(unittest.TestCase):
         self.pestana._corriendo = True
         self.pestana.cancelar()
         self.assertTrue(self.pestana._cancelar.is_set())
+
+    def test_el_puerto_cdp_por_defecto_viene_de_la_configuracion(self):
+        """El puerto CDP del barrido es el configurado (BRAVE_CDP_PORT)."""
+        with unittest.mock.patch.object(config_ui, "ENV",
+                                        Path(self.temp_dir.name) / ".env"):
+            (Path(self.temp_dir.name) / ".env").write_text(
+                "BRAVE_CDP_PORT=9555\n", encoding="utf-8")
+            with unittest.mock.patch.dict(os.environ, {}, clear=False):
+                os.environ.pop("BRAVE_CDP_PORT", None)
+                root = _tkroot_reintentos()
+                try:
+                    theme = apply_theme(root)
+                    shell = AppShell(root, self.repository, theme=theme)
+                    shell.mostrar(3)
+                    pestana = shell.pestana_activa()
+                    root.update()
+                    self.assertEqual(pestana._widgets["puerto"].get(), "9555")
+                    self.assertEqual(pestana._puerto(), 9555)
+                finally:
+                    root.update_idletasks()
+                    root.destroy()
+                    gc.collect()
 
 
 if __name__ == "__main__":

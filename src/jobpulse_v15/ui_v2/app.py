@@ -13,6 +13,7 @@ from typing import Sequence, Type
 
 from jobpulse_v15.db import Database
 from jobpulse_v15.repository import Repository
+from jobpulse_v15.ui_v2 import configuracion
 from jobpulse_v15.ui_v2.configuracion import paleta_actual
 from jobpulse_v15.ui_v2.data.jobs import JobsStore
 from jobpulse_v15.ui_v2.data.profile import ProfileStore
@@ -244,8 +245,13 @@ def crear_app(root: tk.Tk | None = None, database_path: str | Path | None = None
     """Crea la app v2 completa (tema + shell) y devuelve (root, shell).
 
     Aplica la paleta guardada en ui_config.json (clave «paleta»); si no
-    hay ninguna o es desconocida, cae al esquema por defecto.
+    hay ninguna o es desconocido, cae al esquema por defecto.
+
+    Antes de montar nada carga el `.env` del proyecto (override=False: lo
+    que el usuario exportó en la sesión manda) para que la configuración
+    de la IA y del navegador (BRAVE_*) esté disponible desde el arranque.
     """
+    configuracion.cargar_env()
     base = Database(database_path) if database_path else Database()
     base.initialize()
     root = root or tk.Tk()

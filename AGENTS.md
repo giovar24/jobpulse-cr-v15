@@ -123,7 +123,7 @@ Cuando el usuario dice "vamos a otra sesión":
 .\.venv\Scripts\python.exe -X utf8 clean_run.py SI
 
 # Tests: pytest vive en el python del SISTEMA (el venv NO lo tiene).
-python -m pytest tests/ -q   # baseline 2026-11-03: 630 passed + 223 subtests
+python -m pytest tests/ -q   # baseline 2026-11-03: 655 passed + 231 subtests
 
 # UI clásica (completa, intacta)
 .\.venv\Scripts\python.exe -m jobpulse_v15.ui
@@ -189,6 +189,11 @@ cualquiera de estos sitios. Reglas de oro:
    Si tu Brave diario corre SIN CDP, la app no puede abrir el puerto
    (Chromium delega en la instancia viva): ciérralo del todo y reintenta.
    El barrido de la UI abre/cierra Brave solo (solo si ella lo abrió).
+   **El puerto CDP ya NO está fijo**: `BRAVE_CDP_PORT` (del `.env`) es la
+   única fuente — `browser_manager.puerto_cdp_configurado()`; la UI v2 lo
+   edita en la tarjeta "Navegador" (Configuración) y la pestaña "Scraping"
+   lo usa por defecto. El perfil se detecta en disco (`User Data/*` con su
+   archivo `Preferences`) y se guarda en `BRAVE_PERFIL`.
 2. **ANE (ane.cr)**: sesión obligatoria; sin sesión el barrido se omite limpio
    (no es error). Re-login desde la UI (botón "Re-login ANE") o via CLI:
    `.\.venv\Scripts\python.exe login_ane.py` → re-barrido
@@ -434,12 +439,12 @@ desmarca (pestaña **“Áreas de empleo”** en `ui_perfil.py` → hechos
     son las que el perfil cubre (cotejo por tokens, con alias de
     fabricante: "Microsoft Excel" ≈ "Excel Avanzado").
 
-## Estado de referencia (verificado 2026-11-03, tras la pestaña de Scraping)
+## Estado de referencia (verificado 2026-11-03, tras la tarjeta de navegador)
 
-- Suite: **630 tests verdes** + 223 subtests (`python -m pytest tests/ -q`,
+- Suite: **655 tests verdes** + 231 subtests (`python -m pytest tests/ -q`,
   ~2 min); `test_matching.py` 87, `test_areas.py` 20, `test_ubicaciones_cr.py`
   34, `test_idiomas.py` 7, `test_salario.py` 16, `test_ats_ranking.py` 44,
-  `test_scraper.py` 11, `test_ui_v2.py` 58.
+  `test_scraper.py` 11, `test_browser_manager.py` 21, `test_ui_v2.py` 72.
 - **UI v2 (`src/jobpulse_v15/ui_v2/`, 2026-11-02)**: interfaz **plana y
   modular** que convive con la UI clásica (`ui.py`, intacta). Lanzador
   `jobpulse-v15-v2.bat` o `python -m jobpulse_v15.ui_v2`. Capas: `theme.py`
@@ -455,6 +460,7 @@ desmarca (pestaña **“Áreas de empleo”** en `ui_perfil.py` → hechos
   barrido de las fuentes: grupos `directos`/`cr-gov`/`cr-jobs`, páginas,
   puerto CDP, bitácora en vivo; dominio en `src/jobpulse_v15/scraper.py`) y
   **Configuración** (IA local —arrancar/detener, O7.3—, IA externa → `.env`,
+  **navegador Brave/CDP** —ruta, perfil y puerto; Verificar/Abrir/Detener—,
   sondas de scraping on/off, esquema de color, directorio por defecto de
   CSV). Detalle y patrones de Tk: `docs/UI_V2_ARQUITECTURA.md`; gotchas
   21–24.

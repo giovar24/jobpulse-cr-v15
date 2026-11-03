@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
-"""Pestaña "Configuración": IA, sondas de scraping, apariencia y CSV.
+"""Pestaña "Configuración": IA, navegador, sondas de scraping, apariencia y CSV.
 
-Cinco tarjetas (una Card cada una):
+Seis tarjetas (una Card cada una):
 
 1. **IA local** — estado/arranque/detención del servidor llama.cpp.
    Política O7.3: solo se detiene el servidor que ESTA UI arrancó; uno que
@@ -11,11 +11,15 @@ Cinco tarjetas (una Card cada una):
 2. **IA externa** — proveedor LLM → `.env` del proyecto
    (IA_PROVEEDOR / IA_BASE_URL / IA_MODEL / IA_API_KEY + límites opt-in
    IA_MAX_LLAMADAS / IA_RPM; vacío = sin tope).
-3. **Sondas de scraping** — activa/pausa `source_sites` (la única verdad
+3. **Navegador (Brave / CDP)** — ruta del ejecutable, perfil con la sesión
+   iniciada y puerto CDP → `.env` (BRAVE_BIN / BRAVE_PERFIL /
+   BRAVE_CDP_PORT). El puerto deja de estar fijo en 9222: es la misma
+   variable que leen el CLI, los scripts y la pestaña de Scraping.
+4. **Sondas de scraping** — activa/pausa `source_sites` (la única verdad
    que miran `run_scrapes.py`, `run_full_flow.py` y `Repository.select_sites`).
-4. **Apariencia** — esquema de color (`theme.PALETAS`) → `ui_config.json` y
+5. **Apariencia** — esquema de color (`theme.PALETAS`) → `ui_config.json` y
    reconstrucción en caliente vía el servicio `reconstruir_ui`.
-5. **Exportaciones CSV** — directorio inicial de los diálogos "Exportar CSV".
+6. **Exportaciones CSV** — directorio inicial de los diálogos "Exportar CSV".
 
 Patrones: un solo gestor de geometría por padre; hilos que solo tocan Tk vía
 `_programar` (marco.after); ningún color escrito a mano (van de `theme`).
@@ -44,13 +48,17 @@ TODAS_LAS_PLATAFORMAS = "Todas las plataformas"
 # esquema de color (la pestaña se destruye; el proceso no).
 _HANDLE_SERVIDOR: Any = None
 
+# Handle del Brave que ESTA UI arrancó (misma política que el servidor IA:
+# el navegador que ya estaba vivo —el del usuario— no se toca ni se cierra).
+_HANDLE_BRAVE: Any = None
+
 
 class ConfiguracionTab(BaseTab):
     """Configuración del sistema dentro de la UI v2."""
 
     key = "configuracion"
     title = "Configuración"
-    subtitle = "IA, sondas de scraping, apariencia y exportaciones"
+    subtitle = "IA, navegador, sondas de scraping, apariencia y exportaciones"
     icon = "⚙"
 
     def __init__(self, context) -> None:
@@ -76,11 +84,13 @@ class ConfiguracionTab(BaseTab):
 
         self._card_ia_local(scroll.inner)
         self._card_ia_externa(scroll.inner)
+        self._card_navegador(scroll.inner)
         self._card_sondas(scroll.inner)
         self._card_apariencia(scroll.inner)
         self._card_csv(scroll.inner)
 
         self._cargar_ia()
+        self._cargar_navegador()
         self._cargar_apariencia()
         return marco
 
@@ -198,11 +208,80 @@ class ConfiguracionTab(BaseTab):
             font=theme.font(8), anchor="w",
         ).grid(row=3, column=0, sticky="ew", pady=(8, 0))
 
-    # -- tarjeta 3: sondas de scraping ------------------------------
-    def _card_sondas(self, parent: tk.Misc) -> None:
+    # -- tarjeta 3: navegador (Brave / CDP) --------------------------
+    def _card_navegador(self, parent: tk.Misc) -> None:
         theme = self.theme
         card = Card(parent, theme)
         card.grid(row=2, column=0, sticky="ew", pady=(0, theme.metrics.gap))
+        card.body.columnconfigure(0, weight=1)
+
+        SectionTitle(card.body, theme, "Navegador (Brave / CDP)",
+                     hint="ANE · Indeed · LinkedIn · Elempleo").grid(
+            row=0, column=0, sticky="ew")
+
+        form = tk.Frame(card.body, bg=theme.color("surface"))
+        form.grid(row=1, column=0, sticky="ew", pady=(8, 0))
+        form.columnconfigure(1, weight=1)
+
+        self._widgets["brave_bin"] = self._fila_form(
+            form, 0, "Ejecutable:", ttk.Entry(form, font=theme.font(9)))
+        FlatButton(form, theme, "Examinar…",
+                   command=self._elegir_brave).grid(
+            row=0, column=2, sticky="w", padx=(8, 0))
+
+        perfiles = self._perfiles_brave()
+        combo_perfil = ttk.Combobox(
+            form, values=perfiles or ["Default"], state="normal", width=22,
+            font=theme.font(9),
+        )
+        self._widgets["brave_perfil"] = self._fila_form(
+            form, 1, "Perfil:", combo_perfil,
+            hint="BRAVE_PERFIL · el que tiene la sesión iniciada")
+
+        self._widgets["brave_puerto"] = self._fila_form(
+            form, 2, "Puerto CDP:", ttk.Entry(form, width=12, font=theme.font(9)),
+            hint="BRAVE_CDP_PORT · 1024-65535 (por defecto 9222)")
+
+        self._widgets["brave_estado"] = tk.Label(
+            card.body, text="Estado: sin comprobar", bg=theme.color("surface"),
+            fg=theme.color("text_muted"), font=theme.font(9), anchor="w",
+        )
+        self._widgets["brave_estado"].grid(row=2, column=0, sticky="ew",
+                                           pady=(8, 0))
+
+        botones = tk.Frame(card.body, bg=theme.color("surface"))
+        botones.grid(row=3, column=0, sticky="w", pady=(10, 0))
+        FlatButton(botones, theme, "Verificar CDP",
+                   command=self.verificar_cdp).pack(side="left")
+        self._widgets["brave_abrir"] = FlatButton(
+            botones, theme, "Abrir Brave", command=self.abrir_brave,
+            variant="accent",
+        )
+        self._widgets["brave_abrir"].pack(side="left", padx=(8, 0))
+        self._widgets["brave_detener"] = FlatButton(
+            botones, theme, "Detener Brave", command=self.detener_brave,
+        )
+        self._widgets["brave_detener"].pack(side="left", padx=(8, 0))
+        self._widgets["brave_detener"].configure(state="disabled")
+        FlatButton(botones, theme, "Guardar en .env",
+                   command=self.guardar_brave).pack(side="left", padx=(8, 0))
+
+        tk.Label(
+            card.body,
+            text=("«Abrir Brave» guarda la configuración en el .env y abre "
+                  "el navegador con CDP. La UI solo detiene el navegador "
+                  "que ella abrió: el que ya estaba vivo no se toca. "
+                  "El puerto es el que usan el CLI, los scripts y la "
+                  "pestaña de Scraping."),
+            bg=theme.color("surface"), fg=theme.color("text_faint"),
+            font=theme.font(8), anchor="w", wraplength=760, justify="left",
+        ).grid(row=4, column=0, sticky="ew", pady=(8, 0))
+
+    # -- tarjeta 4: sondas de scraping ------------------------------
+    def _card_sondas(self, parent: tk.Misc) -> None:
+        theme = self.theme
+        card = Card(parent, theme)
+        card.grid(row=3, column=0, sticky="ew", pady=(0, theme.metrics.gap))
         card.body.columnconfigure(0, weight=1)
 
         SectionTitle(card.body, theme,
@@ -278,11 +357,11 @@ class ConfiguracionTab(BaseTab):
         aviso.grid_remove()
         self._widgets["sondas_aviso"] = aviso
 
-    # -- tarjeta 4: apariencia --------------------------------------
+    # -- tarjeta 5: apariencia --------------------------------------
     def _card_apariencia(self, parent: tk.Misc) -> None:
         theme = self.theme
         card = Card(parent, theme)
-        card.grid(row=3, column=0, sticky="ew", pady=(0, theme.metrics.gap))
+        card.grid(row=4, column=0, sticky="ew", pady=(0, theme.metrics.gap))
         card.body.columnconfigure(0, weight=1)
 
         SectionTitle(card.body, theme, "Esquema de color",
@@ -336,11 +415,11 @@ class ConfiguracionTab(BaseTab):
             font=theme.font(8), anchor="w",
         ).grid(row=4, column=0, sticky="ew", pady=(8, 0))
 
-    # -- tarjeta 5: exportaciones CSV -------------------------------
+    # -- tarjeta 6: exportaciones CSV -------------------------------
     def _card_csv(self, parent: tk.Misc) -> None:
         theme = self.theme
         card = Card(parent, theme)
-        card.grid(row=4, column=0, sticky="ew")
+        card.grid(row=5, column=0, sticky="ew")
         card.body.columnconfigure(0, weight=1)
 
         SectionTitle(card.body, theme, "Exportaciones CSV",
@@ -377,6 +456,7 @@ class ConfiguracionTab(BaseTab):
     def on_show(self) -> None:
         self.refresh()
         self.verificar_ia_local()
+        self.verificar_cdp()
 
     def refresh(self) -> None:
         """Recarga las sondas (el resto NO: no pisar ediciones del usuario)."""
@@ -666,6 +746,215 @@ class ConfiguracionTab(BaseTab):
                                        f"Respuesta: {mensaje}"))
 
         self._lanzar_hilo(tarea)
+
+    # ================================================================
+    # Navegador (Brave / CDP)
+    # ================================================================
+    def _perfiles_brave(self) -> list[str]:
+        """Perfiles de Brave detectados en el disco (para el desplegable)."""
+        try:
+            from jobpulse_v15.browser_manager import perfiles_disponibles
+
+            return perfiles_disponibles()
+        except Exception:  # noqa: BLE001 - solo es ayuda visual
+            return []
+
+    def _cargar_navegador(self) -> None:
+        """Puebla el formulario con lo que hay en el `.env` / entorno."""
+        self._set("brave_bin",
+                  configuracion.valor_env(configuracion.CLAVE_BRAVE_BIN))
+        self._set("brave_perfil",
+                  configuracion.valor_env(configuracion.CLAVE_BRAVE_PERFIL,
+                                          "Default"))
+        self._set("brave_puerto",
+                  str(configuracion.puerto_cdp()))
+        # Si no hay ruta configurada, se muestra la detectada (información,
+        # no se escribe: el .env queda como está).
+        if not self._get("brave_bin"):
+            try:
+                from jobpulse_v15.browser_manager import detectar_brave
+
+                detectada = detectar_brave()
+            except Exception:  # noqa: BLE001
+                detectada = None
+            if detectada:
+                self._widgets["brave_estado"].configure(
+                    text=f"Estado: Brave detectado en {detectada}")
+            else:
+                self._widgets["brave_estado"].configure(
+                    text="Estado: no se encontró Brave (indica la ruta)")
+
+    def _puerto_brave(self) -> int | None:
+        """Puerto del formulario (None si no es válido)."""
+        texto = self._get("brave_puerto")
+        if not texto:
+            return None
+        try:
+            puerto = int(texto)
+        except ValueError:
+            return None
+        return puerto if 1024 <= puerto <= 65535 else None
+
+    def _estado_brave(self, texto: str, color: str | None = None) -> None:
+        etiqueta = self._widgets.get("brave_estado")
+        if etiqueta is None:
+            return
+        try:
+            etiqueta.configure(
+                text=texto,
+                fg=color or self.theme.color("text_muted"),
+            )
+        except tk.TclError:
+            pass
+
+    def _elegir_brave(self) -> None:
+        inicial = self._get("brave_bin")
+        kwargs: dict[str, Any] = {}
+        if inicial and Path(inicial).exists():
+            kwargs["initialdir"] = str(Path(inicial).parent)
+        ruta = filedialog.askopenfilename(
+            title="Ejecutable de Brave", parent=self._raiz(),
+            filetypes=[("Ejecutables", "*.exe"), ("Todos", "*.*")], **kwargs,
+        )
+        if ruta:
+            self._set("brave_bin", ruta)
+
+    def guardar_brave(self) -> None:
+        """Guarda la configuración del navegador en el `.env`."""
+        puerto = self._puerto_brave()
+        if puerto is None:
+            self._warn("Puerto CDP inválido",
+                       "El puerto debe ser un número entre 1024 y 65535 "
+                       f"(por defecto {configuracion.PUERTO_CDP_DEFECTO}).")
+            return
+        try:
+            valores = configuracion.guardar_navegador(
+                self._get("brave_bin"), self._get("brave_perfil"), puerto)
+        except OSError as exc:
+            self._error("Error al guardar navegador (.env)", str(exc))
+            return
+        self._info(
+            "Navegador guardado",
+            "Configuración escrita en el .env del proyecto:\n"
+            f"BRAVE_BIN={valores[configuracion.CLAVE_BRAVE_BIN] or '(detección automática)'}\n"
+            f"BRAVE_PERFIL={valores[configuracion.CLAVE_BRAVE_PERFIL] or '(Default)'}\n"
+            f"BRAVE_CDP_PORT={valores[configuracion.CLAVE_BRAVE_CDP_PORT]}\n\n"
+            "Ese archivo nunca se sube al repo.",
+        )
+
+    def verificar_cdp(self) -> None:
+        """Comprueba si hay un navegador escuchando en el puerto CDP."""
+        puerto = self._puerto_brave() or configuracion.puerto_cdp()
+        self._estado_brave(f"Estado: comprobando el puerto {puerto}…")
+
+        def tarea() -> None:
+            try:
+                from jobpulse_v15.browser_manager import cdp_vivo
+
+                vivo = cdp_vivo(puerto)
+            except Exception as exc:  # noqa: BLE001
+                self._programar(
+                    lambda: self._estado_brave(
+                        f"Estado: no se pudo comprobar — {exc}",
+                        self.theme.color("danger")))
+                return
+            self._programar(lambda: self._pintar_cdp(vivo, puerto))
+
+        self._lanzar_hilo(tarea)
+
+    def _pintar_cdp(self, vivo: bool, puerto: int) -> None:
+        if vivo:
+            self._estado_brave(
+                f"Estado: hay un navegador con CDP en el puerto {puerto}",
+                self.theme.color("success"))
+        else:
+            self._estado_brave(
+                f"Estado: no hay navegador con CDP en el puerto {puerto}",
+                self.theme.color("text_muted"))
+
+    def abrir_brave(self) -> None:
+        """Guarda la configuración y abre Brave con CDP (si no había uno)."""
+        puerto = self._puerto_brave()
+        if puerto is None:
+            self._warn("Puerto CDP inválido",
+                       "El puerto debe ser un número entre 1024 y 65535.")
+            return
+        try:
+            configuracion.guardar_navegador(
+                self._get("brave_bin"), self._get("brave_perfil"), puerto)
+        except OSError as exc:
+            self._error("Error al guardar navegador (.env)", str(exc))
+            return
+        self._estado_brave(f"Estado: abriendo Brave con CDP en {puerto}…")
+
+        def tarea() -> None:
+            global _HANDLE_BRAVE
+            mensaje, error = "", ""
+            try:
+                from jobpulse_v15.browser_manager import asegurar_brave
+
+                manager = asegurar_brave(puerto)
+                if manager is None:
+                    mensaje = (f"Ya había un navegador con CDP en el puerto "
+                               f"{puerto}: no se tocó.")
+                else:
+                    _HANDLE_BRAVE = manager
+                    mensaje = (f"Brave abierto por la UI con CDP en el "
+                               f"puerto {puerto}.")
+            except Exception as exc:  # noqa: BLE001
+                error = f"{type(exc).__name__}: {exc}"
+            self._programar(
+                lambda: self._tras_abrir_brave(mensaje, error, puerto))
+
+        self._lanzar_hilo(tarea)
+
+    def _tras_abrir_brave(self, mensaje: str, error: str, puerto: int) -> None:
+        if error:
+            self._estado_brave(f"Estado: no se pudo abrir Brave — {error}",
+                               self.theme.color("danger"))
+            self._error("Error al abrir Brave", error)
+            return
+        self._estado_brave(f"Estado: {mensaje}", self.theme.color("success"))
+        detener = self._widgets.get("brave_detener")
+        if detener is not None:
+            try:
+                detener.configure(
+                    state="normal" if _HANDLE_BRAVE is not None else "disabled")
+            except tk.TclError:
+                pass
+
+    def detener_brave(self) -> None:
+        """Detiene SOLO el Brave que abrió esta UI (política O7.3)."""
+        global _HANDLE_BRAVE
+        manager = _HANDLE_BRAVE
+        if manager is None:
+            self._info("Brave", "No hay ningún navegador abierto por esta UI.")
+            return
+        _HANDLE_BRAVE = None
+
+        def tarea() -> None:
+            ok, mensaje = False, ""
+            try:
+                manager.stop_brave_sync()
+                ok, mensaje = True, "Brave detenido."
+            except Exception as exc:  # noqa: BLE001
+                mensaje = str(exc)
+            self._programar(lambda: self._tras_detener_brave(ok, mensaje))
+
+        self._lanzar_hilo(tarea)
+
+    def _tras_detener_brave(self, ok: bool, mensaje: str) -> None:
+        if ok:
+            self._estado_brave("Estado: navegador detenido")
+        else:
+            self._estado_brave(f"Estado: no se pudo detener — {mensaje}",
+                               self.theme.color("danger"))
+        detener = self._widgets.get("brave_detener")
+        if detener is not None:
+            try:
+                detener.configure(state="disabled")
+            except tk.TclError:
+                pass
 
     # ================================================================
     # Sondas de scraping

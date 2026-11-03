@@ -19,6 +19,23 @@ def _arbol_brave(base: Path) -> Path:
     return user_data
 
 
+def _puerto_libre() -> int:
+    """Puerto TCP libre en localhost."""
+    s = socket.socket()
+    s.bind(("127.0.0.1", 0))
+    puerto = s.getsockname()[1]
+    s.close()
+    return puerto
+
+
+def _listener() -> socket.socket:
+    """Socket que escucha (simula un navegador con CDP)."""
+    srv = socket.socket()
+    srv.bind(("127.0.0.1", 0))
+    srv.listen(1)
+    return srv
+
+
 class _ProcFake:
     """Popen de mentira: poll/terminate/wait/kill como el real."""
 
@@ -70,17 +87,10 @@ class TestUserDataDirRaiz(unittest.TestCase):
 
 class TestCdpYAsegurar(unittest.TestCase):
     def _puerto_libre(self) -> int:
-        s = socket.socket()
-        s.bind(("127.0.0.1", 0))
-        puerto = s.getsockname()[1]
-        s.close()
-        return puerto
+        return _puerto_libre()
 
     def _listener(self) -> socket.socket:
-        srv = socket.socket()
-        srv.bind(("127.0.0.1", 0))
-        srv.listen(1)
-        return srv
+        return _listener()
 
     def test_cdp_vivo_falso_en_puerto_cerrado(self):
         self.assertFalse(bm.cdp_vivo(self._puerto_libre()))
@@ -128,6 +138,105 @@ class TestCdpYAsegurar(unittest.TestCase):
 
     def test_plataformas_navegador_conocidas(self):
         self.assertEqual(set(bm.PLATAFORMAS_NAVEGADOR), {"ane", "indeed", "linkedin", "elempleo"})
+
+
+class TestPuertoCDPConfigurable(unittest.TestCase):
+    """BRAVE_CDP_PORT: el puerto CDP se configura (antes estaba fijo en 9222)."""
+
+    def test_lee_el_puerto_del_entorno(self):
+        with patch.dict(os.environ, {"BRAVE_CDP_PORT": "9333"}):
+            self.assertEqual(bm.puerto_cdp_configurado(), 9333)
+
+    def test_sin_variable_usa_el_predeterminado(self):
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("BRAVE_CDP_PORT", None)
+            self.assertEqual(bm.puerto_cdp_configurado(), bm.PUERTO_CDP_DEFECTO)
+
+    def test_valor_invalido_cae_al_predeterminado(self):
+        for valor in ("abc", "80", "70000", ""):
+            with self.subTest(valor=valor):
+                with patch.dict(os.environ, {"BRAVE_CDP_PORT": valor}):
+                    self.assertEqual(bm.puerto_cdp_configurado(),
+                                     bm.PUERTO_CDP_DEFECTO)
+
+    def test_brave_manager_toma_el_puerto_del_entorno(self):
+        with patch.dict(os.environ, {"BRAVE_CDP_PORT": "9444"}):
+            mgr = bm.BraveManager(brave_bin="x")
+            self.assertEqual(mgr.cdp_port, 9444)
+            self.assertIn("--remote-debugging-port=9444", mgr._build_args())
+
+    def test_el_puerto_explícito_manda_sobre_el_entorno(self):
+        with patch.dict(os.environ, {"BRAVE_CDP_PORT": "9444"}):
+            mgr = bm.BraveManager(brave_bin="x", cdp_port=9555)
+            self.assertEqual(mgr.cdp_port, 9555)
+
+    def test_cdp_vivo_sin_puerto_usa_el_configurado(self):
+        srv = _listener()
+        try:
+            puerto = srv.getsockname()[1]
+            with patch.dict(os.environ, {"BRAVE_CDP_PORT": str(puerto)}):
+                self.assertTrue(bm.cdp_vivo())
+        finally:
+            srv.close()
+        # Puerto cerrado → False.
+        with patch.dict(os.environ, {"BRAVE_CDP_PORT": str(puerto)}):
+            self.assertFalse(bm.cdp_vivo())
+
+    def test_asegurar_brave_sin_puerto_usa_el_configurado(self):
+        puerto = _puerto_libre()
+        visto = {}
+
+        class _MgrFake:
+            def __init__(self, *, cdp_port, **kw):
+                self.cdp_port = cdp_port
+                visto["puerto"] = cdp_port
+
+            def start_brave(self):
+                return self.cdp_port
+
+        with patch.dict(os.environ, {"BRAVE_CDP_PORT": str(puerto)}):
+            with patch.object(bm, "BraveManager", _MgrFake):
+                bm.asegurar_brave()
+        self.assertEqual(visto["puerto"], puerto)
+
+
+class TestHelpersBrave(unittest.TestCase):
+    """Ayudantes para la tarjeta de navegador de la UI v2."""
+
+    def test_detectar_brave_devuelve_none_si_no_encuentra(self):
+        with patch.object(bm.BraveManager, "_detect_brave",
+                          side_effect=RuntimeError("no")):
+            self.assertIsNone(bm.detectar_brave())
+
+    def test_detectar_brave_devuelve_la_ruta(self):
+        with patch.object(bm.BraveManager, "_detect_brave",
+                          return_value="C:/brave.exe"):
+            self.assertEqual(bm.detectar_brave(), "C:/brave.exe")
+
+    def test_perfiles_disponibles_lista_las_carpetas(self):
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            user_data = base / "BraveSoftware" / "Brave-Browser" / "User Data"
+            (user_data / "Default").mkdir(parents=True)
+            (user_data / "Default" / "Preferences").write_text("{}",
+                                                               encoding="utf-8")
+            (user_data / "Profile 1").mkdir()
+            (user_data / "Profile 1" / "Preferences").write_text("{}",
+                                                                  encoding="utf-8")
+            # Carpeta de componente de Brave: NO es un perfil.
+            (user_data / "GPUPersistentCache").mkdir()
+            with patch.dict(os.environ, {"LOCALAPPDATA": str(base)}):
+                self.assertEqual(bm.perfiles_disponibles(),
+                                 ["Default", "Profile 1"])
+
+    def test_perfiles_disponibles_vacio_si_no_hay_brave(self):
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch.dict(os.environ, {"LOCALAPPDATA": str(Path(tmp))}):
+                self.assertEqual(bm.perfiles_disponibles(), [])
 
 
 if __name__ == "__main__":

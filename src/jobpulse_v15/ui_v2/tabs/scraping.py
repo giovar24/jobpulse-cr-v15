@@ -22,12 +22,14 @@ from tkinter import ttk
 from typing import Any
 
 from jobpulse_v15 import scraper
+from jobpulse_v15.ui_v2 import configuracion
 from jobpulse_v15.ui_v2.data.scraping import TODOS, ScrapingStore
 from jobpulse_v15.ui_v2.tabs.base import BaseTab
 from jobpulse_v15.ui_v2.widgets import Card, FlatButton, SectionTitle
 
 MAX_PAGINAS = 10
-PUERTO_DEFECTO = 9222
+# El puerto CDP sale de la configuración (BRAVE_CDP_PORT en el .env), que es
+# la misma que usan el CLI y los scripts; si no hay, 9222.
 
 
 class ScrapingTab(BaseTab):
@@ -95,7 +97,8 @@ class ScrapingTab(BaseTab):
         tk.Label(fila, text="Puerto CDP:", bg=theme.color("surface"),
                  fg=theme.color("text_muted"), font=theme.font(9)).pack(
             side="left", padx=(16, 0))
-        self._widgets["puerto"] = tk.StringVar(value=str(PUERTO_DEFECTO))
+        self._widgets["puerto"] = tk.StringVar(
+            value=str(configuracion.puerto_cdp()))
         tk.Entry(fila, textvariable=self._widgets["puerto"], width=7,
                  font=theme.font(9)).pack(side="left", padx=(6, 0))
 
@@ -288,10 +291,15 @@ class ScrapingTab(BaseTab):
         self._ejecutar(ids)
 
     def _puerto(self) -> int:
+        """Puerto CDP de la casilla; si no es válido, el configurado."""
+        texto = str(self._widgets["puerto"].get() or "").strip()
+        if not texto:
+            return configuracion.puerto_cdp()
         try:
-            return int(str(self._widgets["puerto"].get()).strip() or PUERTO_DEFECTO)
+            puerto = int(texto)
         except ValueError:
-            return PUERTO_DEFECTO
+            return configuracion.puerto_cdp()
+        return puerto if 1024 <= puerto <= 65535 else configuracion.puerto_cdp()
 
     def _paginas(self) -> int:
         try:

@@ -12,8 +12,9 @@ Claves que usa la UI v2:
 - `csv_dir` : directorio inicial de los diálogos "Exportar CSV"
               ("" = sin fijo → Tk usa su última carpeta).
 
-El `.env` del proyecto (IA_PROVEEDOR/IA_BASE_URL/IA_MODEL/IA_API_KEY y los
-límites opt-in IA_MAX_LLAMADAS/IA_RPM) se escribe con `guardar_env`, que
+El `.env` del proyecto (IA_PROVEEDOR/IA_BASE_URL/IA_MODEL/IA_API_KEY, los
+límites opt-in IA_MAX_LLAMADAS/IA_RPM y la configuración del navegador
+BRAVE_BIN/BRAVE_PERFIL/BRAVE_CDP_PORT) se escribe con `guardar_env`, que
 actualiza solo las claves pedidas y preserva el resto de líneas/comentarios.
 """
 from __future__ import annotations
@@ -31,6 +32,14 @@ ENV = Path(__file__).resolve().parents[3] / ".env"
 
 CLAVE_PALETA = "paleta"
 CLAVE_CSV_DIR = "csv_dir"
+
+# Claves del .env que guardan la configuración del navegador (punto 2).
+CLAVE_BRAVE_BIN = "BRAVE_BIN"
+CLAVE_BRAVE_PERFIL = "BRAVE_PERFIL"
+CLAVE_BRAVE_CDP_PORT = "BRAVE_CDP_PORT"
+
+# Puerto CDP por defecto (el que trae el launcher del PC del usuario).
+PUERTO_CDP_DEFECTO = 9222
 
 
 def cargar(ruta: Path | None = None) -> dict[str, Any]:
@@ -75,6 +84,92 @@ def directorio_csv(ruta: Path | None = None) -> str | None:
 def ruta_env() -> Path:
     """Ruta del .env del proyecto (para load_dotenv con ruta explícita)."""
     return ENV
+
+
+def cargar_env() -> None:
+    """Carga el .env del proyecto en ``os.environ`` (sin pisar lo existente).
+
+    ``load_dotenv`` NO sobreescribe variables ya presentes: lo que el
+    usuario exportó en la sesión manda sobre el archivo. Si python-dotenv no
+    está instalado, no pasa nada (el `.env` se lee a mano con `leer_env`).
+    """
+    try:
+        from dotenv import load_dotenv
+
+        load_dotenv(ENV)
+    except Exception:  # noqa: BLE001 - sin dotenv no hay .env que cargar
+        pass
+
+
+def leer_env(ruta: Path | None = None) -> dict[str, str]:
+    """Valores del `.env` del proyecto como dict (NO toca ``os.environ``).
+
+    Parser mínimo: `CLAVE=valor`, ignora comentarios y líneas vacías, y
+    quita las comillas que envuelven el valor.
+    """
+    ruta = ruta or ENV
+    valores: dict[str, str] = {}
+    try:
+        texto = ruta.read_text(encoding="utf-8")
+    except OSError:
+        return valores
+    for linea in texto.splitlines():
+        linea = linea.strip()
+        if not linea or linea.startswith("#") or "=" not in linea:
+            continue
+        clave, _, valor = linea.partition("=")
+        clave = clave.strip()
+        if not clave or clave.startswith("export "):
+            continue
+        valor = valor.strip()
+        if len(valor) >= 2 and valor[0] == valor[-1] and valor[0] in "\"'":
+            valor = valor[1:-1]
+        valores[clave] = valor
+    return valores
+
+
+def valor_env(clave: str, defecto: str = "",
+              ruta: Path | None = None) -> str:
+    """Valor de una clave del entorno o del `.env` (el entorno gana)."""
+    valor = os.getenv(clave)
+    if valor is not None and valor.strip():
+        return valor.strip()
+    return str(leer_env(ruta).get(clave) or defecto).strip()
+
+
+def puerto_cdp(ruta: Path | None = None) -> int:
+    """Puerto CDP configurado (``BRAVE_CDP_PORT``) o 9222."""
+    valor = valor_env(CLAVE_BRAVE_CDP_PORT, "", ruta)
+    try:
+        puerto = int(valor)
+    except ValueError:
+        return PUERTO_CDP_DEFECTO
+    if not (1024 <= puerto <= 65535):
+        return PUERTO_CDP_DEFECTO
+    return puerto
+
+
+def guardar_navegador(binario: str, perfil: str, puerto: int | str,
+                       ruta: Path | None = None) -> dict[str, str]:
+    """Guarda la configuración del navegador en el `.env` y la aplica YA.
+
+    Escribe ``BRAVE_BIN`` / ``BRAVE_PERFIL`` / ``BRAVE_CDP_PORT`` y actualiza
+    ``os.environ`` en el acto: el `.env`` no vuelve a mandar hasta el
+    próximo arranque (``load_dotenv`` no pisa lo ya presente), así que sin
+    esto el cambio no rigería en la sesión actual.
+    """
+    valores = {
+        CLAVE_BRAVE_BIN: str(binario or "").strip(),
+        CLAVE_BRAVE_PERFIL: str(perfil or "").strip(),
+        CLAVE_BRAVE_CDP_PORT: str(puerto or "").strip(),
+    }
+    guardar_env(valores, ruta)
+    for clave, valor in valores.items():
+        if valor:
+            os.environ[clave] = valor
+        else:
+            os.environ.pop(clave, None)
+    return valores
 
 
 def guardar_env(valores: dict[str, str], ruta: Path | None = None) -> None:

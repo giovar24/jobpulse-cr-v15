@@ -92,14 +92,15 @@ def run_scrape(sites: list[str], pages: int = 1) -> dict:
     # arriba. Si el Brave diario ya esta en 9222 no se toca; si no, se abre
     # uno y se cierra al terminar (solo el que abrio esta corrida).
     mgr_brave = None
-    port = 9222
+    from jobpulse_v15.browser_manager import puerto_cdp_configurado
+    port = puerto_cdp_configurado()
     plataformas = {
         (repo.get_site(sid) or {}).get("platform_id", "") for sid in sites
     }
     if plataformas & {"ane", "indeed", "linkedin", "elempleo"}:
         from jobpulse_v15.browser_manager import asegurar_brave, cdp_vivo
         if cdp_vivo(port):
-            print("Brave CDP ya activo en 9222 (no se toca).")
+            print(f"Brave CDP ya activo en {port} (no se toca).")
         else:
             print("Abriendo Brave con CDP (se cerrara al terminar)...")
             try:
