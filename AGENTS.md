@@ -123,12 +123,12 @@ Cuando el usuario dice "vamos a otra sesión":
 .\.venv\Scripts\python.exe -X utf8 clean_run.py SI
 
 # Tests: pytest vive en el python del SISTEMA (el venv NO lo tiene).
-python -m pytest tests/ -q   # baseline 2026-11-03: 578 passed + 204 subtests
+python -m pytest tests/ -q   # baseline 2026-11-03: 592 passed + 204 subtests
 
 # UI clásica (completa, intacta)
 .\.venv\Scripts\python.exe -m jobpulse_v15.ui
 
-# UI v2 (plana y modular; por ahora: Datos crudos + Perfil) — ver
+# UI v2 (plana y modular; por ahora: Datos crudos + Perfil + Vacantes) — ver
 # docs/UI_V2_ARQUITECTURA.md. Agregar una pestaña = módulo + 1 línea en PESTANIAS.
 .\jobpulse-v15-v2.bat
 .\.venv\Scripts\python.exe -X utf8 -m jobpulse_v15.ui_v2

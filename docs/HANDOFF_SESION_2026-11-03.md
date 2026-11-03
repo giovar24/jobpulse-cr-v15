@@ -236,12 +236,22 @@ python -m pytest tests/ -q                       # suite completa: 592 + 204 sub
 - Regla del repo respetada: **nada de `ALTER` manual**, migraciones solo como
   archivo nuevo; **no pushear sin confirmación**.
 
+## Validación del usuario (2026-11-03, 09:38)
+
+El usuario abrió la UI v2 y probó la pestaña: **"funciona bien"** (arranque,
+cálculo en 2º plano y tabla OK). Queda **su revisión en curso** del contenido
+(orden del ranking y desglose) antes de darlo por cerrado — no es un fallo
+conocido, es validación pendiente. En este cierre se actualizó la documentación
+a tres pestañas (`AGENTS.md` línea de comandos + baseline de tests **592**, y
+`docs/UI_V2_ARQUITECTURA.md`: tabla de módulos y sección "Vacantes").
+
 ## Pendiente inmediato
 
-1. **Revisar el ranking con el usuario**: abrir la pestaña y confirmar si el
-   orden le convence (los avisos contables/analistas aparecen en el top 10
-   porque el componente de skills los favorece). Si hay que ajustar, cambiar
-   `PESOS_RANKING` y `UMBRALES_RANKING` en `ats.py` y documentarlo aquí.
+1. **Revisar el ranking con el usuario** (EN CURSO: ya lo probó y "funciona
+   bien"; falta su veredicto sobre el ORDEN — los avisos contables/analistas
+   aparecen en el top 10 porque el componente de skills los favorece). Si hay
+   que ajustar, cambiar `PESOS_RANKING` y `UMBRALES_RANKING` en `ats.py` y
+   documentarlo aquí.
 2. **Filtrar mejor el ruido de `jobs.skills`**: hoy el denominador incluye
    habilidades blandas ("PowerPoint", "administración"). Una stoplist de
    skills blandas mejoraría el componente de skills.
