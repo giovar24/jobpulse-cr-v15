@@ -1107,6 +1107,76 @@ class TestConfiguracionTab(unittest.TestCase):
         self.pestana.detener_brave()
         self.assertIsNone(config_mod._HANDLE_BRAVE)
 
+    # -- cachés -----------------------------------------------------
+    def test_la_tarjeta_de_caches_monta_las_dos_filas(self):
+        self.root.update()
+        for clave in ("cache_ia", "cache_embeddings",
+                      "cache_boton_1", "cache_boton_2"):
+            with self.subTest(widget=clave):
+                self.assertIn(clave, self.pestana._widgets)
+
+    def test_la_tarjeta_muestra_el_tamano_de_las_caches(self):
+        from jobpulse_v15 import caches
+
+        self.root.update()
+        estados = {
+            caches.CLAVE_IA: caches.EstadoCache(
+                clave=caches.CLAVE_IA, titulo=caches.TITULO_IA,
+                ruta="C:/cache/ia", archivos_totales=12, bytes_totales=2048),
+            caches.CLAVE_EMBEDDINGS: caches.EstadoCache(
+                clave=caches.CLAVE_EMBEDDINGS, titulo=caches.TITULO_EMBEDDINGS,
+                ruta="C:/cache/emb", archivos_totales=2, bytes_totales=4096),
+        }
+        with unittest.mock.patch.object(caches, "estado_caches",
+                                        return_value=estados):
+            self.pestana._cargar_caches()
+        self.root.update()
+        texto_ia = self.pestana._widgets["cache_ia"].cget("text")
+        self.assertIn("12 respuestas", texto_ia)
+        self.assertIn("C:/cache/ia", texto_ia)
+        texto_emb = self.pestana._widgets["cache_embeddings"].cget("text")
+        self.assertIn("4.0 KB", texto_emb)
+        self.assertIn("2 archivos", texto_emb)
+
+    def test_limpiar_la_cache_ia_pide_confirmacion_y_borra(self):
+        from jobpulse_v15 import caches
+
+        self.root.update()
+        estados = {
+            caches.CLAVE_IA: caches.EstadoCache(
+                clave=caches.CLAVE_IA, titulo=caches.TITULO_IA,
+                ruta="C:/cache/ia", archivos_totales=12, bytes_totales=2048),
+        }
+        resultado = caches.ResultadoLimpieza(caches.CLAVE_IA, 12, 2048)
+        # OJO: el nombre de `with ... as X` se borra al salir del bloque
+        # (comportamiento de Python): por eso se guarda en otra variable.
+        parche = unittest.mock.patch.object(caches, "estado_caches",
+                                            return_value=estados)
+        parche.start()
+        self.addCleanup(parche.stop)
+        parche2 = unittest.mock.patch.object(caches, "limpiar",
+                                             return_value=resultado)
+        limpiar = parche2.start()
+        self.addCleanup(parche2.stop)
+        self.pestana._cargar_caches()
+        self.pestana._limpiar_cache(1)
+        # El worker corre en un hilo: se espera a que termine.
+        self.assertTrue(self._esperar(lambda: limpiar.called))
+        self.assertTrue(self._esperar(lambda: self.showinfo.called))
+        limpiar.assert_called_once_with(caches.CLAVE_IA)
+        # El diálogo final informa de lo liberado.
+        self.assertIn("2.0 KB", self.showinfo.call_args[0][1])
+
+    def test_limpiar_una_cache_que_no_se_conoce_no_hace_nada(self):
+        from jobpulse_v15 import caches
+
+        self.root.update()
+        parche = unittest.mock.patch.object(caches, "limpiar")
+        limpiar = parche.start()
+        self.addCleanup(parche.stop)
+        self.pestana._limpiar_cache(99)
+        self.assertFalse(limpiar.called)
+
 
 class TestScrapingTab(unittest.TestCase):
     """La pestaña de Scraping monta, filtra por grupo y lanza el barrido."""

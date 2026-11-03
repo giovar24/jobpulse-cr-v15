@@ -123,7 +123,7 @@ Cuando el usuario dice "vamos a otra sesión":
 .\.venv\Scripts\python.exe -X utf8 clean_run.py SI
 
 # Tests: pytest vive en el python del SISTEMA (el venv NO lo tiene).
-python -m pytest tests/ -q   # baseline 2026-11-03: 678 passed + 231 subtests
+python -m pytest tests/ -q   # baseline 2026-11-03: 694 passed + 235 subtests
 
 # UI clásica (completa, intacta)
 .\.venv\Scripts\python.exe -m jobpulse_v15.ui
@@ -446,14 +446,26 @@ desmarca (pestaña **“Áreas de empleo”** en `ui_perfil.py` → hechos
     con clave en el keyring salía "sin credencial" — bug corregido el
     2026-11-03). En la UI (pestaña "Cuentas") el campo de contraseña arranca
     vacío y vacío = "conserva la guardada".
+29. **Las cachés se limpian SOLO por patrón** (`src/jobpulse_v15/caches.py`):
+    la caché IA borra únicamente archivos `[0-9a-f]{32}.json` (los que
+    escribe `ia_api._cache_key`); un archivo ajeno del usuario en esa
+    carpeta no se toca. La caché de embeddings son los 4 archivos
+    conocidos (`embeddings_cache.npy` + `_meta.json` y los de títulos).
+    Borrar la caché IA **cuesta dinero** (se vuelven a pagar las llamadas
+    al LLM); la de embeddings solo tiempo (re-vectorizar, ~1-2 min).
+30. **`with ... as X` BORRA el nombre al salir del bloque** (comportamiento
+    de Python, no de Tk): en los tests, si hay que usar el mock después
+    del bloque, guardarlo en otra variable (`parche.start()` →
+    `mock = parche.start()`), porque `with patch(...) as m:` deja `m`
+    sin definir fuera del `with` (NameError).
 
-## Estado de referencia (verificado 2026-11-03, tras el Paso 5 persistido)
+## Estado de referencia (verificado 2026-11-03, tras la tarjeta de cachés)
 
-- Suite: **678 tests verdes** + 231 subtests (`python -m pytest tests/ -q`,
+- Suite: **694 tests verdes** + 235 subtests (`python -m pytest tests/ -q`,
   ~2 min); `test_matching.py` 87, `test_areas.py` 20, `test_ubicaciones_cr.py`
   34, `test_idiomas.py` 7, `test_salario.py` 16, `test_ats_ranking.py` 44,
   `test_scraper.py` 11, `test_browser_manager.py` 21, `test_cuentas.py` 9,
-  `test_paso5.py` 6, `test_ui_v2.py` 80.
+  `test_paso5.py` 6, `test_caches.py` 12, `test_ui_v2.py` 84.
 - **UI v2 (`src/jobpulse_v15/ui_v2/`, 2026-11-02)**: interfaz **plana y
   modular** que convive con la UI clásica (`ui.py`, intacta). Lanzador
   `jobpulse-v15-v2.bat` o `python -m jobpulse_v15.ui_v2`. Capas: `theme.py`
@@ -474,9 +486,10 @@ desmarca (pestaña **“Áreas de empleo”** en `ui_perfil.py` → hechos
   la contraseña va al keyring y NUNCA se muestra) y
   **Configuración** (IA local —arrancar/detener, O7.3—, IA externa → `.env`,
   **navegador Brave/CDP** —ruta, perfil y puerto; Verificar/Abrir/Detener—,
-  sondas de scraping on/off, esquema de color, directorio por defecto de
+  sondas de scraping on/off, esquema de color, **cachés** —tamaño y
+  limpieza de la caché IA y de embeddings—, directorio por defecto de
   CSV). Detalle y patrones de Tk: `docs/UI_V2_ARQUITECTURA.md`; gotchas
-  21–24.
+  21–24, 29–30.
 - **BD `data/jobpulse_v15.db` = corpus REAL del usuario** (corrida manual del
   01-11, sin vaciar: es la evidencia en uso). NO "limpiarla" sin confirmación
   explícita — la única vía es `clean_run.py SI`. Esquema versión **16**; la

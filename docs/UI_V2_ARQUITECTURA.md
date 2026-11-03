@@ -1,7 +1,8 @@
 # UI v2 — arquitectura (plana y modular)
 
 Fecha: 2026-11-02. Autor: sesión de UI v2.
-Actualizado: 2026-11-03 (pestaña **Cuentas** + **Paso 5 persistido**).
+Actualizado: 2026-11-03 (pestaña **Cuentas** + **Paso 5 persistido** +
+tarjeta de **cachés**).
 
 La **UI clásica** (`src/jobpulse_v15/ui.py`, 3978 líneas) **no se toca**:
 sigue siendo la interfaz completa. La UI v2 vive aparte, en
@@ -194,7 +195,7 @@ Bugs del dominio corregidos al hacer la pestaña (afectan también al CLI):
 
 ### Configuración (`tabs/configuracion.py`)
 
-Seis tarjetas (una `Card` cada una), modeladas sobre la ventana de
+Siete tarjetas (una `Card` cada una), modeladas sobre la ventana de
 configuración de la UI clásica pero **planas** y sin Toplevel:
 
 | Tarjeta | Qué configura | Dónde se guarda |
@@ -204,6 +205,7 @@ configuración de la UI clásica pero **planas** y sin Toplevel:
 | **Navegador (Brave / CDP)** | Ruta del ejecutable, perfil con la sesión iniciada y puerto CDP; botones **Verificar CDP**, **Abrir Brave**, **Detener Brave** | `.env` del proyecto (`BRAVE_BIN` / `BRAVE_PERFIL` / `BRAVE_CDP_PORT`) |
 | **Sondas de scraping** | Activa/pausa fuentes (`source_sites.enabled`), con filtro por plataforma, selección múltiple, "todas" y aviso si no queda ninguna activa | BD (`source_sites`) |
 | **Apariencia** | Esquema de color (`theme.PALETAS`: claro azul / claro verde / oscuro) | `~/.jobpulse_v15/ui_config.json` (clave `paleta`) |
+| **Cachés** | Qué ocupa `data/usuario/` (caché de la IA y caché de embeddings) y botones **Limpiar** | — (disco) |
 | **Exportaciones CSV** | Directorio inicial de los diálogos "Exportar CSV" | `~/.jobpulse_v15/ui_config.json` (clave `csv_dir`) |
 
 Reglas que esta pestaña respeta:
@@ -255,3 +257,27 @@ nombre escrito a mano.
 
 > El `.env` y `ui_config.json` **no** son del repo: el `.env` está gitignored
 > y `ui_config.json` vive en el HOME del usuario.
+
+#### Las cachés (punto 5)
+
+El dominio vive en `src/jobpulse_v15/caches.py` (**sin Tk**); la tarjeta de
+Configuración solo lo pinta y pide confirmación.
+
+| Caché | Dónde | Qué guarda | Coste de borrarla |
+|---|---|---|---|
+| **IA** | `ia_api.CACHE_DIR` (por defecto `data/usuario/ia_cache/`) | Un JSON por petición (`<hash32>.json`) | **Cuesta dinero/tiempo**: el enriquecimiento vuelve a llamar al LLM |
+| **Embeddings** | `data/usuario/embeddings_cache.npy` + `_meta.json` (y los de títulos) | Los vectores del ranking ATS | Solo tiempo: el próximo ranking re-vectoriza (~1–2 min) |
+
+Reglas:
+
+- **La caché de la IA solo se limpia por patrón**: se borran únicamente los
+  archivos `[0-9a-f]{32}.json` (los que escribe `ia_api._cache_key`). Un
+  archivo ajeno del usuario en esa carpeta **no se toca**.
+- **La UI confirma antes de borrar** y dice qué se libera (archivos + bytes).
+- **La limpieza corre en un hilo**: el worker no toca Tk; el resultado
+  vuelve por la cola (`BaseTab._programar`).
+
+> OJO (Python): el nombre de `with ... as X` **se borra** al salir del
+> bloque. En los tests hay que guardar el mock en otra variable
+> (`parche.start()` + `limpiar = parche.start()`) si se quiere usarlo
+> después.

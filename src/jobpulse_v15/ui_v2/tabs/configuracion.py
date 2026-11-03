@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
-"""Pestaña "Configuración": IA, navegador, sondas de scraping, apariencia y CSV.
+"""Pestaña "Configuración": IA, navegador, sondas, apariencia, cachés y CSV.
 
-Seis tarjetas (una Card cada una):
+Siete tarjetas (una Card cada una):
 
 1. **IA local** — estado/arranque/detención del servidor llama.cpp.
    Política O7.3: solo se detiene el servidor que ESTA UI arrancó; uno que
@@ -19,7 +19,10 @@ Seis tarjetas (una Card cada una):
    que miran `run_scrapes.py`, `run_full_flow.py` y `Repository.select_sites`).
 5. **Apariencia** — esquema de color (`theme.PALETAS`) → `ui_config.json` y
    reconstrucción en caliente vía el servicio `reconstruir_ui`.
-6. **Exportaciones CSV** — directorio inicial de los diálogos "Exportar CSV".
+6. **Cachés** — qué ocupa `data/usuario/` (caché de la IA y caché de
+   embeddings) y botones para limpiarlas (el dominio está en
+   `jobpulse_v15.caches`, sin Tk).
+7. **Exportaciones CSV** — directorio inicial de los diálogos "Exportar CSV".
 
 Patrones: un solo gestor de geometría por padre; hilos que solo tocan Tk vía
 `_programar` (marco.after); ningún color escrito a mano (van de `theme`).
@@ -58,7 +61,7 @@ class ConfiguracionTab(BaseTab):
 
     key = "configuracion"
     title = "Configuración"
-    subtitle = "IA, navegador, sondas de scraping, apariencia y exportaciones"
+    subtitle = "IA, navegador, sondas de scraping, apariencia, cachés y CSV"
     icon = "⚙"
 
     def __init__(self, context) -> None:
@@ -68,6 +71,10 @@ class ConfiguracionTab(BaseTab):
         )
         self._widgets: dict[str, Any] = {}
         self._csv_var = tk.StringVar(value="")
+        # Estado de las cachés (medido en disco al abrir la pestaña).
+        self._estados_cache: dict[str, Any] = {}
+        # Fila de la tarjeta -> clave de caché (para el botón "Limpiar").
+        self._cache_claves: dict[int, str] = {1: "ia", 2: "embeddings"}
 
     # ================================================================
     # Construcción
@@ -87,11 +94,13 @@ class ConfiguracionTab(BaseTab):
         self._card_navegador(scroll.inner)
         self._card_sondas(scroll.inner)
         self._card_apariencia(scroll.inner)
+        self._card_caches(scroll.inner)
         self._card_csv(scroll.inner)
 
         self._cargar_ia()
         self._cargar_navegador()
         self._cargar_apariencia()
+        self._cargar_caches()
         return marco
 
     # -- tarjeta 1: IA local ----------------------------------------
@@ -415,11 +424,142 @@ class ConfiguracionTab(BaseTab):
             font=theme.font(8), anchor="w",
         ).grid(row=4, column=0, sticky="ew", pady=(8, 0))
 
-    # -- tarjeta 6: exportaciones CSV -------------------------------
+    # -- tarjeta 6: cachés -------------------------------------------
+    def _card_caches(self, parent: tk.Misc) -> None:
+        theme = self.theme
+        card = Card(parent, theme)
+        card.grid(row=5, column=0, sticky="ew", pady=(0, theme.metrics.gap))
+        card.body.columnconfigure(0, weight=1)
+
+        SectionTitle(card.body, theme, "Cachés",
+                     hint="data/usuario/ · qué ocupa y qué se puede borrar"
+                     ).grid(row=0, column=0, sticky="ew")
+
+        # Una fila por caché: nombre, estado y botón de limpieza.
+        self._widgets["cache_ia"] = self._fila_cache(
+            card.body, 1, "Caché de la IA",
+            "las respuestas ya pagadas al LLM (se repiten al enricher)")
+        self._widgets["cache_embeddings"] = self._fila_cache(
+            card.body, 2, "Caché de embeddings",
+            "los vectores del ranking ATS (no cuesta dinero re-vectorizar)")
+
+        botones = tk.Frame(card.body, bg=theme.color("surface"))
+        botones.grid(row=3, column=0, sticky="w", pady=(10, 0))
+        FlatButton(botones, theme, "Actualizar", variant="ghost",
+                   command=self._cargar_caches).pack(side="left")
+
+        tk.Label(
+            card.body,
+            text=("Borrar la caché de la IA hace que el enriquecimiento "
+                  "vuelva a llamar al modelo (con IA externa, cuesta dinero). "
+                  "Borrar la de embeddings solo obliga a re-vectorizar los "
+                  "avisos la próxima vez. Los archivos ajenos al sistema no "
+                  "se tocan."),
+            bg=theme.color("surface"), fg=theme.color("text_faint"),
+            font=theme.font(8), anchor="w", wraplength=760, justify="left",
+        ).grid(row=4, column=0, sticky="ew", pady=(8, 0))
+
+    def _fila_cache(self, parent: tk.Misc, fila: int, titulo: str,
+                    ayuda: str) -> tk.Label:
+        """Fila de una caché: título + estado (devuelve la etiqueta)."""
+        theme = self.theme
+        marco = tk.Frame(parent, bg=theme.color("surface"))
+        marco.grid(row=fila, column=0, sticky="ew", pady=(8, 0))
+        marco.columnconfigure(0, weight=1)
+
+        texto = tk.Label(
+            marco, text=titulo, bg=theme.color("surface"),
+            fg=theme.color("text"), font=theme.font(9, "bold"), anchor="w",
+        )
+        texto.grid(row=0, column=0, sticky="w")
+        estado = tk.Label(
+            marco, text="…", bg=theme.color("surface"),
+            fg=theme.color("text_muted"), font=theme.font(9), anchor="w",
+        )
+        estado.grid(row=1, column=0, sticky="w")
+        tk.Label(
+            marco, text=ayuda, bg=theme.color("surface"),
+            fg=theme.color("text_faint"), font=theme.font(8), anchor="w",
+        ).grid(row=2, column=0, sticky="w")
+
+        boton = FlatButton(marco, theme, "Limpiar", variant="ghost",
+                           command=lambda c=fila: self._limpiar_cache(c))
+        boton.grid(row=0, column=1, rowspan=3, sticky="e")
+        self._widgets[f"cache_boton_{fila}"] = boton
+        return estado
+
+    def _cargar_caches(self) -> None:
+        """Mide las cachés y las pinta (rápido: solo mira el disco)."""
+        try:
+            from jobpulse_v15 import caches
+        except Exception:  # noqa: BLE001 - si falla, la tarjeta queda muda
+            return
+        try:
+            estados = caches.estado_caches()
+        except Exception as exc:  # noqa: BLE001
+            for clave in ("cache_ia", "cache_embeddings"):
+                etiqueta = self._widgets.get(clave)
+                if etiqueta is not None:
+                    etiqueta.configure(text=f"No se pudo leer: {exc}")
+            return
+        self._estados_cache = estados
+        for clave, etiqueta_clave in (("ia", "cache_ia"),
+                                      ("embeddings", "cache_embeddings")):
+            etiqueta = self._widgets.get(etiqueta_clave)
+            estado = estados.get(clave)
+            if etiqueta is None or estado is None:
+                continue
+            try:
+                etiqueta.configure(
+                    text=f"{estado.texto_resumen}  ·  {estado.ruta}",
+                    fg=self.theme.color("text_muted"),
+                )
+            except tk.TclError:
+                pass
+
+    def _limpiar_cache(self, fila: int) -> None:
+        """Limpia una caché (con confirmación: la de la IA cuesta dinero)."""
+        from jobpulse_v15 import caches
+
+        clave = self._cache_claves.get(fila)
+        if clave is None:
+            return
+        estado = getattr(self, "_estados_cache", {}).get(clave)
+        if estado is None:
+            self._cargar_caches()
+            estado = getattr(self, "_estados_cache", {}).get(clave)
+        if estado is None:
+            return
+        if not confirmar(
+            self.frame,
+            "Limpiar caché",
+            f"¿Borrar la {estado.titulo.lower()}?\n\n"
+            f"{estado.texto_resumen}\n\n{estado.nota}",
+        ):
+            return
+
+        def tarea() -> None:
+            resultado = caches.limpiar(clave)
+            self._programar(lambda: self._tras_limpiar_cache(clave, resultado))
+
+        self._lanzar_hilo(tarea)
+
+    def _tras_limpiar_cache(self, clave: str, resultado) -> None:
+        self._cargar_caches()
+        if not resultado.ok:
+            self._error("No se pudo limpiar la caché", resultado.error)
+            return
+        self._info(
+            "Caché limpiada",
+            f"{resultado.archivos_borrados} archivo(s) borrados · "
+            f"{resultado.tamano_liberado} liberados.",
+        )
+
+    # -- tarjeta 7: exportaciones CSV -------------------------------
     def _card_csv(self, parent: tk.Misc) -> None:
         theme = self.theme
         card = Card(parent, theme)
-        card.grid(row=5, column=0, sticky="ew")
+        card.grid(row=6, column=0, sticky="ew")
         card.body.columnconfigure(0, weight=1)
 
         SectionTitle(card.body, theme, "Exportaciones CSV",
@@ -457,6 +597,7 @@ class ConfiguracionTab(BaseTab):
         self.refresh()
         self.verificar_ia_local()
         self.verificar_cdp()
+        self._cargar_caches()
 
     def refresh(self) -> None:
         """Recarga las sondas (el resto NO: no pisar ediciones del usuario)."""
