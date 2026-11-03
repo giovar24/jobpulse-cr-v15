@@ -123,7 +123,7 @@ Cuando el usuario dice "vamos a otra sesión":
 .\.venv\Scripts\python.exe -X utf8 clean_run.py SI
 
 # Tests: pytest vive en el python del SISTEMA (el venv NO lo tiene).
-python -m pytest tests/ -q   # baseline 2026-11-02: 544 passed + 204 subtests
+python -m pytest tests/ -q   # baseline 2026-11-03: 578 passed + 204 subtests
 
 # UI clásica (completa, intacta)
 .\.venv\Scripts\python.exe -m jobpulse_v15.ui
@@ -350,10 +350,12 @@ desmarca (pestaña **“Áreas de empleo”** en `ui_perfil.py` → hechos
 12. **Roots Tk de test fallan a veces en Windows** ('Can't find a usable
     tk.tcl' — transitorio): los tests usan `_tkroot_reintentos()`
     (tests/test_ui.py); si falla, reintentar.
-13. **Embeddings (`search_engine.py`) DORMIDOS por decisión del usuario**:
-    funcionales (fallback `paraphrase-multilingual-mpnet` 768d, ES↔EN OK)
-    pero SIN cablear. `ats.py`/`gate.py`/`ia_calibracion.py` sin callers —
-    no borrar sin redefinir O2/O4.
+13. **Embeddings (`search_engine.py`)**: funcionales (fallback
+    `paraphrase-multilingual-mpnet` 768d, ES↔EN OK). **Desde el 2026-11-03
+    están cableados** en la pestaña "Vacantes" de la UI v2 (ranking ATS).
+    `gate.py`/`ia_calibracion.py` siguen sin callers — no borrar sin redefinir
+    O2/O4. OJO: `EmbeddingGemma` está *gated* (401) → el motor cae al
+    fallback solo; el texto se codifica **normalizado** (ver gotcha 25).
 14. **`failed` en `run_ia_enrichment` NO es error de red**: cuenta jobs cuya
     respuesta fue null/"no mencionado"; la caché de disco los repite
     instantáneo. Errores REALES = WARNING "IA extract {campo} fallo tras 3
@@ -400,12 +402,40 @@ desmarca (pestaña **“Áreas de empleo”** en `ui_perfil.py` → hechos
     (la franja de métricas salía vacía). En tests sin ventana visible, verifica
     con `widget.winfo_manager()` (no `winfo_ismapped()`, que da 0 si el root
     está oculto).
+25. **La caché de embeddings NO se guardaba** (bug corregido el 2026-11-03):
+    `np.save` **agrega `.npy`** al nombre del temporal, así que
+    `embeddings_cache.npy.tmp` se escribía como `...tmp.npy` y el `replace()`
+    fallaba ("no existe el temporal") → **cada arranque re-vectorizaba los 535
+    avisos** (77 s). El temporal debe terminar en `.npy`
+    (`embeddings_cache.npy.tmp.npy`). Hay **dos** cachés (documento y título)
+    y las dos se versionan (`CACHE_VERSION`): si cambia cómo se codifica el
+    texto, la caché vieja se descarta. El texto se codifica **normalizado**
+    (minúsculas, sin acentos): medido en el corpus, sin normalizar los avisos
+    de soporte TI quedan en la posición 59/535 y normalizados en 37/535.
+26. **El ranking ATS es un RANKING, no una calificación**: no toca los
+    umbrales congelados del Paso 5 ni sus estados. `"preferred"` **no
+    bloquea** (no entra al denominador). Para que los avisos sean
+    **comparables entre sí** el score usa **pesos fijos** y **imputa** el
+    promedio del corpus a los componentes sin dato (así la falta de
+    información ni premia ni castiga; si se redistribuye el peso, un aviso
+    con menos datos sube solo). El componente semántico es el **percentil**
+    del corpus (los cosenos viven comprimidos en 0.1–0.6 y no distinguen).
+    Fórmula semántica calibrada: media de los cosenos entre los **cargos del
+    perfil** y el **título** del aviso (65 %) y el **aviso completo** (35 %).
+27. **`jobs.skills` mezcla herramientas con frases de tarea** ("elaborar
+    cotizaciones", "soporte a equipos Dell"): como denominador bruto
+    distortiona el score. El denominador del componente de skills son los
+    requisitos **obligatorios** del aviso ∪ las skills **útiles** del aviso
+    (las frases de tarea se filtran: `ats.es_frase_de_tarea`). El numerador
+    son las que el perfil cubre (cotejo por tokens, con alias de
+    fabricante: "Microsoft Excel" ≈ "Excel Avanzado").
 
-## Estado de referencia (verificado 2026-11-02, tras la UI v2 y su pestaña de Perfil)
+## Estado de referencia (verificado 2026-11-03, tras la pestaña de Vacantes)
 
-- Suite: **544 tests verdes** + 204 subtests (`python -m pytest tests/ -q`,
-  ~1.7 min); `test_matching.py` 87, `test_areas.py` 20, `test_ubicaciones_cr.py`
-  35, `test_idiomas.py` 7, `test_salario.py` 16, `test_ui_v2.py` 27.
+- Suite: **592 tests verdes** + 204 subtests (`python -m pytest tests/ -q`,
+  ~1.4 min); `test_matching.py` 87, `test_areas.py` 20, `test_ubicaciones_cr.py`
+  35, `test_idiomas.py` 7, `test_salario.py` 16, `test_ats_ranking.py` 44,
+  `test_ui_v2.py` 31.
 - **UI v2 (`src/jobpulse_v15/ui_v2/`, 2026-11-02)**: interfaz **plana y
   modular** que convive con la UI clásica (`ui.py`, intacta). Lanzador
   `jobpulse-v15-v2.bat` o `python -m jobpulse_v15.ui_v2`. Capas: `theme.py`
@@ -413,8 +443,10 @@ desmarca (pestaña **“Áreas de empleo”** en `ui_perfil.py` → hechos
   Tk**), `tabs/base.py` (contrato), `tabs/*.py`, `app.py` (shell + `PESTANIAS`).
   Agregar una pestaña = módulo nuevo + 1 línea en `PESTANIAS`. Pestañas:
   **Datos crudos** (avisos con valores originales + panel de texto crudo +
-  export CSV) y **Perfil** (importar CV con diálogo de revisión revertible +
-  alta/edición manual de `candidate_profile_facts`). Detalle y patrones de Tk:
+  export CSV), **Perfil** (importar CV con diálogo de revisión revertible +
+  alta/edición manual de `candidate_profile_facts`) y **Vacantes**
+  (**ranking ATS** de los avisos contra el perfil: score 0-100, veredicto,
+  desglose y skills que faltan; export CSV). Detalle y patrones de Tk:
   `docs/UI_V2_ARQUITECTURA.md`; gotchas 21–24.
 - **BD `data/jobpulse_v15.db` = corpus REAL del usuario** (corrida manual del
   01-11, sin vaciar: es la evidencia en uso). NO "limpiarla" sin confirmación

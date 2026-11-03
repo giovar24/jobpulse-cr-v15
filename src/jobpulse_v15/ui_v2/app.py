@@ -18,6 +18,7 @@ from jobpulse_v15.ui_v2.data.profile import ProfileStore
 from jobpulse_v15.ui_v2.tabs.base import BaseTab, TabContext
 from jobpulse_v15.ui_v2.tabs.crudos import DatosCrudosTab
 from jobpulse_v15.ui_v2.tabs.perfil import PerfilTab
+from jobpulse_v15.ui_v2.tabs.vacantes import VacantesTab
 from jobpulse_v15.ui_v2.theme import Metrics, Palette, Theme, apply_theme
 from jobpulse_v15.ui_v2.widgets import FlatButton
 
@@ -25,6 +26,7 @@ from jobpulse_v15.ui_v2.widgets import FlatButton
 PESTANIAS: tuple[Type[BaseTab], ...] = (
     DatosCrudosTab,
     PerfilTab,
+    VacantesTab,
 )
 
 

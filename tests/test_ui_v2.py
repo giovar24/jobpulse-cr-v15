@@ -40,7 +40,10 @@ from jobpulse_v15.ui_v2.data.profile import (
     fact_desde_sugerencia,
 )
 from jobpulse_v15.ui_v2.data.profile import exportar_csv as exportar_perfil_csv
+from jobpulse_v15.ui_v2.data.vacantes import AtsStore
 from jobpulse_v15.ui_v2.tabs import perfil as perfil_mod
+from jobpulse_v15.ui_v2.tabs.base import TabContext
+from jobpulse_v15.ui_v2.tabs.vacantes import VacantesTab
 from jobpulse_v15.ui_v2.theme import apply_theme
 
 
@@ -460,6 +463,89 @@ class TestPerfilTab(unittest.TestCase):
         self.root.update()
         self.assertEqual(self.pestana._widgets["tabla"].get_children(), ())
         self.assertEqual(self.pestana._widgets["vacio"].winfo_manager(), "grid")
+
+
+class TestVacantesTab(unittest.TestCase):
+    """La pestaña del ranking ATS se monta y no rompe el shell."""
+
+    def setUp(self):
+        self.temp_dir = tempfile.TemporaryDirectory()
+        self.database = Database(Path(self.temp_dir.name) / "ui-v2-vacantes.db")
+        self.database.initialize()
+        self.repository = Repository(self.database)
+        self.root = _tkroot_reintentos()
+        self.theme = apply_theme(self.root)
+
+    def tearDown(self):
+        self.root.update_idletasks()
+        self.root.destroy()
+        gc.collect()
+        self.temp_dir.cleanup()
+
+    def _pestana(self) -> "VacantesTab":
+        contexto = TabContext(
+            repository=self.repository,
+            theme=self.theme,
+            services={"ats_store": AtsStore(self.repository)},
+        )
+        pestana = VacantesTab(contexto)
+        marco = pestana.build(self.root)
+        marco.grid(row=0, column=0, sticky="nsew")
+        self.root.update()
+        return pestana
+
+    def test_la_pestana_esta_registrada(self):
+        self.assertIn("vacantes", [clase.key for clase in PESTANIAS])
+
+    def test_se_monta_con_la_tabla_vacia(self):
+        pestana = self._pestana()
+        pestana.refresh()
+        self.root.update()
+        self.assertEqual(pestana._widgets["tabla"].get_children(), ())
+        self.assertEqual(pestana._widgets["vacio"].winfo_manager(), "grid")
+        self.assertIn("estado", pestana._widgets)
+        self.assertIn("detalle", pestana._widgets)
+
+    def test_sin_avisos_no_lanza_el_calculo_pesado(self):
+        pestana = self._pestana()
+        pestana.recalcular()
+        self.root.update()
+        self.assertFalse(pestana._calculando)
+        self.assertEqual(pestana._widgets["estado"].cget("text"), "No hay avisos guardados para rankear.")
+
+    def test_el_calculo_en_segundo_plano_pinta_la_tabla(self):
+        """El `after` va por el marco de la pestaña (no es un widget Tk)."""
+        self.repository.register_platform("workday", "Workday", "api")
+        self.repository.register_site(
+            "intel-cr", "workday", "Intel Careers CR",
+            "https://intel.example.test", company_name="Intel", country="CR",
+        )
+        self.repository.save_job(
+            {
+                "job_id": "workday-REQ-1",
+                "title": "IT Support Specialist",
+                "company": "Intel",
+                "country": "CR",
+                "location_raw": "San Jose, Costa Rica",
+                "posting_language": "en",
+                "date_published": "2026-10-20",
+                "description_raw": "Soporte TI con Active Directory y ServiceNow. " * 5,
+            },
+            site_id="intel-cr",
+            source_job_id="REQ-1",
+            source_url="https://intel.example.test/jobs/REQ-1",
+        )
+        pestana = self._pestana()
+        with unittest.mock.patch.object(VacantesTab, "_crear_engine", return_value=None):
+            pestana.recalcular()
+            for _ in range(100):
+                self.root.update()
+                if not pestana._calculando:
+                    break
+                time.sleep(0.02)
+        self.assertFalse(pestana._calculando)
+        self.assertEqual(len(pestana._widgets["tabla"].get_children()), 1)
+        self.assertEqual(pestana.filas[0].title, "IT Support Specialist")
 
 
 if __name__ == "__main__":

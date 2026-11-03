@@ -29,6 +29,37 @@ CACHE_DIR = RAIZ / "data" / "usuario"
 CACHE_DIR.mkdir(parents=True, exist_ok=True)
 EMB_CACHE_FILE = CACHE_DIR / "embeddings_cache.npy"
 EMB_META_FILE = CACHE_DIR / "embeddings_meta.json"
+# Cache aparte para el TITULO de cada aviso: el titulo es la senal mas limpia
+# de "de que puesto se trata" y la que mas discrimina la familia de puesto.
+EMB_TIT_CACHE_FILE = CACHE_DIR / "embeddings_titulos.npy"
+EMB_TIT_META_FILE = CACHE_DIR / "embeddings_titulos_meta.json"
+
+# Version del formato de cache: si cambia como se codifica el texto (p. ej.
+# la normalizacion), la cache vieja se descarta y se reindexa.
+CACHE_VERSION = 2
+
+# Si el modelo principal resulto GATED (401), no se vuelve a intentar en
+# esta sesion: se arranca directo con el fallback (ahorra el 401 y el ruido
+# en cada arranque de la UI).
+_FALLBACK_ACTIVO = False
+
+
+def normalizar_texto(texto: str) -> str:
+    """Minusculas, sin acentos y sin espacios repetidos.
+
+    Medido sobre el corpus real: codificar los titulos SIN normalizar deja
+    los avisos de soporte TI en la posicion 59/535; normalizados quedan en
+    37/535 (el modelo es sensible a mayusculas y acentos).
+    """
+    import unicodedata
+
+    plano = (
+        unicodedata.normalize("NFKD", str(texto or ""))
+        .encode("ascii", "ignore")
+        .decode("ascii")
+        .lower()
+    )
+    return " ".join(plano.split())
 
 # Modelos
 MODELO_PRIMARY = "google/embeddinggemma-300m"      # 768 dim, MRL, prompts asimetricos
@@ -80,26 +111,35 @@ class SemanticSearchEngine:
         self.cache_dir = cache_dir
         self.device = device
         self._model = None
-        self._embeddings = None  # np.ndarray (n, dim)
+        self._embeddings = None  # np.ndarray (n, dim)  -- documento completo
         self._meta = {}          # job_id -> {"hash": ..., "idx": ...}
         self._ids = []           # lista de job_id alineada con _embeddings
+        self._tit_embeddings = None  # np.ndarray (n, dim) -- solo el titulo
+        self._tit_meta = {}          # job_id -> {"hash": ..., "idx": ...}
+        self._tit_ids = []           # lista de job_id alineada con _tit_embeddings
         self._dim = None
 
     # ---------------------------------------------------------------- modelo
     def _load_model(self):
         """Carga sentence-transformers con fallback automatico."""
+        global _FALLBACK_ACTIVO
         if self._model is not None:
             return
         from sentence_transformers import SentenceTransformer
+        modelo = self.model_name
+        if _FALLBACK_ACTIVO and modelo == MODELO_PRIMARY:
+            modelo = MODELO_FALLBACK
         try:
-            logger.info("Cargando modelo embeddings: %s", self.model_name)
-            self._model = SentenceTransformer(self.model_name, device=self.device)
+            logger.info("Cargando modelo embeddings: %s", modelo)
+            self._model = SentenceTransformer(modelo, device=self.device)
+            self.model_name = modelo
             logger.info("Modelo cargado OK (dim=%d)", self._model.get_sentence_embedding_dimension())
         except Exception as e:
             if "401" in str(e) or "gated" in str(e).lower():
-                logger.warning("Modelo %s gated/401 -> fallback a %s: %s", self.model_name, MODELO_FALLBACK, e)
+                logger.warning("Modelo %s gated/401 -> fallback a %s: %s", modelo, MODELO_FALLBACK, e)
+                _FALLBACK_ACTIVO = True
                 self.model_name = MODELO_FALLBACK
-                self._model = SentenceTransformer(self.model_name, device=self.device)
+                self._model = SentenceTransformer(MODELO_FALLBACK, device=self.device)
                 logger.info("Fallback cargado OK (dim=%d)", self._model.get_sentence_embedding_dimension())
             else:
                 raise
@@ -115,12 +155,22 @@ class SemanticSearchEngine:
             if meta.get("model") != self.model_name:
                 logger.info("Cache invalido: modelo distinto (cache=%s, actual=%s)", meta.get("model"), self.model_name)
                 return False
+            if meta.get("version") != CACHE_VERSION:
+                logger.info("Cache invalido: version %s != %s", meta.get("version"), CACHE_VERSION)
+                return False
             if meta.get("dim") != self._dim:
                 logger.info("Cache invalido: dimension distinta")
                 return False
             self._embeddings = np.load(EMB_CACHE_FILE)
             self._meta = meta.get("items", {})
-            self._ids = [item["job_id"] for item in sorted(self._meta.values(), key=lambda x: x["idx"])]
+            # OJO: los items se guardan como {job_id: {"hash":..., "idx":...}};
+            # la clave es el job_id (no un campo dentro del item).
+            self._ids = [
+                job_id
+                for job_id, item in sorted(
+                    self._meta.items(), key=lambda par: par[1].get("idx", 0)
+                )
+            ]
             logger.info("Cache cargado: %d vectores", len(self._ids))
             return True
         except Exception as e:
@@ -133,11 +183,16 @@ class SemanticSearchEngine:
             meta = {
                 "model": self.model_name,
                 "dim": self._dim,
+                "version": CACHE_VERSION,
                 "items": self._meta,
                 "ts": time.time(),
             }
-            tmp_npy = EMB_CACHE_FILE.with_suffix(".npy.tmp")
-            tmp_meta = EMB_META_FILE.with_suffix(".json.tmp")
+            # OJO: np.save AGREGA ".npy" al nombre si no lo trae. Con un
+            # temporal ".npy.tmp" escribia "embeddings_cache.npy.tmp.npy" y el
+            # rename decia que el temporal no existia: la cache NUNCA se
+            # guardaba y cada arranque re-vectorizaba los 535 avisos.
+            tmp_npy = EMB_CACHE_FILE.with_name(EMB_CACHE_FILE.name + ".tmp.npy")
+            tmp_meta = EMB_META_FILE.with_name(EMB_META_FILE.name + ".tmp")
             np.save(tmp_npy, self._embeddings)
             tmp_meta.write_text(json.dumps(meta, ensure_ascii=False), encoding="utf-8")
             tmp_npy.replace(EMB_CACHE_FILE)
@@ -179,7 +234,7 @@ class SemanticSearchEngine:
         # Prompt DOC para documento (retrieval asimetrico)
         doc_prompt = self._get_doc_prompt()
         embeddings = self._model.encode(
-            [doc_prompt + t for t in texts],
+            [doc_prompt + normalizar_texto(t) for t in texts],
             batch_size=32,
             show_progress_bar=True,
             convert_to_numpy=True,
@@ -230,6 +285,117 @@ class SemanticSearchEngine:
             return "task: search result | query: "
         return ""
 
+    # ---------------------------------------------------------------- titulos
+    def _load_title_cache(self) -> bool:
+        """Carga la cache de titulos (si existe y es del mismo modelo)."""
+        if not EMB_TIT_CACHE_FILE.exists() or not EMB_TIT_META_FILE.exists():
+            return False
+        try:
+            meta = json.loads(EMB_TIT_META_FILE.read_text(encoding="utf-8"))
+            if meta.get("model") != self.model_name or meta.get("dim") != self._dim:
+                return False
+            if meta.get("version") != CACHE_VERSION:
+                return False
+            self._tit_embeddings = np.load(EMB_TIT_CACHE_FILE)
+            self._tit_meta = meta.get("items", {})
+            self._tit_ids = [
+                job_id
+                for job_id, item in sorted(
+                    self._tit_meta.items(), key=lambda par: par[1].get("idx", 0)
+                )
+            ]
+            logger.info("Cache de titulos cargada: %d vectores", len(self._tit_ids))
+            return True
+        except Exception as e:
+            logger.warning("Error cargando cache de titulos: %s", e)
+            return False
+
+    def _save_title_cache(self) -> None:
+        """Guarda la cache de titulos en disco (atomico)."""
+        try:
+            meta = {
+                "model": self.model_name,
+                "dim": self._dim,
+                "version": CACHE_VERSION,
+                "items": self._tit_meta,
+                "ts": time.time(),
+            }
+            tmp_npy = EMB_TIT_CACHE_FILE.with_name(EMB_TIT_CACHE_FILE.name + ".tmp.npy")
+            tmp_meta = EMB_TIT_META_FILE.with_name(EMB_TIT_META_FILE.name + ".tmp")
+            np.save(tmp_npy, self._tit_embeddings)
+            tmp_meta.write_text(json.dumps(meta, ensure_ascii=False), encoding="utf-8")
+            tmp_npy.replace(EMB_TIT_CACHE_FILE)
+            tmp_meta.replace(EMB_TIT_META_FILE)
+        except Exception as e:
+            logger.warning("Error guardando cache de titulos: %s", e)
+
+    def index_titulos(self, jobs: List[Dict[str, Any]], force_reindex: bool = False) -> int:
+        """Indexa SOLO el titulo de cada aviso (cache propia).
+
+        El titulo es la senal mas limpia de la familia de puesto: la
+        similitud entre los cargos del perfil y el titulo del aviso es la
+        que separa los puestos de soporte TI del resto del corpus.
+        Retorna cuantos titulos se indexaron nuevo/actualizados.
+        """
+        self._load_model()
+        if not force_reindex:
+            self._load_title_cache()
+        nuevos = []
+        for job in jobs:
+            jid = job.get("job_id")
+            titulo = str(job.get("title") or "").strip()
+            if not jid or not titulo:
+                continue
+            h = hashlib.sha256(titulo.encode()).hexdigest()[:16]
+            meta = self._tit_meta.get(jid)
+            if meta is None or meta.get("hash") != h:
+                nuevos.append((jid, titulo, h))
+        if not nuevos:
+            logger.info("Titulos: sin cambios (%d ya indexados)", len(self._tit_ids))
+            return 0
+        logger.info("Titulos: calculando embeddings para %d avisos", len(nuevos))
+        embeddings = self._model.encode(
+            [normalizar_texto(t) for _, t, _ in nuevos],
+            batch_size=64,
+            show_progress_bar=False,
+            convert_to_numpy=True,
+            normalize_embeddings=True,
+        )
+        if self._tit_embeddings is None:
+            self._tit_embeddings = embeddings
+        else:
+            self._tit_embeddings = np.vstack([self._tit_embeddings, embeddings])
+        start_idx = len(self._tit_ids)
+        for i, (jid, _, h) in enumerate(nuevos):
+            self._tit_meta[jid] = {"hash": h, "idx": start_idx + i}
+            self._tit_ids.append(jid)
+        self._save_title_cache()
+        return len(nuevos)
+
+    def embed_texts(self, textos: List[str], tipo: str = "doc") -> np.ndarray:
+        """Codifica textos sueltos con el prompt del tipo indicado.
+
+        ``tipo='doc'`` usa el prompt de documento y ``tipo='query'`` el de
+        consulta (asimetricos en EmbeddingGemma; vacios en el fallback).
+        """
+        self._load_model()
+        if not textos:
+            return np.zeros((0, self._dim), dtype=np.float32)
+        prompt = self._get_doc_prompt() if tipo == "doc" else self._get_query_prompt()
+        return self._model.encode(
+            [prompt + normalizar_texto(t) for t in textos],
+            batch_size=32,
+            show_progress_bar=False,
+            convert_to_numpy=True,
+            normalize_embeddings=True,
+        )
+
+    def vectors(self, tipo: str = "doc") -> Tuple[List[str], Any]:
+        """Devuelve ``(ids, matriz de vectores)`` de lo cacheado."""
+        if tipo == "titulo":
+            return list(self._tit_ids), self._tit_embeddings
+        return list(self._ids), self._embeddings
+
     # ---------------------------------------------------------------- busqueda
     def search(
         self,
@@ -249,7 +415,7 @@ class SemanticSearchEngine:
         # Embedding de query con prompt QUERY
         q_prompt = self._get_query_prompt()
         q_emb = self._model.encode(
-            [q_prompt + query],
+            [q_prompt + normalizar_texto(query)],
             convert_to_numpy=True,
             normalize_embeddings=True,
         )[0]
