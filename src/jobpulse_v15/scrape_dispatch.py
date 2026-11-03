@@ -18,7 +18,7 @@ reves, con los async).
 """
 from __future__ import annotations
 
-from typing import Any, Callable, Mapping
+from typing import Any, Callable, Mapping, Sequence
 
 # Plataformas que aceptan el parametro ``pages``.
 _CON_PAGINAS = frozenset({
@@ -36,25 +36,39 @@ def construir_llamada(
     pages: int = 1,
     port: int = 9222,
     dias: int = 30,
+    skip_source_job_ids: Sequence[str] | None = None,
 ) -> Callable[[], Any]:
     """Devuelve un ``lambda`` sin argumentos que trae las ofertas del sitio.
 
     El resultado puede ser una lista o una corrutina: ``IngestionService.
     fetch_and_import`` resuelve las dos (``asyncio.run`` si es corrutina),
     asi que el llamador debe estar FUERA de un event loop en ejecucion.
+
+    ``skip_source_job_ids`` son los ``source_job_id`` que el usuario descarto
+    a mano (``user_job_state.skip_automatic``): no se vuelven a ofrecer. TODOS
+    los fetchers lo aceptan, asi que se pasa siempre (el CLI ya lo hacia; el
+    dispatcher se quedaba sin el y re-procesaba lo descartado).
     """
+    omitidos = frozenset(skip_source_job_ids or ())
     if platform_id == "ane":
         return lambda: fetcher.fetch(
-            site, pages=pages, port=port, dias=dias
+            site, pages=pages, port=port, dias=dias,
+            skip_source_job_ids=omitidos,
         )
     if platform_id in ("indeed", "linkedin"):
-        return lambda: fetcher.fetch(site, pages=pages, port=port)
+        return lambda: fetcher.fetch(
+            site, pages=pages, port=port, skip_source_job_ids=omitidos,
+        )
     if platform_id == "elempleo":
-        return lambda: fetcher.fetch(site, port=port)
+        return lambda: fetcher.fetch(
+            site, port=port, skip_source_job_ids=omitidos,
+        )
     if platform_id in _CON_PAGINAS:
-        return lambda: fetcher.fetch(site, pages=pages)
+        return lambda: fetcher.fetch(
+            site, pages=pages, skip_source_job_ids=omitidos,
+        )
     # greenhouse, ashby, lever, recruitee, successfactors, harvie: sin pages.
-    return lambda: fetcher.fetch(site)
+    return lambda: fetcher.fetch(site, skip_source_job_ids=omitidos)
 
 
 def necesita_navegador(platform_id: str) -> bool:

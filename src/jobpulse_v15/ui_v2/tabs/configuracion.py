@@ -23,8 +23,6 @@ Patrones: un solo gestor de geometría por padre; hilos que solo tocan Tk vía
 from __future__ import annotations
 
 import os
-import queue
-import threading
 import tkinter as tk
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
@@ -62,11 +60,6 @@ class ConfiguracionTab(BaseTab):
         )
         self._widgets: dict[str, Any] = {}
         self._csv_var = tk.StringVar(value="")
-        # Patrón de la UI v2 (como VacantesTab): los hilos de trabajo NUNCA
-        # tocan Tk; meten callbacks en una cola y el hilo principal los
-        # ejecuta (así funciona igual con mainloop() y con update() en tests).
-        self._cola: queue.Queue = queue.Queue()
-        self._hilos_activos = 0
 
     # ================================================================
     # Construcción
@@ -826,63 +819,6 @@ class ConfiguracionTab(BaseTab):
     # ================================================================
     # Utilidades (hilos, diálogos, formulario)
     # ================================================================
-    def _programar(self, callback) -> None:
-        """Encola un callback para el hilo principal (un hilo NUNCA toca Tk).
-
-        El `after` se agenda desde el hilo principal (el vigilante), no desde
-        el worker: llamar a Tk desde otro hilo no es seguro (y en los tests
-        `root.update()` no cuenta como "main loop").
-        """
-        self._cola.put(callback)
-
-    def _lanzar_hilo(self, funcion) -> None:
-        """Arranca un worker y activa el vigilante de la cola."""
-        self._hilos_activos += 1
-
-        def envoltorio() -> None:
-            try:
-                funcion()
-            finally:
-                self._hilos_activos -= 1
-                self._cola.put(None)  # centinela: el worker terminó
-
-        threading.Thread(target=envoltorio, daemon=True).start()
-        self._after(60, self._vigilar)
-
-    def _after(self, milisegundos: int, callback) -> None:
-        """Programa un callback en el hilo principal (SIEMPRE desde él)."""
-        marco = self.frame
-        if marco is None:
-            return
-        try:
-            marco.after(milisegundos, callback)
-        except tk.TclError:
-            pass
-
-    def _vigilar(self) -> None:
-        """Vacía la cola y ejecuta los callbacks (hilo principal)."""
-        marco = self.frame
-        if marco is None:
-            return
-        try:
-            if not marco.winfo_exists():
-                return  # la pestaña se destruyó (cambio de esquema)
-        except tk.TclError:
-            return
-        while True:
-            try:
-                callback = self._cola.get_nowait()
-            except queue.Empty:
-                break
-            if callback is None:
-                continue
-            try:
-                callback()
-            except tk.TclError:
-                pass
-        if self._hilos_activos > 0 or not self._cola.empty():
-            self._after(80, self._vigilar)
-
     def _raiz(self) -> tk.Misc | None:
         if self.frame is None:
             return None

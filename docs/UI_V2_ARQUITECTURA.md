@@ -5,9 +5,9 @@ Actualizado: 2026-11-03 (pestaña **Configuración**).
 
 La **UI clásica** (`src/jobpulse_v15/ui.py`, 3978 líneas) **no se toca**:
 sigue siendo la interfaz completa. La UI v2 vive aparte, en
-`src/jobpulse_v15/ui_v2/`, y por ahora trae cuatro pestañas (Datos crudos,
-Perfil, Vacantes, Configuración). El objetivo es **agregar funciones sin
-comprometer lo que ya funciona**.
+`src/jobpulse_v15/ui_v2/`, y por ahora trae cinco pestañas (Datos crudos,
+Perfil, Vacantes, Scraping, Configuración). El objetivo es **agregar
+funciones sin comprometer lo que ya funciona**.
 
 ## Arranque
 
@@ -24,9 +24,9 @@ comprometer lo que ya funciona**.
 | `ui_v2/widgets.py` | `Card`, `StatTile`, `Badge`, `SearchField`, `FlatButton`, `EmptyState`, `ScrollFrame`, `SectionTitle`, `KeyValue` | Componentes planos reutilizables |
 | `ui_v2/dialogs.py` | `RevisionImportacionDialog` (revisión de CV), `confirmar()` | Toplevels reutilizables; no tocan la BD |
 | `ui_v2/configuracion.py` | `cargar`/`guardar` (merge), `paleta_actual`, `directorio_csv`, `guardar_env` | Persistencia **SIN Tk**: `ui_config.json` (compartido con la UI clásica) y `.env` |
-| `ui_v2/data/*.py` | `JobsStore`, `ProfileStore`, `AtsStore`, `FuentesStore` + dataclasses | **SIN Tkinter**: las pestañas no ven SQLite |
-| `ui_v2/tabs/base.py` | `BaseTab`, `TabContext` | El CONTRATO de una pestaña |
-| `ui_v2/tabs/*.py` | `DatosCrudosTab`, `PerfilTab`, `VacantesTab`, `ConfiguracionTab` | Composición de widgets; hablan con el store |
+| `ui_v2/data/*.py` | `JobsStore`, `ProfileStore`, `AtsStore`, `FuentesStore`, `ScrapingStore` + dataclasses | **SIN Tkinter**: las pestañas no ven SQLite |
+| `ui_v2/tabs/base.py` | `BaseTab`, `TabContext` | El CONTRATO de una pestaña (+ helpers de hilos: cola + vigilante) |
+| `ui_v2/tabs/*.py` | `DatosCrudosTab`, `PerfilTab`, `VacantesTab`, `ScrapingTab`, `ConfiguracionTab` | Composición de widgets; hablan con el store |
 | `ui_v2/app.py` | `AppShell`, `crear_app()`, `main()`, `PESTANIAS` | El shell no conoce el contenido de las pestañas |
 
 El flujo de una pestaña es: **widgets → store (dataclasses) → Repository → BD**.
@@ -126,6 +126,30 @@ que toca la arquitectura:
 > La columna **"Paso 5"** sale "—" mientras `job_match` no tenga corrida
 > vigente: la UI **no persiste** el Paso 5 (solo `run_paso5.py` crea
 > corridas).
+
+### Scraping (`tabs/scraping.py`)
+
+**Lanza un barrido desde la interfaz** (antes solo por CLI:
+`run_scrapes.py`, `run_full_flow.py`, `jobpulse_v15 scrape ...`).
+
+- La pestaña solo arma la UI; el trabajo real vive en el módulo de dominio
+  **`src/jobpulse_v15/scraper.py`** (sin Tk): `ejecutar_barrido(site_ids,
+  pages, port, on_progress, should_stop)` devuelve un `ResumenBarrido`.
+- El store `ScrapingStore` (`data/scraping.py`) lista los sitios y sus
+  **grupos de corrida** (`directos`, `cr-gov`, `cr-jobs` — los mismos del
+  CLI: `scrape <plataforma> --group`).
+- Solo se barren los sitios **activos**: lo que pausó la tarjeta "Sondas de
+  scraping" de Configuración (`source_sites.enabled`).
+- Cada sitio usa el `pages` de su `site_config` si lo tiene; si no, el de la
+  casilla "Páginas".
+- **Brave (O7.2)**: `scraper` abre el navegador solo si algún sitio elegido
+  lo necesita y lo cierra solo si él lo abrió; el Brave del usuario no se
+  toca.
+- **Cancelar** termina **después** del sitio en curso (no se corta un fetch a
+  medias: la corrida debe quedar consistente en `source_runs`).
+- El dispatcher canónico `scrape_dispatch.construir_llamada` ahora pasa
+  `skip_source_job_ids` (las ofertas descartadas a mano): el CLI ya lo
+  hacía, el dispatcher no, y por eso se re-procesaba lo descartado.
 
 ### Configuración (`tabs/configuracion.py`)
 

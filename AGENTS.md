@@ -123,14 +123,14 @@ Cuando el usuario dice "vamos a otra sesión":
 .\.venv\Scripts\python.exe -X utf8 clean_run.py SI
 
 # Tests: pytest vive en el python del SISTEMA (el venv NO lo tiene).
-python -m pytest tests/ -q   # baseline 2026-11-03: 613 passed + 209 subtests
+python -m pytest tests/ -q   # baseline 2026-11-03: 630 passed + 223 subtests
 
 # UI clásica (completa, intacta)
 .\.venv\Scripts\python.exe -m jobpulse_v15.ui
 
 # UI v2 (plana y modular; por ahora: Datos crudos + Perfil + Vacantes +
-# Configuración) — ver docs/UI_V2_ARQUITECTURA.md. Agregar una pestaña =
-# módulo + 1 línea en PESTANIAS.
+# Scraping + Configuración) — ver docs/UI_V2_ARQUITECTURA.md. Agregar una
+# pestaña = módulo + 1 línea en PESTANIAS.
 .\jobpulse-v15-v2.bat
 .\.venv\Scripts\python.exe -X utf8 -m jobpulse_v15.ui_v2
 
@@ -434,12 +434,12 @@ desmarca (pestaña **“Áreas de empleo”** en `ui_perfil.py` → hechos
     son las que el perfil cubre (cotejo por tokens, con alias de
     fabricante: "Microsoft Excel" ≈ "Excel Avanzado").
 
-## Estado de referencia (verificado 2026-11-03, tras la pestaña de Configuración)
+## Estado de referencia (verificado 2026-11-03, tras la pestaña de Scraping)
 
-- Suite: **613 tests verdes** + 209 subtests (`python -m pytest tests/ -q`,
+- Suite: **630 tests verdes** + 223 subtests (`python -m pytest tests/ -q`,
   ~2 min); `test_matching.py` 87, `test_areas.py` 20, `test_ubicaciones_cr.py`
   34, `test_idiomas.py` 7, `test_salario.py` 16, `test_ats_ranking.py` 44,
-  `test_ui_v2.py` 52.
+  `test_scraper.py` 11, `test_ui_v2.py` 58.
 - **UI v2 (`src/jobpulse_v15/ui_v2/`, 2026-11-02)**: interfaz **plana y
   modular** que convive con la UI clásica (`ui.py`, intacta). Lanzador
   `jobpulse-v15-v2.bat` o `python -m jobpulse_v15.ui_v2`. Capas: `theme.py`
@@ -451,10 +451,13 @@ desmarca (pestaña **“Áreas de empleo”** en `ui_perfil.py` → hechos
   export CSV), **Perfil** (importar CV con diálogo de revisión revertible +
   alta/edición manual de `candidate_profile_facts`), **Vacantes**
   (**ranking ATS** de los avisos contra el perfil: score 0-100, veredicto,
-  desglose y skills que faltan; export CSV) y **Configuración** (IA local
-  —arrancar/detener, O7.3—, IA externa → `.env`, sondas de scraping
-  on/off, esquema de color, directorio por defecto de CSV). Detalle y
-  patrones de Tk: `docs/UI_V2_ARQUITECTURA.md`; gotchas 21–24.
+  desglose y skills que faltan; export CSV), **Scraping** (lanzar un
+  barrido de las fuentes: grupos `directos`/`cr-gov`/`cr-jobs`, páginas,
+  puerto CDP, bitácora en vivo; dominio en `src/jobpulse_v15/scraper.py`) y
+  **Configuración** (IA local —arrancar/detener, O7.3—, IA externa → `.env`,
+  sondas de scraping on/off, esquema de color, directorio por defecto de
+  CSV). Detalle y patrones de Tk: `docs/UI_V2_ARQUITECTURA.md`; gotchas
+  21–24.
 - **BD `data/jobpulse_v15.db` = corpus REAL del usuario** (corrida manual del
   01-11, sin vaciar: es la evidencia en uso). NO "limpiarla" sin confirmación
   explícita — la única vía es `clean_run.py SI`. Esquema versión **16**; la

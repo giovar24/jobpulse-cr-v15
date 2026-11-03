@@ -24,6 +24,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from jobpulse_v15.candidate_profile import CandidateProfileSuggestion
 from jobpulse_v15.db import Database
 from jobpulse_v15.repository import Repository
+from jobpulse_v15 import scraper
 from jobpulse_v15.ui_v2 import configuracion as config_ui
 from jobpulse_v15.ui_v2.app import AppShell, PESTANIAS
 from jobpulse_v15.ui_v2.data.fuentes import FuentesStore
@@ -46,6 +47,7 @@ from jobpulse_v15.ui_v2.data.profile import exportar_csv as exportar_perfil_csv
 from jobpulse_v15.ui_v2.data.vacantes import AtsStore
 from jobpulse_v15.ui_v2.tabs import configuracion as config_mod
 from jobpulse_v15.ui_v2.tabs import perfil as perfil_mod
+from jobpulse_v15.ui_v2.tabs import scraping as scraping_mod
 from jobpulse_v15.ui_v2.tabs.base import TabContext
 from jobpulse_v15.ui_v2.tabs.vacantes import VacantesTab
 from jobpulse_v15.ui_v2.theme import PALETAS, apply_theme
@@ -719,7 +721,7 @@ class TestConfiguracionTab(unittest.TestCase):
         self.root = _tkroot_reintentos()
         self.theme = apply_theme(self.root)
         self.shell = AppShell(self.root, self.repository, theme=self.theme)
-        self.shell.mostrar(3)  # pestaña "configuracion"
+        self.shell.mostrar(4)  # pestaña "configuracion"
         self.pestana = self.shell.pestana_activa()
         self.assertEqual(self.pestana.key, "configuracion")
 
@@ -751,7 +753,7 @@ class TestConfiguracionTab(unittest.TestCase):
     def test_la_pestana_esta_registrada(self):
         claves = [clase.key for clase in PESTANIAS]
         self.assertIn("configuracion", claves)
-        self.assertEqual(claves, ["crudos", "perfil", "vacantes",
+        self.assertEqual(claves, ["crudos", "perfil", "vacantes", "scraping",
                                   "configuracion"])
 
     def test_monta_las_cinco_tarjetas_y_lista_las_sondas(self):
@@ -917,6 +919,109 @@ class TestConfiguracionTab(unittest.TestCase):
         self.pestana.detener_ia_local()  # no debe lanzar ni lanzar hilos
         self.assertIsNone(config_mod._HANDLE_SERVIDOR)
         self.assertFalse(self.showerror.called)
+
+
+class TestScrapingTab(unittest.TestCase):
+    """La pestaña de Scraping monta, filtra por grupo y lanza el barrido."""
+
+    def setUp(self):
+        self.temp_dir = tempfile.TemporaryDirectory()
+        temp = Path(self.temp_dir.name)
+        self.database = Database(temp / "scraping-ui.db")
+        self.database.initialize()
+        self.repository = Repository(self.database)
+        self.repository.register_platform("workday", "Workday", "api")
+        self.repository.register_platform("greenhouse", "Greenhouse", "api")
+        self.repository.register_site(
+            "intel-cr", "workday", "Intel Careers CR",
+            "https://intel.example.test", company_name="Intel", country="CR",
+            run_groups=("directos",), site_config={"pages": 3},
+        )
+        self.repository.register_site(
+            "acme-cr", "greenhouse", "Acme CR",
+            "https://acme.example.test", company_name="Acme", country="CR",
+            run_groups=("cr-gov",),
+        )
+        self.root = _tkroot_reintentos()
+        self.theme = apply_theme(self.root)
+        self.shell = AppShell(self.root, self.repository, theme=self.theme)
+        self.shell.mostrar(3)  # pestaña "scraping"
+        self.pestana = self.shell.pestana_activa()
+        self.assertEqual(self.pestana.key, "scraping")
+
+    def tearDown(self):
+        for _ in range(5):
+            self.root.update()
+            time.sleep(0.01)
+        self.root.update_idletasks()
+        self.root.destroy()
+        gc.collect()
+        self.temp_dir.cleanup()
+
+    def _esperar(self, cond, timeout: float = 3.0) -> bool:
+        limite = time.time() + timeout
+        while time.time() < limite:
+            self.root.update()
+            if cond():
+                return True
+            time.sleep(0.02)
+        return bool(cond())
+
+    def test_la_pestana_esta_registrada(self):
+        self.assertIn("scraping", [clase.key for clase in PESTANIAS])
+
+    def test_monta_y_lista_las_fuentes(self):
+        self.root.update()
+        tabla = self.pestana._widgets["tabla"]
+        self.assertEqual(set(tabla.get_children()), {"intel-cr", "acme-cr"})
+        valores = tabla.item("intel-cr", "values")
+        self.assertIn("Intel Careers CR", valores)
+        self.assertIn("3", valores)  # páginas del site_config
+
+    def test_el_filtro_por_grupo_acota_la_tabla(self):
+        self.root.update()
+        self.pestana._widgets["grupo"].set("cr-gov")
+        self.pestana._pintar_tabla()
+        self.root.update()
+        self.assertEqual(self.pestana._widgets["tabla"].get_children(),
+                         ("acme-cr",))
+
+    def test_ejecutar_seleccionados_pinta_el_resumen(self):
+        self.root.update()
+        tabla = self.pestana._widgets["tabla"]
+        tabla.selection_set("intel-cr")
+        resumen = scraper.ResumenBarrido(resultados=[
+            scraper.ResultadoSitio("intel-cr", "Workday", scraper.ESTADO_OK,
+                                    jobs_found=7, jobs_new=2, jobs_duplicate=5,
+                                    jobs_skipped=1),
+        ])
+        with unittest.mock.patch.object(
+                scraping_mod.scraper, "ejecutar_barrido",
+                return_value=resumen) as ejecutar:
+            self.pestana.ejecutar_seleccion()
+            self.assertTrue(self._esperar(
+                lambda: self.pestana._widgets["resumen_nuevas"].cget("text") == "2"))
+        ejecutar.assert_called_once()
+        self.assertEqual(ejecutar.call_args.args[0], ["intel-cr"])
+        self.assertEqual(self.pestana._widgets["resumen_encontradas"].cget("text"),
+                         "7")
+        self.assertEqual(self.pestana._widgets["resumen_duplicadas"].cget("text"),
+                         "5")
+        log = self.pestana._widgets["log"].get("1.0", "end")
+        self.assertIn("Barrido", log)
+
+    def test_sin_seleccion_no_lanza_nada(self):
+        self.root.update()
+        with unittest.mock.patch.object(scraping_mod.scraper,
+                                        "ejecutar_barrido") as ejecutar:
+            self.pestana.ejecutar_seleccion()
+        self.assertFalse(ejecutar.called)
+
+    def test_cancelar_pide_el_fin(self):
+        self.root.update()
+        self.pestana._corriendo = True
+        self.pestana.cancelar()
+        self.assertTrue(self.pestana._cancelar.is_set())
 
 
 if __name__ == "__main__":
