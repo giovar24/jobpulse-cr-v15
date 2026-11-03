@@ -1,7 +1,7 @@
 # UI v2 — arquitectura (plana y modular)
 
 Fecha: 2026-11-02. Autor: sesión de UI v2.
-Actualizado: 2026-11-03 (pestaña **Cuentas**).
+Actualizado: 2026-11-03 (pestaña **Cuentas** + **Paso 5 persistido**).
 
 La **UI clásica** (`src/jobpulse_v15/ui.py`, 3978 líneas) **no se toca**:
 sigue siendo la interfaz completa. La UI v2 vive aparte, en
@@ -24,7 +24,7 @@ Perfil, Vacantes, Scraping, Cuentas, Configuración). El objetivo es
 | `ui_v2/widgets.py` | `Card`, `StatTile`, `Badge`, `SearchField`, `FlatButton`, `EmptyState`, `ScrollFrame`, `SectionTitle`, `KeyValue` | Componentes planos reutilizables |
 | `ui_v2/dialogs.py` | `RevisionImportacionDialog` (revisión de CV), `confirmar()`, `pedir_texto()` | Toplevels reutilizables; no tocan la BD |
 | `ui_v2/configuracion.py` | `cargar`/`guardar` (merge), `paleta_actual`, `directorio_csv`, `guardar_env`, `leer_env`/`valor_env`, `puerto_cdp`, `guardar_navegador` | Persistencia **SIN Tk**: `ui_config.json` (compartido con la UI clásica) y `.env` |
-| `ui_v2/data/*.py` | `JobsStore`, `ProfileStore`, `AtsStore`, `FuentesStore`, `ScrapingStore`, `CuentasStore` + dataclasses | **SIN Tkinter**: las pestañas no ven SQLite ni el keyring |
+| `ui_v2/data/*.py` | `JobsStore`, `ProfileStore`, `AtsStore`, `FuentesStore`, `ScrapingStore`, `CuentasStore`, `Paso5Store` + dataclasses | **SIN Tkinter**: las pestañas no ven SQLite ni el keyring |
 | `ui_v2/tabs/base.py` | `BaseTab`, `TabContext` | El CONTRATO de una pestaña (+ helpers de hilos: cola + vigilante) |
 | `ui_v2/tabs/*.py` | `DatosCrudosTab`, `PerfilTab`, `VacantesTab`, `ScrapingTab`, `CuentasTab`, `ConfiguracionTab` | Composición de widgets; hablan con el store |
 | `ui_v2/app.py` | `AppShell`, `crear_app()`, `main()`, `PESTANIAS` | El shell no conoce el contenido de las pestañas |
@@ -107,7 +107,6 @@ Botones extra: **Revertir importación** (restaura manuales), **Exportar CSV**,
 > "Canónico" para que el hueco sea visible, no oculto.
 
 ### Vacantes (`tabs/vacantes.py`)
-
 **Ranking ATS**: puntúa cada aviso (0–100) contra el perfil y lista los más
 aptos. Detalle completo en `docs/HANDOFF_SESION_2026-11-03.md`; esto es lo
 que toca la arquitectura:
@@ -118,14 +117,30 @@ que toca la arquitectura:
   resultados vuelven por una `queue.Queue`. La UI solo se toca desde el hilo
   principal con `after` — y **el `after` va por el marco**, no por `self`
   (la pestaña NO es un widget Tk; `self.after` revienta con `AttributeError`).
-- **Nada se persiste**: el score se regenera al pedirlo ("Calcular ranking");
-  no hay migración ni escritura en BD.
+- **El score ATS no se persiste**: se regenera al pedirlo ("Recalcular"); no
+  hay migración ni escritura en BD.
 - La fórmula, los pesos y los umbrales viven en `ats.py` (`PESOS_RANKING`,
   `UMBRALES_RANKING`), NO en la pestaña.
 
-> La columna **"Paso 5"** sale "—" mientras `job_match` no tenga corrida
-> vigente: la UI **no persiste** el Paso 5 (solo `run_paso5.py` crea
-> corridas).
+#### El botón "Ejecutar Paso 5" (matching persistido)
+
+El **Paso 5 sí se persiste** y se puede correr desde la UI (antes solo por
+CLI: `run_paso5.py`):
+
+- El store `Paso5Store` (`data/paso5.py`) abre **su propia conexión**
+  (`sqlite3.Row` es obligatorio: `matching` indexa por nombre de columna) y
+  llama a `matching.ejecutar_paso5(...)`: una corrida **NUEVA** en
+  `job_match` (las anteriores quedan con `valida = 0`).
+- La casilla **"Evaluar todo"** = `aplicar_filtro_areas=False` (ignora las
+  áreas marcadas en el perfil), igual que `run_paso5.py --evaluar-todo`.
+- Al terminar, la columna **"Paso 5"** de la tabla se puebla sola con los
+  estados de la corrida vigente (`AtsStore.estados_paso5()`), y un diálogo
+  muestra el resumen `estado | motivo | n`.
+- El hilo usa el patrón de `BaseTab` (`_lanzar_hilo` + `_programar`): el
+  worker **nunca** toca Tk.
+
+> El score ATS (ranking) y el Paso 5 (matching) son cosas distintas: el
+> ranking no se guarda; el matching sí, en `job_match`.
 
 ### Scraping (`tabs/scraping.py`)
 

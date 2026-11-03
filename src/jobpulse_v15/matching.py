@@ -1621,6 +1621,30 @@ def guardar_resultados(
     return len(filas)
 
 
+def _nuevo_corrida_id(connection: sqlite3.Connection) -> str:
+    """Identificador de una corrida NUEVA: timestamp (+ sufijo si ya existe).
+
+    La regla del Paso 5 es "nunca se actualiza una corrida emitida": dos
+    corridas en el MISMO segundo tienen que ser dos corridas distintas, y
+    `guardar_resultados` BORRA las filas de la corrida que recibe. Con el
+    timestamp solo, dos corridas seguidas (la UI hace fácil pulsar dos veces)
+    se pisarian. Si el timestamp ya existe, se le anade un sufijo.
+    """
+    base = datetime.now().strftime("%Y%m%d_%H%M%S")
+    existe = connection.execute(
+        "SELECT 1 FROM job_match WHERE corrida_id = ? LIMIT 1", (base,)
+    ).fetchone()
+    if not existe:
+        return base
+    for sufijo in range(1, 1000):
+        candidata = f"{base}_{sufijo:02d}"
+        if not connection.execute(
+            "SELECT 1 FROM job_match WHERE corrida_id = ? LIMIT 1", (candidata,)
+        ).fetchone():
+            return candidata
+    return f"{base}_{datetime.now().microsecond}"
+
+
 def ejecutar_paso5(
     connection: sqlite3.Connection,
     corrida_id: str | None = None,
@@ -1636,6 +1660,6 @@ def ejecutar_paso5(
         connection, aplicar_filtro_areas=aplicar_filtro_areas
     )
     resultados = [evaluador.evaluar_job(job_id) for job_id in evaluador.jobs_con_analisis]
-    corrida = corrida_id or datetime.now().strftime("%Y%m%d_%H%M%S")
+    corrida = corrida_id or _nuevo_corrida_id(connection)
     guardar_resultados(connection, resultados, corrida, invalidar_previas)
     return corrida, resultados

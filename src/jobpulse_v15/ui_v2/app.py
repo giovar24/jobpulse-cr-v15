@@ -16,6 +16,7 @@ from jobpulse_v15.repository import Repository
 from jobpulse_v15.ui_v2 import configuracion
 from jobpulse_v15.ui_v2.configuracion import paleta_actual
 from jobpulse_v15.ui_v2.data.jobs import JobsStore
+from jobpulse_v15.ui_v2.data.paso5 import Paso5Store
 from jobpulse_v15.ui_v2.data.profile import ProfileStore
 from jobpulse_v15.ui_v2.tabs.base import BaseTab, TabContext
 from jobpulse_v15.ui_v2.tabs.configuracion import ConfiguracionTab
@@ -59,6 +60,7 @@ class AppShell:
             services={
                 "jobs_store": JobsStore(repository),
                 "profile_store": ProfileStore(repository),
+                "paso5_store": Paso5Store(repository),
                 # Servicio que ConfiguracionTab usa para cambiar el
                 # esquema de color en caliente (reconstruye la app entera).
                 "reconstruir_ui": self.reconstruir_con_paleta,

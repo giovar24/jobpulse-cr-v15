@@ -28,6 +28,8 @@ from jobpulse_v15 import scraper
 from jobpulse_v15.ui_v2 import configuracion as config_ui
 from jobpulse_v15.ui_v2.app import AppShell, PESTANIAS
 from jobpulse_v15.ui_v2.data.fuentes import FuentesStore
+from jobpulse_v15.ui_v2.data.paso5 import Paso5Store, ResumenPaso5
+from jobpulse_v15.ui_v2.data.vacantes import AtsStore, VacanteAts
 from jobpulse_v15.ui_v2.data.jobs import (
     JobsStore,
     RawQuery,
@@ -48,6 +50,7 @@ from jobpulse_v15.ui_v2.data.vacantes import AtsStore
 from jobpulse_v15.ui_v2.tabs import configuracion as config_mod
 from jobpulse_v15.ui_v2.tabs import perfil as perfil_mod
 from jobpulse_v15.ui_v2.tabs import scraping as scraping_mod
+from jobpulse_v15.ui_v2.tabs import vacantes as vacantes_mod
 from jobpulse_v15.ui_v2.tabs.base import TabContext
 from jobpulse_v15.ui_v2.tabs.vacantes import VacantesTab
 from jobpulse_v15.ui_v2.theme import PALETAS, apply_theme
@@ -552,6 +555,46 @@ class TestVacantesTab(unittest.TestCase):
         self.assertFalse(pestana._calculando)
         self.assertEqual(len(pestana._widgets["tabla"].get_children()), 1)
         self.assertEqual(pestana.filas[0].title, "IT Support Specialist")
+
+    def test_el_paso5_persiste_la_corrida_y_puebla_la_columna(self):
+        """El botón corre el matching y deja la corrida en `job_match`."""
+        pestana = self._pestana()
+        # La fila del ranking (con su estado del Paso 5).
+        pestana.filas = [
+            VacanteAts(job_id="job-a", title="Puesto A", company="Acme",
+                       area="—", score=70.0, veredicto="ajustable",
+                       semantica_pct=None, skills_pct=None,
+                       experiencia_pct=None, educacion_pct=None,
+                       idiomas_pct=None)
+        ]
+        pestana._pintar_tabla()
+        self.root.update()
+
+        with unittest.mock.patch.object(
+                pestana.paso5, "ejecutar",
+                return_value=ResumenPaso5(
+                    corrida_id="20261103_101010", evaluadas=1,
+                    conteo=(("compatible", "cumple", 1),),
+                )) as ejecutar:
+            with unittest.mock.patch.object(
+                    pestana.store, "estados_paso5",
+                    return_value={"job-a": "compatible"}):
+                with unittest.mock.patch.object(
+                        vacantes_mod.messagebox, "showinfo") as info:
+                    pestana.ejecutar_paso5()
+                    for _ in range(100):
+                        self.root.update()
+                        if not pestana._corriendo_paso5:
+                            break
+                        time.sleep(0.02)
+        self.assertTrue(ejecutar.called)
+        self.assertFalse(pestana._corriendo_paso5)
+        # La columna "Paso 5" de la tabla se puebla sola.
+        valores = pestana._widgets["tabla"].item("job-a", "values")
+        self.assertEqual(valores[-1], "compatible")
+        self.assertIn("20261103_101010",
+                      pestana._widgets["estado"].cget("text"))
+        self.assertTrue(info.called)
 
 
 class TestConfiguracionPersistencia(unittest.TestCase):

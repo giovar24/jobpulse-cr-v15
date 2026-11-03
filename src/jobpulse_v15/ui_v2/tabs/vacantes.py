@@ -9,17 +9,21 @@ que tiene el CV cargado. Cada fila trae el score 0-100, el veredicto
 El cálculo pesado (embeddings) corre en un HILO DE SEGUUNDO PLANO: la UI no
 se congela y los resultados se entregan por una cola (Tk solo se toca desde
 el hilo principal).
+
+Además, el botón **Ejecutar Paso 5** corre el matching PERSISTIDO (la misma
+corrida que `run_paso5.py` deja en `job_match`): al terminar, la columna
+"Paso 5" de la tabla se puebla sola con los estados de esa corrida.
 """
 from __future__ import annotations
 
-import queue
-import threading
 import tkinter as tk
 import webbrowser
+from dataclasses import replace
 from tkinter import filedialog, messagebox, ttk
 from typing import Any
 
 from jobpulse_v15.ui_v2 import configuracion
+from jobpulse_v15.ui_v2.data.paso5 import Paso5Store, ResumenPaso5
 from jobpulse_v15.ui_v2.data.vacantes import (
     AtsStore,
     ETIQUETAS_VEREDICTO,
@@ -101,11 +105,14 @@ class VacantesTab(BaseTab):
         self.store: AtsStore = context.services.setdefault(
             "ats_store", AtsStore(context.repository)
         )
+        self.paso5: Paso5Store = context.services.setdefault(
+            "paso5_store", Paso5Store(context.repository)
+        )
         self.filas: list[VacanteAts] = []
         self.detalle: VacanteAts | None = None
         self._widgets: dict[str, Any] = {}
-        self._cola: queue.Queue = queue.Queue()
         self._calculando = False
+        self._corriendo_paso5 = False
         self._areas_perfil: set[str] = set()
 
     # -- construcción --
@@ -154,11 +161,23 @@ class VacantesTab(BaseTab):
             command=self._pintar_tabla,
         ).grid(row=0, column=2, padx=(12, 0))
 
+        self._widgets["evaluar_todo"] = tk.BooleanVar(value=False)
+        ttk.Checkbutton(
+            barra, text="Evaluar todo",
+            variable=self._widgets["evaluar_todo"],
+        ).grid(row=0, column=3, padx=(12, 0))
+
+        self._widgets["paso5"] = FlatButton(
+            barra, theme, "Ejecutar Paso 5", command=self.ejecutar_paso5,
+            variant="accent",
+        )
+        self._widgets["paso5"].grid(row=0, column=4, padx=(12, 0))
+
         FlatButton(barra, theme, "Recalcular", command=self.recalcular, variant="flat").grid(
-            row=0, column=3, padx=(12, 0)
+            row=0, column=5, padx=(8, 0)
         )
         FlatButton(barra, theme, "Exportar CSV", command=self.exportar, variant="flat").grid(
-            row=0, column=4, padx=(8, 0)
+            row=0, column=6, padx=(8, 0)
         )
 
     def _build_resumen(self, parent: tk.Misc) -> None:
@@ -351,15 +370,16 @@ class VacantesTab(BaseTab):
                 engine = self._crear_engine()
                 filas = self.store.calcular(
                     engine=engine,
-                    progreso=lambda texto: self._cola.put(("progreso", texto)),
+                    progreso=lambda texto: self._programar(
+                        lambda t=texto: self._pintar_progreso(str(t))),
                 )
             except Exception as error:  # pragma: no cover - defensivo
-                self._cola.put(("error", str(error)))
+                mensaje = str(error)
+                self._programar(lambda: self._error_calculo(mensaje))
                 return
-            self._cola.put(("listo", filas))
+            self._programar(lambda: self._listo(filas))
 
-        threading.Thread(target=trabajo, daemon=True).start()
-        self._after(120, self._vigilar)
+        self._lanzar_hilo(trabajo)
 
     def _calcular_en_linea(self) -> None:
         """Calculo sincronico (pestana no montada)."""
@@ -373,16 +393,27 @@ class VacantesTab(BaseTab):
         self._pintar_resumen()
         self._pintar_estado()
 
-    def _after(self, milisegundos: int, callback) -> None:
-        """Programa un callback en el hilo principal de Tk.
+    def _pintar_progreso(self, texto: str) -> None:
+        estado = self._widgets.get("estado")
+        if estado is not None:
+            try:
+                estado.configure(text=texto)
+            except tk.TclError:
+                pass
 
-        La pestaña NO es un widget: el `after` va por el marco que devolvio
-        `build()` (o su toplevel), nunca por `self`.
-        """
-        widget = self.frame
-        if widget is None:
-            return
-        widget.after(milisegundos, callback)
+    def _listo(self, filas: Any) -> None:
+        self.filas = list(filas)
+        self._calculando = False
+        self._pintar_tabla()
+        self._pintar_resumen()
+        self._pintar_estado()
+
+    def _error_calculo(self, mensaje: str) -> None:
+        self._calculando = False
+        self._widgets["estado"].configure(text=f"Error al calcular: {mensaje}")
+        self._widgets["badge"].set_text("Error")
+        self._widgets["badge"].set_tone("danger")
+        messagebox.showerror("Ranking ATS", f"No se pudo calcular el score:\n{mensaje}")
 
     @staticmethod
     def _crear_engine() -> Any:
@@ -390,33 +421,6 @@ class VacantesTab(BaseTab):
         from jobpulse_v15.search_engine import SemanticSearchEngine
 
         return SemanticSearchEngine()
-
-    def _vigilar(self) -> None:
-        """Vacía la cola y actualiza la UI (siempre en el hilo principal)."""
-        terminado = False
-        while True:
-            try:
-                tipo, dato = self._cola.get_nowait()
-            except queue.Empty:
-                break
-            if tipo == "progreso":
-                self._widgets["estado"].configure(text=str(dato))
-            elif tipo == "listo":
-                self.filas = list(dato)
-                self._calculando = False
-                self._pintar_tabla()
-                self._pintar_resumen()
-                self._pintar_estado()
-                terminado = True
-            elif tipo == "error":
-                self._calculando = False
-                self._widgets["estado"].configure(text=f"Error al calcular: {dato}")
-                self._widgets["badge"].set_text("Error")
-                self._widgets["badge"].set_tone("danger")
-                messagebox.showerror("Ranking ATS", f"No se pudo calcular el score:\n{dato}")
-                terminado = True
-        if not terminado and self._calculando:
-            self._after(120, self._vigilar)
 
     def _filas_visibles(self) -> list[VacanteAts]:
         combo = self._widgets.get("veredicto")
@@ -549,6 +553,90 @@ class VacantesTab(BaseTab):
     def _abrir_navegador(self) -> None:
         if self.detalle and self.detalle.source_url:
             webbrowser.open(self.detalle.source_url)
+
+    # -- Paso 5 (matching persistido) --
+    def ejecutar_paso5(self) -> None:
+        """Corre el Paso 5 y deja la corrida GUARDADA en `job_match`.
+
+        Es la misma corrida que escribe `run_paso5.py`: una corrida NUEVA
+        (las anteriores quedan con `valida = 0`). Al terminar, la columna
+        "Paso 5" de la tabla se puebla con los estados de esa corrida.
+        """
+        if self._corriendo_paso5:
+            self._pintar_progreso("Ya hay un Paso 5 en marcha…")
+            return
+        evaluar_todo = bool(self._widgets["evaluar_todo"].get())
+        self._corriendo_paso5 = True
+        self._widgets["paso5"].configure(state="disabled")
+        self._pintar_progreso("Paso 5: evaluando requisitos contra el perfil…")
+        self._widgets["badge"].set_text("Paso 5")
+        self._widgets["badge"].set_tone("warning")
+
+        def trabajo() -> None:
+            try:
+                resumen = self.paso5.ejecutar(
+                    aplicar_filtro_areas=not evaluar_todo,
+                    progreso=lambda texto: self._programar(
+                        lambda t=texto: self._pintar_progreso(str(t))),
+                )
+            except Exception as error:  # pragma: no cover - defensivo
+                mensaje = str(error)
+                self._programar(lambda: self._error_paso5(mensaje))
+                return
+            self._programar(lambda: self._fin_paso5(resumen))
+
+        self._lanzar_hilo(trabajo)
+
+    def _error_paso5(self, mensaje: str) -> None:
+        self._corriendo_paso5 = False
+        boton = self._widgets.get("paso5")
+        if boton is not None:
+            boton.configure(state="normal")
+        self._widgets["estado"].configure(text=f"Error en el Paso 5: {mensaje}")
+        self._widgets["badge"].set_text("Error")
+        self._widgets["badge"].set_tone("danger")
+        messagebox.showerror("Paso 5", f"No se pudo correr el matching:\n{mensaje}")
+
+    def _fin_paso5(self, resumen: ResumenPaso5) -> None:
+        self._corriendo_paso5 = False
+        boton = self._widgets.get("paso5")
+        if boton is not None:
+            boton.configure(state="normal")
+        # La columna "Paso 5" se puebla sola con la corrida recién guardada.
+        self._actualizar_estados_paso5()
+        self._pintar_tabla()
+        if self.detalle is not None:
+            self._pintar_detalle(self.detalle)
+        por_estado = resumen.por_estado
+        detalle = " · ".join(f"{estado}: {n}" for estado, n in
+                             sorted(por_estado.items())) or "sin evaluables"
+        self._widgets["estado"].configure(
+            text=f"Paso 5 · corrida {resumen.corrida_id} · {resumen.evaluadas} "
+                 f"evaluada(s) · {detalle}")
+        self._widgets["badge"].set_text("Paso 5 listo")
+        self._widgets["badge"].set_tone("success")
+        messagebox.showinfo(
+            "Paso 5",
+            f"Corrida {resumen.corrida_id} guardada.\n"
+            f"{resumen.evaluadas} vacante(s) evaluada(s).\n\n"
+            f"{resumen.texto()}",
+        )
+
+    def _actualizar_estados_paso5(self) -> None:
+        """Pega en las filas los estados del Paso 5 de la corrida vigente."""
+        try:
+            estados = self.store.estados_paso5()
+        except Exception:  # pragma: no cover - defensivo
+            return
+        self.filas = [
+            replace(fila, estado_paso5=estados.get(fila.job_id, ""))
+            for fila in self.filas
+        ]
+        if self.detalle is not None:
+            self.detalle = replace(
+                self.detalle,
+                estado_paso5=estados.get(self.detalle.job_id, ""),
+            )
 
     def exportar(self) -> None:
         filas = self._filas_visibles()

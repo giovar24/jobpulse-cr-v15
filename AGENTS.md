@@ -123,7 +123,7 @@ Cuando el usuario dice "vamos a otra sesión":
 .\.venv\Scripts\python.exe -X utf8 clean_run.py SI
 
 # Tests: pytest vive en el python del SISTEMA (el venv NO lo tiene).
-python -m pytest tests/ -q   # baseline 2026-11-03: 671 passed + 231 subtests
+python -m pytest tests/ -q   # baseline 2026-11-03: 678 passed + 231 subtests
 
 # UI clásica (completa, intacta)
 .\.venv\Scripts\python.exe -m jobpulse_v15.ui
@@ -447,13 +447,13 @@ desmarca (pestaña **“Áreas de empleo”** en `ui_perfil.py` → hechos
     2026-11-03). En la UI (pestaña "Cuentas") el campo de contraseña arranca
     vacío y vacío = "conserva la guardada".
 
-## Estado de referencia (verificado 2026-11-03, tras la pestaña de Cuentas)
+## Estado de referencia (verificado 2026-11-03, tras el Paso 5 persistido)
 
-- Suite: **671 tests verdes** + 231 subtests (`python -m pytest tests/ -q`,
+- Suite: **678 tests verdes** + 231 subtests (`python -m pytest tests/ -q`,
   ~2 min); `test_matching.py` 87, `test_areas.py` 20, `test_ubicaciones_cr.py`
   34, `test_idiomas.py` 7, `test_salario.py` 16, `test_ats_ranking.py` 44,
   `test_scraper.py` 11, `test_browser_manager.py` 21, `test_cuentas.py` 9,
-  `test_ui_v2.py` 79.
+  `test_paso5.py` 6, `test_ui_v2.py` 80.
 - **UI v2 (`src/jobpulse_v15/ui_v2/`, 2026-11-02)**: interfaz **plana y
   modular** que convive con la UI clásica (`ui.py`, intacta). Lanzador
   `jobpulse-v15-v2.bat` o `python -m jobpulse_v15.ui_v2`. Capas: `theme.py`
@@ -465,7 +465,9 @@ desmarca (pestaña **“Áreas de empleo”** en `ui_perfil.py` → hechos
   export CSV), **Perfil** (importar CV con diálogo de revisión revertible +
   alta/edición manual de `candidate_profile_facts`), **Vacantes**
   (**ranking ATS** de los avisos contra el perfil: score 0-100, veredicto,
-  desglose y skills que faltan; export CSV), **Scraping** (lanzar un
+  desglose y skills que faltan; export CSV; botón **Ejecutar Paso 5** que
+  deja la corrida PERSISTIDA en `job_match` + casilla "Evaluar todo"),
+  **Scraping** (lanzar un
   barrido de las fuentes: grupos `directos`/`cr-gov`/`cr-jobs`, páginas,
   puerto CDP, bitácora en vivo; dominio en `src/jobpulse_v15/scraper.py`),
   **Cuentas** (credenciales de los sitios que piden login: tabla + formulario;
@@ -481,8 +483,12 @@ desmarca (pestaña **“Áreas de empleo”** en `ui_perfil.py` → hechos
   migración `017` sigue pendiente. Censos vivos: `tools/estado_bd.py`,
   `tools/progreso_enriquecimiento.py`, `ia_estado.snapshot_enriquecimiento` —
   no confiar en números transcritos de ningún doc.
-- **La UI NO persiste el Paso 5**: solo `run_paso5.py` crea corridas en
-  `job_match`; desde la UI el matching se calcula sin quedarse guardado.
+- **El Paso 5 SÍ se persiste desde la UI v2**: el botón "Ejecutar Paso 5"
+  (pestaña Vacantes) llama a `matching.ejecutar_paso5` y deja una corrida
+  NUEVA en `job_match` (store `ui_v2/data/paso5.py`; "Evaluar todo" =
+  `--evaluar-todo`). Las corridas nunca se actualizan: cada una es nueva y
+  las anteriores quedan con `valida = 0`. El **ranking ATS** (score) NO se
+  persiste: se regenera al pedirlo.
 - **Invariantes de calidad**: todo requisito vigente lleva `evidence` literal
   (trazable al texto del aviso) — uno sin evidence es un bug. El salario casi
   nunca existe como dato (~1–2 % de avisos declara cifra con moneda): la
@@ -522,5 +528,5 @@ desmarca (pestaña **“Áreas de empleo”** en `ui_perfil.py` → hechos
   `codigo_canonico` del perfil + migración `017`, las `educacion_no_confirmada`
   sin firma de segunda persona, O5.3 re-barrido de descripciones basura, O6.4
   dedupe de slugs ES/EN al importar CV, sucursal de Harvie en el título,
-  Paso 7, O8.2/O8.4, O2/O4/O9, O10 `solo_vigentes`, Paso 5 desde la UI
-  (persistir corridas) y pestañas nuevas de la UI v2 — el shell ya está listo).
+  Paso 7, O8.2/O8.4, O2/O4/O9, O10 `solo_vigentes` y pestañas nuevas de la
+  UI v2 — el shell ya está listo).
