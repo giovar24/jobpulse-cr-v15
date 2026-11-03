@@ -15,6 +15,7 @@ import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 from typing import Any
 
+from jobpulse_v15.ui_v2 import configuracion
 from jobpulse_v15.ui_v2.data.profile import (
     CATEGORIAS,
     CATEGORIAS_CON_ESTADO,
@@ -584,11 +585,13 @@ class PerfilTab(BaseTab):
             messagebox.showinfo("Exportar perfil", "No hay datos en la vista.",
                                 parent=self._toplevel())
             return
+        dir_csv = configuracion.directorio_csv()
         ruta = filedialog.asksaveasfilename(
             defaultextension=".csv",
             filetypes=[("CSV", "*.csv"), ("Todos los archivos", "*.*")],
             initialfile="perfil_candidato.csv",
             parent=self._toplevel(),
+            **({"initialdir": dir_csv} if dir_csv else {}),
         )
         if not ruta:
             return

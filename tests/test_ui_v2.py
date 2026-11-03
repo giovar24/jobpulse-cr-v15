@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import csv
 import gc
+import os
 import sys
 import tempfile
 import time
@@ -23,7 +24,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from jobpulse_v15.candidate_profile import CandidateProfileSuggestion
 from jobpulse_v15.db import Database
 from jobpulse_v15.repository import Repository
+from jobpulse_v15.ui_v2 import configuracion as config_ui
 from jobpulse_v15.ui_v2.app import AppShell, PESTANIAS
+from jobpulse_v15.ui_v2.data.fuentes import FuentesStore
 from jobpulse_v15.ui_v2.data.jobs import (
     JobsStore,
     RawQuery,
@@ -41,10 +44,11 @@ from jobpulse_v15.ui_v2.data.profile import (
 )
 from jobpulse_v15.ui_v2.data.profile import exportar_csv as exportar_perfil_csv
 from jobpulse_v15.ui_v2.data.vacantes import AtsStore
+from jobpulse_v15.ui_v2.tabs import configuracion as config_mod
 from jobpulse_v15.ui_v2.tabs import perfil as perfil_mod
 from jobpulse_v15.ui_v2.tabs.base import TabContext
 from jobpulse_v15.ui_v2.tabs.vacantes import VacantesTab
-from jobpulse_v15.ui_v2.theme import apply_theme
+from jobpulse_v15.ui_v2.theme import PALETAS, apply_theme
 
 
 def _tkroot_reintentos(intentos: int = 5) -> tk.Tk:
@@ -546,6 +550,373 @@ class TestVacantesTab(unittest.TestCase):
         self.assertFalse(pestana._calculando)
         self.assertEqual(len(pestana._widgets["tabla"].get_children()), 1)
         self.assertEqual(pestana.filas[0].title, "IT Support Specialist")
+
+
+class TestConfiguracionPersistencia(unittest.TestCase):
+    """ui_config.json (merge con claves ajenas) y .env (update selectivo). SIN Tk."""
+
+    def setUp(self):
+        self.temp_dir = tempfile.TemporaryDirectory()
+        self.ruta_cfg = Path(self.temp_dir.name) / "ui_config.json"
+        self._parches = [
+            unittest.mock.patch.object(config_ui, "ARCHIVO", self.ruta_cfg),
+        ]
+        for parche in self._parches:
+            parche.start()
+            self.addCleanup(parche.stop)
+
+    def tearDown(self):
+        self.temp_dir.cleanup()
+
+    def test_guardar_hace_merge_y_no_pisa_claves_ajenas(self):
+        """Regresión: el mismo archivo escribe ciclo_vida y la UI clásica."""
+        config_ui.guardar({"otra_clave": 1})
+        config_ui.guardar({config_ui.CLAVE_PALETA: "oscuro"})
+        datos = config_ui.cargar()
+        self.assertEqual(datos["otra_clave"], 1)
+        self.assertEqual(config_ui.paleta_actual(), "oscuro")
+
+    def test_cargar_sin_archivo_o_ilegible_devuelve_vacio(self):
+        self.assertEqual(config_ui.cargar(Path(self.temp_dir.name) / "no.json"), {})
+        roto = Path(self.temp_dir.name) / "roto.json"
+        roto.write_text("{no es json", encoding="utf-8")
+        self.assertEqual(config_ui.cargar(roto), {})
+
+    def test_directorio_csv_solo_si_la_carpeta_existe(self):
+        self.assertIsNone(config_ui.directorio_csv())
+        carpeta = Path(self.temp_dir.name) / "exports"
+        carpeta.mkdir()
+        config_ui.guardar({config_ui.CLAVE_CSV_DIR: str(carpeta)})
+        self.assertEqual(config_ui.directorio_csv(), str(carpeta))
+        # Carpeta borrada después de guardar → el diálogo cae al default de Tk.
+        config_ui.guardar({config_ui.CLAVE_CSV_DIR: str(carpeta / "borrada")})
+        self.assertIsNone(config_ui.directorio_csv())
+
+    def test_guardar_env_actualiza_solo_las_claves_pedidas(self):
+        env = Path(self.temp_dir.name) / ".env"
+        env.write_text("# comentario\nOTRA=1\nIA_MODEL=viejo\n", encoding="utf-8")
+        config_ui.guardar_env({"IA_MODEL": "nuevo", "IA_RPM": ""}, ruta=env)
+        lineas = env.read_text(encoding="utf-8").splitlines()
+        self.assertIn("# comentario", lineas)      # comentarios intactos
+        self.assertIn("OTRA=1", lineas)            # claves ajenas intactas
+        self.assertIn("IA_MODEL=nuevo", lineas)    # pedida → actualizada
+        self.assertNotIn("IA_MODEL=viejo", lineas)
+        self.assertIn("IA_RPM=", lineas)           # vacío = sin tope (opt-in)
+
+    def test_guardar_env_agrega_clave_nueva_y_sana_saltos(self):
+        env = Path(self.temp_dir.name) / ".env"
+        env.write_text("EXISTE=1\n", encoding="utf-8")
+        config_ui.guardar_env({"IA_MODEL": "a\nb"}, ruta=env)
+        texto = env.read_text(encoding="utf-8")
+        self.assertIn("EXISTE=1", texto)
+        self.assertIn("IA_MODEL=a b", texto)  # un salto rompería el archivo
+        self.assertNotIn("IA_MODEL=a\nb", texto)
+
+
+class TestFuentesStore(unittest.TestCase):
+    """Sondas de scraping (source_sites) SIN Tk."""
+
+    def setUp(self):
+        self.temp_dir = tempfile.TemporaryDirectory()
+        self.database = Database(Path(self.temp_dir.name) / "fuentes.db")
+        self.database.initialize()
+        self.repository = Repository(self.database)
+        self.repository.register_platform("workday", "Workday", "api")
+        self.repository.register_platform("greenhouse", "Greenhouse", "api")
+        self.repository.register_site(
+            "intel-cr", "workday", "Intel Careers CR",
+            "https://intel.example.test", company_name="Intel", country="CR",
+        )
+        self.repository.register_site(
+            "acme-cr", "greenhouse", "Acme CR",
+            "https://acme.example.test", company_name="Acme", country="CR",
+        )
+        self.store = FuentesStore(self.repository)
+
+    def tearDown(self):
+        self.temp_dir.cleanup()
+
+    def test_lista_las_sondas_con_su_plataforma(self):
+        filas = self.store.sitios()
+        self.assertEqual(len(filas), 2)
+        por_id = {f.site_id: f for f in filas}
+        self.assertEqual(por_id["intel-cr"].plataforma, "Workday")
+        self.assertEqual(por_id["intel-cr"].tipo, "api")
+        self.assertTrue(por_id["intel-cr"].activo)
+
+    def test_plataformas_ordenadas_y_conteo(self):
+        self.assertEqual(self.store.plataformas(), ["Greenhouse", "Workday"])
+        self.assertEqual(self.store.conteo(), (2, 2))
+
+    def test_alternar_persiste_en_la_bd_sin_borrar_nada(self):
+        cambiadas = self.store.alternar(["intel-cr", "acme-cr"], False)
+        self.assertEqual(cambiadas, 2)
+        self.assertEqual(self.store.conteo(), (0, 2))
+        habilitados = {s["site_id"]: s["enabled"]
+                       for s in self.repository.list_sites()}
+        self.assertEqual(habilitados, {"intel-cr": False, "acme-cr": False})
+        # Reactivar vuelve al estado original (nada se pierde).
+        self.store.alternar(["intel-cr", "acme-cr"], True)
+        self.assertEqual(self.store.conteo(), (2, 2))
+
+    def test_alternar_un_id_inexistente_no_cambia_nada(self):
+        self.assertEqual(self.store.alternar(["no-existe"], False), 0)
+        self.assertEqual(self.store.conteo(), (2, 2))
+
+
+class TestConfiguracionTab(unittest.TestCase):
+    """La pestaña de Configuración monta, pausa sondas y cambia esquemas."""
+
+    def setUp(self):
+        self.temp_dir = tempfile.TemporaryDirectory()
+        temp = Path(self.temp_dir.name)
+        self.database = Database(temp / "config-ui.db")
+        self.database.initialize()
+        self.repository = Repository(self.database)
+        self.repository.register_platform("workday", "Workday", "api")
+        self.repository.register_platform("greenhouse", "Greenhouse", "api")
+        self.repository.register_site(
+            "intel-cr", "workday", "Intel Careers CR",
+            "https://intel.example.test", company_name="Intel", country="CR",
+        )
+        self.repository.register_site(
+            "acme-cr", "greenhouse", "Acme CR",
+            "https://acme.example.test", company_name="Acme", country="CR",
+        )
+        self.ruta_cfg = temp / "ui_config.json"
+
+        # Nada de red, nada de diálogos modales, nada de .env real.
+        self.showinfo = unittest.mock.MagicMock(side_effect=lambda *a, **k: None)
+        self.showwarning = unittest.mock.MagicMock(side_effect=lambda *a, **k: None)
+        self.showerror = unittest.mock.MagicMock(side_effect=lambda *a, **k: None)
+        # La pestaña actualiza os.environ al guardar: se restaura al final.
+        self._env_ia = {clave: os.environ.get(clave) for clave in
+                        ("IA_PROVEEDOR", "IA_BASE_URL", "IA_MODEL",
+                         "IA_API_KEY", "IA_MAX_LLAMADAS", "IA_RPM")}
+        self.addCleanup(self._restaurar_env_ia)
+        config_mod._HANDLE_SERVIDOR = None  # el global no se hereda entre tests
+        parches = [
+            unittest.mock.patch.object(config_ui, "ARCHIVO", self.ruta_cfg),
+            unittest.mock.patch.object(config_mod, "servidor_arriba",
+                                        return_value=False),
+            unittest.mock.patch.object(config_mod, "confirmar",
+                                        return_value=True),
+            unittest.mock.patch.object(config_mod.messagebox, "showinfo",
+                                        self.showinfo),
+            unittest.mock.patch.object(config_mod.messagebox, "showwarning",
+                                        self.showwarning),
+            unittest.mock.patch.object(config_mod.messagebox, "showerror",
+                                        self.showerror),
+            unittest.mock.patch("dotenv.load_dotenv", return_value=False),
+            unittest.mock.patch("jobpulse_v15.ia_servidor.load_dotenv",
+                                return_value=False),
+        ]
+        for parche in parches:
+            parche.start()
+            self.addCleanup(parche.stop)
+        self.addCleanup(setattr, config_mod, "_HANDLE_SERVIDOR", None)
+
+        self.root = _tkroot_reintentos()
+        self.theme = apply_theme(self.root)
+        self.shell = AppShell(self.root, self.repository, theme=self.theme)
+        self.shell.mostrar(3)  # pestaña "configuracion"
+        self.pestana = self.shell.pestana_activa()
+        self.assertEqual(self.pestana.key, "configuracion")
+
+    def tearDown(self):
+        for _ in range(5):  # drena los after de los hilos antes de destruir
+            self.root.update()
+            time.sleep(0.01)
+        self.root.update_idletasks()
+        self.root.destroy()
+        gc.collect()
+        self.temp_dir.cleanup()
+
+    def _esperar(self, cond, timeout: float = 3.0) -> bool:
+        limite = time.time() + timeout
+        while time.time() < limite:
+            self.root.update()
+            if cond():
+                return True
+            time.sleep(0.02)
+        return bool(cond())
+
+    def _restaurar_env_ia(self) -> None:
+        for clave, valor in self._env_ia.items():
+            if valor is None:
+                os.environ.pop(clave, None)
+            else:
+                os.environ[clave] = valor
+
+    def test_la_pestana_esta_registrada(self):
+        claves = [clase.key for clase in PESTANIAS]
+        self.assertIn("configuracion", claves)
+        self.assertEqual(claves, ["crudos", "perfil", "vacantes",
+                                  "configuracion"])
+
+    def test_monta_las_cinco_tarjetas_y_lista_las_sondas(self):
+        self.root.update()
+        for clave in ("ia_estado", "ia_proveedor", "tabla", "paleta",
+                      "sondas_hint"):
+            with self.subTest(widget=clave):
+                self.assertIn(clave, self.pestana._widgets)
+        self.assertEqual(len(self.pestana._widgets["tabla"].get_children()), 2)
+        self.assertEqual(self.pestana._widgets["sondas_hint"].cget("text"),
+                         "2 de 2 activas")
+        # El estado de la IA local se pinta desde el hilo (servidor_arriba
+        # parcheado a False → "apagado"); si no llega, el after nunca corre.
+        self.assertTrue(self._esperar(
+            lambda: "apagado" in self.pestana._widgets["ia_estado"].cget("text")
+            or "ARRIBA" in self.pestana._widgets["ia_estado"].cget("text")))
+
+    def test_pausar_seleccion_persiste_y_muestra_el_aviso(self):
+        self.root.update()
+        tabla = self.pestana._widgets["tabla"]
+        tabla.selection_set(*tabla.get_children())
+        self.pestana.pausar_seleccion()
+        self.root.update()
+        self.assertEqual(self.pestana._widgets["sondas_hint"].cget("text"),
+                         "0 de 2 activas")
+        # Ninguna corrida verá estas fuentes: select_sites() las excluye.
+        self.assertEqual(
+            {s["site_id"]: s["enabled"] for s in self.repository.list_sites()},
+            {"intel-cr": 0, "acme-cr": 0})
+        aviso = self.pestana._widgets["sondas_aviso"]
+        self.assertTrue(aviso.grid_info())  # visible (grid_remove → grid())
+
+    def test_pausar_todas_respeta_la_confirmacion(self):
+        self.root.update()
+        with unittest.mock.patch.object(config_mod, "confirmar",
+                                        return_value=False):
+            self.pestana.pausar_todas()
+        self.root.update()
+        self.assertEqual(self.pestana._widgets["sondas_hint"].cget("text"),
+                         "2 de 2 activas")
+        with unittest.mock.patch.object(config_mod, "confirmar",
+                                        return_value=True):
+            self.pestana.pausar_todas()
+        self.root.update()
+        self.assertEqual(self.pestana._widgets["sondas_hint"].cget("text"),
+                         "0 de 2 activas")
+        self.pestana.activar_todas()
+        self.root.update()
+        self.assertEqual(self.pestana._widgets["sondas_hint"].cget("text"),
+                         "2 de 2 activas")
+        self.assertFalse(self.pestana._widgets["sondas_aviso"].grid_info())
+
+    def test_filtro_por_plataforma_acota_la_tabla(self):
+        self.root.update()
+        self.pestana._widgets["sondas_filtro"].set("Workday")
+        self.pestana.refresh()
+        self.root.update()
+        hijos = self.pestana._widgets["tabla"].get_children()
+        self.assertEqual(hijos, ("intel-cr",))
+
+    def test_guardar_ia_escribe_el_env_y_valida_los_limites(self):
+        self.root.update()
+        with unittest.mock.patch.object(config_ui, "guardar_env") as guardar:
+            self.pestana._widgets["ia_proveedor"].set("Ollama (local)")
+            self.pestana._on_proveedor()
+            # El preset rellena base_url/modelo (combo muestra nombres).
+            self.assertEqual(self.pestana._get("ia_base_url"),
+                             "http://localhost:11434/v1")
+            self.pestana._set("ia_max", "100")
+            self.pestana._set("ia_rpm", "")
+            self.pestana.guardar_ia()
+        self.assertTrue(guardar.called)
+        valores = guardar.call_args.args[0]
+        self.assertEqual(valores["IA_PROVEEDOR"], "ollama")  # clave, no nombre
+        self.assertEqual(valores["IA_MAX_LLAMADAS"], "100")
+        self.assertEqual(valores["IA_RPM"], "")  # vacío = sin tope
+
+        with unittest.mock.patch.object(config_ui, "guardar_env") as guardar:
+            self.pestana._set("ia_max", "no-es-numero")
+            self.pestana.guardar_ia()
+        self.assertFalse(guardar.called)
+        self.assertTrue(self.showwarning.called)
+
+    def test_guardar_ia_toma_effecto_en_la_misma_sesion(self):
+        """load_dotenv NO pisa variables ya presentes: se actualiza os.environ."""
+        self.root.update()
+        with unittest.mock.patch.object(config_ui, "guardar_env"):
+            self.pestana._widgets["ia_proveedor"].set("NVIDIA NIM")
+            self.pestana._on_proveedor()
+            self.pestana.guardar_ia()
+        self.assertEqual(os.environ.get("IA_PROVEEDOR"), "nvidia")
+        self.assertEqual(os.environ.get("IA_BASE_URL"),
+                         "https://integrate.api.nvidia.com/v1")
+
+    def test_listar_modelos_devuelve_la_lista_del_endpoint(self):
+        self.root.update()
+
+        class ClienteFalso:
+            def __init__(self, config):
+                self.config = config
+
+            async def listar_modelos(self):
+                return ["modelo-a", "modelo-b"]
+
+        with unittest.mock.patch("jobpulse_v15.ia_api.IAClient", ClienteFalso):
+            self.pestana.listar_modelos()
+            self.assertTrue(self._esperar(lambda: self.showinfo.called))
+        texto = self.showinfo.call_args.args[1]
+        self.assertIn("modelo-a", texto)
+        self.assertIn("modelo-b", texto)
+
+    def test_cambiar_el_esquema_guarda_y_reconstruye_la_app(self):
+        self.root.update()
+        self.pestana._widgets["paleta"].set("Oscuro")
+        self.pestana.aplicar_paleta()
+        self.assertTrue(self._esperar(
+            lambda: self.shell.theme.color("bg") == PALETAS["oscuro"].bg),
+            "la app no se reconstruyó con la paleta oscura")
+        datos = config_ui.cargar()
+        self.assertEqual(datos.get("paleta"), "oscuro")
+        # Sigue siendo la misma app: 4 pestañas y la activa conservada.
+        self.assertEqual(len(self.shell.instancias), len(PESTANIAS))
+        self.assertEqual(self.shell.pestana_activa().key, "configuracion")
+        # La nueva instancia ya arranca con la paleta elegida.
+        self.assertEqual(
+            self.shell.pestana_activa()._widgets["paleta"].get(), "Oscuro")
+
+    def test_directorio_csv_se_guarda_y_se_puede_limpiar(self):
+        self.root.update()
+        carpeta = Path(self.temp_dir.name) / "exports"
+        carpeta.mkdir()
+        with unittest.mock.patch.object(
+                config_mod.filedialog, "askdirectory",
+                return_value=str(carpeta)):
+            self.pestana._elegir_directorio()
+        self.root.update()
+        self.assertEqual(self.pestana._csv_var.get(), str(carpeta))
+        self.assertEqual(config_ui.directorio_csv(), str(carpeta))
+        self.pestana._usar_predeterminado()
+        self.assertEqual(config_ui.cargar().get("csv_dir"), "")
+
+    def test_arrancar_y_detener_la_ia_local(self):
+        """O7.3: se guarda SOLO el handle que arrancó esta UI y se detiene."""
+        self.root.update()
+        handle = unittest.mock.MagicMock()
+        with unittest.mock.patch.object(config_mod, "asegurar_servidor",
+                                        return_value=handle) as asegurar:
+            self.pestana.arrancar_ia_local()
+            self.assertTrue(self._esperar(
+                lambda: config_mod._HANDLE_SERVIDOR is not None))
+        asegurar.assert_called_once()
+        self.assertIs(config_mod._HANDLE_SERVIDOR, handle)
+
+        self.pestana.detener_ia_local()
+        self.assertTrue(self._esperar(
+            lambda: config_mod._HANDLE_SERVIDOR is None))
+        handle.detener.assert_called_once()
+
+    def test_detener_sin_handle_propio_es_noop(self):
+        """Si la IA la arrancó otro, esta UI jamás la apaga (O7.3)."""
+        self.root.update()
+        self.assertIsNone(config_mod._HANDLE_SERVIDOR)
+        self.pestana.detener_ia_local()  # no debe lanzar ni lanzar hilos
+        self.assertIsNone(config_mod._HANDLE_SERVIDOR)
+        self.assertFalse(self.showerror.called)
 
 
 if __name__ == "__main__":

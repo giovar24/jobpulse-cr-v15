@@ -19,6 +19,7 @@ import webbrowser
 from tkinter import filedialog, messagebox, ttk
 from typing import Any
 
+from jobpulse_v15.ui_v2 import configuracion
 from jobpulse_v15.ui_v2.data.vacantes import (
     AtsStore,
     ETIQUETAS_VEREDICTO,
@@ -554,10 +555,12 @@ class VacantesTab(BaseTab):
         if not filas:
             messagebox.showinfo("Exportar CSV", "No hay vacantes en la vista para exportar.")
             return
+        dir_csv = configuracion.directorio_csv()
         ruta = filedialog.asksaveasfilename(
             defaultextension=".csv",
             filetypes=[("CSV", "*.csv"), ("Todos los archivos", "*.*")],
             initialfile="vacantes_ranking_ats.csv",
+            **({"initialdir": dir_csv} if dir_csv else {}),
         )
         if not ruta:
             return

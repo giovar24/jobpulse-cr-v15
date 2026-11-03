@@ -123,13 +123,14 @@ Cuando el usuario dice "vamos a otra sesión":
 .\.venv\Scripts\python.exe -X utf8 clean_run.py SI
 
 # Tests: pytest vive en el python del SISTEMA (el venv NO lo tiene).
-python -m pytest tests/ -q   # baseline 2026-11-03: 592 passed + 204 subtests
+python -m pytest tests/ -q   # baseline 2026-11-03: 613 passed + 209 subtests
 
 # UI clásica (completa, intacta)
 .\.venv\Scripts\python.exe -m jobpulse_v15.ui
 
-# UI v2 (plana y modular; por ahora: Datos crudos + Perfil + Vacantes) — ver
-# docs/UI_V2_ARQUITECTURA.md. Agregar una pestaña = módulo + 1 línea en PESTANIAS.
+# UI v2 (plana y modular; por ahora: Datos crudos + Perfil + Vacantes +
+# Configuración) — ver docs/UI_V2_ARQUITECTURA.md. Agregar una pestaña =
+# módulo + 1 línea en PESTANIAS.
 .\jobpulse-v15-v2.bat
 .\.venv\Scripts\python.exe -X utf8 -m jobpulse_v15.ui_v2
 
@@ -238,6 +239,8 @@ ese caso mandan los que pide. Implementación: `matching.requisitos_efectivos`
 - La **comparación de la UI** aplica la MISMA regla
   (`Repository._requisitos_con_regla_de_idioma`): UI y CLI no divergen.
 
+### Regla de EDUCACIÓN del título (2026-10-30)
+
 - `descartada` **solo** si el TEXTO de la oferta confirma título universitario
   obligatorio, sin negación y sin alternativa (en la cláusula/grupo completo);
   ante la duda → `revisar_a_mano`. **Nunca descartar por falta de
@@ -263,6 +266,9 @@ ese caso mandan los que pide. Implementación: `matching.requisitos_efectivos`
   Decisiones de negocio ya resueltas con fuente (ISCED 2011/OECD): "advanced
   university studies" = posgrado (4) · "two year college degree"/"associate
   degree" = ciclo corto (2) · "% de completitud" = parciales (3 sin título).
+
+### Transversales del Paso 5 (umbrales, código canónico, firma)
+
 - **Umbrales congelados** (cobertura 0.60 / puntaje 0.80): no tocar sin
   acuerdo explícito.
 - **Las sumas de estado se confirman por `GROUP BY estado`** — la BD manda sobre
@@ -295,10 +301,8 @@ Taxonomía del SISTEMA en la BD (`area` + `area_regla`, sembrada desde
 desmarca (pestaña **“Áreas de empleo”** en `ui_perfil.py` → hechos
 `candidate_profile_facts.category='area'`).
 
-- **20 áreas**: informática, ingeniería, producción, mantenimiento,
-  administración/finanzas, ventas, servicio al cliente, RR.HH., logística,
-  almacén, salud, calidad, marketing, legal/cumplimiento, seguridad,
-  alimentación/hotelería, automotriz, educación, construcción y **otros**.
+- **20 áreas** (lista canónica: `src/jobpulse_v15/seeds/areas.json`; `otros`
+  absorbe ambigüedades y ofertas sin clasificar).
 - La clasificación es por el **TÍTULO** y es la MISMA para cualquier fuente
   (Workday, ANE, Indeed, LinkedIn, Elempleo, Harvie, CINDE, Procomer): al
   guardar una vacante nueva se clasifica sola (`Repository.save_job`).
@@ -430,24 +434,27 @@ desmarca (pestaña **“Áreas de empleo”** en `ui_perfil.py` → hechos
     son las que el perfil cubre (cotejo por tokens, con alias de
     fabricante: "Microsoft Excel" ≈ "Excel Avanzado").
 
-## Estado de referencia (verificado 2026-11-03, tras la pestaña de Vacantes)
+## Estado de referencia (verificado 2026-11-03, tras la pestaña de Configuración)
 
-- Suite: **592 tests verdes** + 204 subtests (`python -m pytest tests/ -q`,
-  ~1.4 min); `test_matching.py` 87, `test_areas.py` 20, `test_ubicaciones_cr.py`
-  35, `test_idiomas.py` 7, `test_salario.py` 16, `test_ats_ranking.py` 44,
-  `test_ui_v2.py` 31.
+- Suite: **613 tests verdes** + 209 subtests (`python -m pytest tests/ -q`,
+  ~2 min); `test_matching.py` 87, `test_areas.py` 20, `test_ubicaciones_cr.py`
+  34, `test_idiomas.py` 7, `test_salario.py` 16, `test_ats_ranking.py` 44,
+  `test_ui_v2.py` 52.
 - **UI v2 (`src/jobpulse_v15/ui_v2/`, 2026-11-02)**: interfaz **plana y
   modular** que convive con la UI clásica (`ui.py`, intacta). Lanzador
   `jobpulse-v15-v2.bat` o `python -m jobpulse_v15.ui_v2`. Capas: `theme.py`
-  (única fuente de estilo), `widgets.py`, `dialogs.py`, `data/` (stores **sin
-  Tk**), `tabs/base.py` (contrato), `tabs/*.py`, `app.py` (shell + `PESTANIAS`).
+  (única fuente de estilo), `widgets.py`, `dialogs.py`, `configuracion.py`
+  (persistencia **sin Tk**), `data/` (stores **sin Tk**), `tabs/base.py`
+  (contrato), `tabs/*.py`, `app.py` (shell + `PESTANIAS`).
   Agregar una pestaña = módulo nuevo + 1 línea en `PESTANIAS`. Pestañas:
   **Datos crudos** (avisos con valores originales + panel de texto crudo +
   export CSV), **Perfil** (importar CV con diálogo de revisión revertible +
-  alta/edición manual de `candidate_profile_facts`) y **Vacantes**
+  alta/edición manual de `candidate_profile_facts`), **Vacantes**
   (**ranking ATS** de los avisos contra el perfil: score 0-100, veredicto,
-  desglose y skills que faltan; export CSV). Detalle y patrones de Tk:
-  `docs/UI_V2_ARQUITECTURA.md`; gotchas 21–24.
+  desglose y skills que faltan; export CSV) y **Configuración** (IA local
+  —arrancar/detener, O7.3—, IA externa → `.env`, sondas de scraping
+  on/off, esquema de color, directorio por defecto de CSV). Detalle y
+  patrones de Tk: `docs/UI_V2_ARQUITECTURA.md`; gotchas 21–24.
 - **BD `data/jobpulse_v15.db` = corpus REAL del usuario** (corrida manual del
   01-11, sin vaciar: es la evidencia en uso). NO "limpiarla" sin confirmación
   explícita — la única vía es `clean_run.py SI`. Esquema versión **16**; la

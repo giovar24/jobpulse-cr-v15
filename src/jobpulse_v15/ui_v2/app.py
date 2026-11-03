@@ -13,13 +13,20 @@ from typing import Sequence, Type
 
 from jobpulse_v15.db import Database
 from jobpulse_v15.repository import Repository
+from jobpulse_v15.ui_v2.configuracion import paleta_actual
 from jobpulse_v15.ui_v2.data.jobs import JobsStore
 from jobpulse_v15.ui_v2.data.profile import ProfileStore
 from jobpulse_v15.ui_v2.tabs.base import BaseTab, TabContext
+from jobpulse_v15.ui_v2.tabs.configuracion import ConfiguracionTab
 from jobpulse_v15.ui_v2.tabs.crudos import DatosCrudosTab
 from jobpulse_v15.ui_v2.tabs.perfil import PerfilTab
 from jobpulse_v15.ui_v2.tabs.vacantes import VacantesTab
-from jobpulse_v15.ui_v2.theme import Metrics, Palette, Theme, apply_theme
+from jobpulse_v15.ui_v2.theme import (
+    Metrics,
+    Theme,
+    apply_theme,
+    paleta_por_nombre,
+)
 from jobpulse_v15.ui_v2.widgets import FlatButton
 
 # --- REGISTRO DE PESTAÑAS (único lugar que hay que tocar al agregar una) ---
@@ -27,6 +34,7 @@ PESTANIAS: tuple[Type[BaseTab], ...] = (
     DatosCrudosTab,
     PerfilTab,
     VacantesTab,
+    ConfiguracionTab,
 )
 
 
@@ -46,6 +54,9 @@ class AppShell:
             services={
                 "jobs_store": JobsStore(repository),
                 "profile_store": ProfileStore(repository),
+                # Servicio que ConfiguracionTab usa para cambiar el
+                # esquema de color en caliente (reconstruye la app entera).
+                "reconstruir_ui": self.reconstruir_con_paleta,
             },
         )
         self.instancias: list[BaseTab] = []
@@ -197,6 +208,29 @@ class AppShell:
         instancia = self.instancias[self._indice_activo]
         instancia.refresh()
 
+    def reconstruir_con_paleta(self, nombre: str) -> None:
+        """Reconstruye la app entera con la paleta `nombre` (caliente).
+
+        Es el servicio `reconstruir_ui` que invoca ConfiguracionTab tras
+        guardar el nombre en ui_config.json: destruye los widgets viejos,
+        re-aplica el tema al root y vuelve a montar las pestañas (se
+        conserva la activa y los stores del contexto). El handle del
+        servidor IA vive en `tabs.configuracion` (módulo) y por eso
+        sobrevive a este rebuild.
+        """
+        theme = apply_theme(self.root, paleta_por_nombre(nombre), Metrics())
+        self.theme = theme
+        self.contexto.theme = theme
+        for widget in self.root.winfo_children():
+            widget.destroy()
+        self.instancias.clear()
+        self._marcos.clear()
+        self._botones.clear()
+        indice = self._indice_activo
+        self._construir()
+        if self.instancias:
+            self.mostrar(min(indice, len(self.instancias) - 1))
+
     def pestana_activa(self) -> BaseTab | None:
         if not self.instancias:
             return None
@@ -205,11 +239,15 @@ class AppShell:
 
 def crear_app(root: tk.Tk | None = None, database_path: str | Path | None = None,
               *, pestanias: Sequence[Type[BaseTab]] = PESTANIAS):
-    """Crea la app v2 completa (tema + shell) y devuelve (root, shell)."""
+    """Crea la app v2 completa (tema + shell) y devuelve (root, shell).
+
+    Aplica la paleta guardada en ui_config.json (clave «paleta»); si no
+    hay ninguna o es desconocida, cae al esquema por defecto.
+    """
     base = Database(database_path) if database_path else Database()
     base.initialize()
     root = root or tk.Tk()
-    theme = apply_theme(root, Palette(), Metrics())
+    theme = apply_theme(root, paleta_por_nombre(paleta_actual()), Metrics())
     shell = AppShell(root, Repository(base), theme=theme, pestanias=pestanias)
     return root, shell
 

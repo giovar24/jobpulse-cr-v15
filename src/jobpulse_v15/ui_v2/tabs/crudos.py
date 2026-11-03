@@ -12,6 +12,7 @@ import webbrowser
 from tkinter import filedialog, messagebox, ttk
 from typing import Any
 
+from jobpulse_v15.ui_v2 import configuracion
 from jobpulse_v15.ui_v2.data.jobs import (
     JobsStore,
     RawDetail,
@@ -511,10 +512,12 @@ class DatosCrudosTab(BaseTab):
         if not self.filas:
             messagebox.showinfo("Exportar CSV", "No hay avisos en la vista para exportar.")
             return
+        dir_csv = configuracion.directorio_csv()
         ruta = filedialog.asksaveasfilename(
             defaultextension=".csv",
             filetypes=[("CSV", "*.csv"), ("Todos los archivos", "*.*")],
             initialfile="avisos_datos_crudos.csv",
+            **({"initialdir": dir_csv} if dir_csv else {}),
         )
         if not ruta:
             return

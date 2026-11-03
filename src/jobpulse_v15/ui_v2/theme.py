@@ -58,6 +58,74 @@ class Palette:
     row_alt: str = "#FBFCFE"
 
 
+# --- Paletas (esquemas de color) ---------------------------------------------
+# La elegida se guarda en ui_config.json (clave "paleta"); `crear_app()` la
+# aplica al arrancar y ConfiguracionTab puede reconstruir la app en caliente
+# (ver app.reconstruir_con_paleta). Agregar un esquema = 1 entrada aquí.
+
+PALETA_CLARO_AZUL = Palette()
+
+PALETA_CLARO_VERDE = Palette(
+    accent="#047857",
+    accent_hover="#065F46",
+    accent_soft="#D1FAE5",
+    accent_border="#A7F3D0",
+    selection="#D1FAE5",
+    sidebar_active="#047857",
+)
+
+PALETA_OSCURO = Palette(
+    bg="#0F172A",
+    surface="#1E293B",
+    surface_alt="#22304A",
+    surface_hover="#334155",
+    border="#26344A",
+    border_strong="#3B4A61",
+    text="#E2E8F0",
+    text_muted="#94A3B8",
+    text_faint="#64748B",
+    text_inverse="#FFFFFF",
+    accent="#3B82F6",
+    accent_hover="#2563EB",
+    accent_soft="#1E3A8A",
+    accent_border="#2563EB",
+    success="#34D399",
+    success_soft="#065F46",
+    warning="#FBBF24",
+    warning_soft="#92400E",
+    danger="#F87171",
+    danger_soft="#991B1B",
+    neutral_soft="#334155",
+    sidebar_bg="#020617",
+    sidebar_hover="#0F172A",
+    sidebar_active="#1D4ED8",
+    sidebar_text="#94A3B8",
+    sidebar_text_active="#FFFFFF",
+    selection="#1E40AF",
+    row_alt="#1A2436",
+)
+
+PALETAS: dict[str, Palette] = {
+    "claro_azul": PALETA_CLARO_AZUL,
+    "claro_verde": PALETA_CLARO_VERDE,
+    "oscuro": PALETA_OSCURO,
+}
+
+# Nombre visible (lo que muestra el combo de Configuración).
+NOMBRES_PALETA: dict[str, str] = {
+    "claro_azul": "Claro · azul",
+    "claro_verde": "Claro · verde",
+    "oscuro": "Oscuro",
+}
+
+PALETA_DEFECTO = "claro_azul"
+
+
+def paleta_por_nombre(nombre: str | None) -> Palette:
+    """Paleta por nombre; cualquier valor desconocido cae al defecto."""
+    return PALETAS.get(nombre or "", PALETAS[PALETA_DEFECTO])
+
+
 @dataclass(frozen=True)
 class Metrics:
     """Medidas del diseño (unidades en píxeles)."""
