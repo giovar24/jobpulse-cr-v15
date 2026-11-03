@@ -1177,6 +1177,67 @@ class TestConfiguracionTab(unittest.TestCase):
         self.pestana._limpiar_cache(99)
         self.assertFalse(limpiar.called)
 
+    # -- retención --------------------------------------------------
+    def test_la_tarjeta_de_retencion_monta_el_formulario(self):
+        self.root.update()
+        for clave in ("retencion_meses", "retencion_solo_vigentes",
+                      "retencion_estado"):
+            with self.subTest(widget=clave):
+                self.assertIn(clave, self.pestana._widgets)
+
+    def test_guardar_retencion_escribe_la_preferencia(self):
+        from jobpulse_v15 import ciclo_vida
+
+        self.root.update()
+        self.pestana._widgets["retencion_meses"].set("3")
+        self.pestana._widgets["retencion_solo_vigentes"].set(False)
+        self.pestana.guardar_retencion()
+        self.root.update()
+        datos = config_ui.cargar()
+        self.assertEqual(datos[ciclo_vida.CLAVE_RETENCION_PUESTOS], 3)
+        self.assertFalse(datos["solo_vigentes"])
+        self.assertIn("muestra todo",
+                      self.pestana._widgets["retencion_estado"].cget("text"))
+
+    def test_guardar_retencion_con_un_mes_invalido_no_escribe(self):
+        from jobpulse_v15 import ciclo_vida
+
+        self.root.update()
+        self.pestana._widgets["retencion_meses"].set("5")
+        self.pestana.guardar_retencion()
+        self.assertTrue(self.showwarning.called)
+        self.assertNotIn(ciclo_vida.CLAVE_RETENCION_PUESTOS,
+                         config_ui.cargar())
+
+    # -- diagnóstico ------------------------------------------------
+    def test_la_tarjeta_de_diagnostico_monta_el_panel(self):
+        self.root.update()
+        for clave in ("diagnostico_boton", "diagnostico_texto",
+                      "diagnostico_estado"):
+            with self.subTest(widget=clave):
+                self.assertIn(clave, self.pestana._widgets)
+
+    def test_el_diagnostico_pinta_el_informe(self):
+        from jobpulse_v15 import diagnostico as modulo
+
+        self.root.update()
+        reporte = modulo.ReporteDiagnostico(
+            ok=True, base="C:/bd.db", esquema=16, integridad="ok", fk=0,
+            total_jobs=535, analizados=535, requisitos=120,
+            huecos_criticos=10, huecos_secundarios=20,
+            calidad={"total_jobs": 535, "missing_company": 1},
+        )
+        parche = unittest.mock.patch.object(modulo, "diagnostico",
+                                            return_value=reporte)
+        parche.start()
+        self.addCleanup(parche.stop)
+        self.pestana.ejecutar_diagnostico()
+        self.assertTrue(self._esperar(
+            lambda: "Avisos: 535" in
+            self.pestana._widgets["diagnostico_texto"].get("1.0", "end")))
+        self.assertIn("sana",
+                      self.pestana._widgets["diagnostico_estado"].cget("text"))
+
 
 class TestScrapingTab(unittest.TestCase):
     """La pestaña de Scraping monta, filtra por grupo y lanza el barrido."""

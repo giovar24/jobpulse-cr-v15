@@ -154,18 +154,30 @@ def estado_truncado(estado: str) -> str:
 class JobsStore:
     """Acceso a los avisos para la UI v2 (envuelve el `Repository`)."""
 
-    def __init__(self, repository: Repository) -> None:
+    def __init__(self, repository: Repository, retencion_store: Any = None) -> None:
         self.repository = repository
+        if retencion_store is None:
+            from jobpulse_v15.ui_v2.data.retencion import RetencionStore
+
+            retencion_store = RetencionStore()
+        self.retencion = retencion_store
 
     # -- lectura --
     def load(self, query: RawQuery | None = None) -> list[RawRow]:
-        """Avisos que cumplen el filtro, ordenados por última actividad."""
+        """Avisos que cumplen el filtro, ordenados por última actividad.
+
+        Respeta la **retención** (O8/O10): por defecto se ocultan los
+        avisos vencidos o publicados fuera de la ventana (la preferencia
+        "solo vigentes" se cambia en Configuración). Ocultar NO es borrar.
+        """
         consulta = query or RawQuery()
+        solo_vigentes, ventana = self.retencion.ventana_consulta()
         jobs = self.repository.search_jobs(
             text=consulta.texto or None,
             limit=max(1, consulta.limite),
             sort_by="last_seen",
-            solo_vigentes=False,
+            solo_vigentes=solo_vigentes,
+            ventana_retencion_meses=ventana,
         )
         plataformas = self._platform_map()
         filas: list[RawRow] = []

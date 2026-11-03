@@ -54,8 +54,9 @@ SECUNDARIOS = {
 BASURA = "LENGTH(COALESCE(description_raw,'')) < 200"
 
 
-def _connect() -> sqlite3.Connection:
-    con = sqlite3.connect(str(BD))
+def _connect(bd: Path | None = None) -> sqlite3.Connection:
+    ruta = Path(bd) if bd is not None else BD
+    con = sqlite3.connect(str(ruta))
     con.row_factory = sqlite3.Row
     # RE(patron, texto): el MISMO regex que usa el extractor de salario, para
     # que el panel y el extractor no puedan discrepar sobre que avisos
@@ -68,16 +69,20 @@ def _cuenta(con: sqlite3.Connection, where: str) -> int:
     return int(con.execute(f"SELECT COUNT(*) FROM jobs WHERE {where}").fetchone()[0])
 
 
-def snapshot_enriquecimiento() -> Dict[str, Any]:
+def snapshot_enriquecimiento(bd: Path | None = None) -> Dict[str, Any]:
     """Estado de los huecos de la BD en este momento.
 
     Devuelve ``huecos`` (pendientes), ``huecos_recuperables`` (excluyendo
     descripción basura) y ``llenos``/``total`` por familia de campos.
+
+    ``bd`` permite medir OTRA base (la UI v2 lo usa para medir la BD que
+    tiene abierta); por defecto, la del proyecto.
     """
-    if not BD.exists():
+    ruta = Path(bd) if bd is not None else BD
+    if not ruta.exists():
         return {"existe_bd": False, "total": 0, "huecos": {}, "huecos_recuperables": {}}
 
-    con = _connect()
+    con = _connect(ruta)
     try:
         total = int(con.execute("SELECT COUNT(*) FROM jobs").fetchone()[0])
         analizados = int(

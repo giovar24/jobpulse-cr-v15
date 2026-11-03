@@ -2,7 +2,7 @@
 
 Fecha: 2026-11-02. Autor: sesión de UI v2.
 Actualizado: 2026-11-03 (pestaña **Cuentas** + **Paso 5 persistido** +
-tarjeta de **cachés**).
+tarjetas de **cachés**, **retención** y **diagnóstico**).
 
 La **UI clásica** (`src/jobpulse_v15/ui.py`, 3978 líneas) **no se toca**:
 sigue siendo la interfaz completa. La UI v2 vive aparte, en
@@ -25,7 +25,7 @@ Perfil, Vacantes, Scraping, Cuentas, Configuración). El objetivo es
 | `ui_v2/widgets.py` | `Card`, `StatTile`, `Badge`, `SearchField`, `FlatButton`, `EmptyState`, `ScrollFrame`, `SectionTitle`, `KeyValue` | Componentes planos reutilizables |
 | `ui_v2/dialogs.py` | `RevisionImportacionDialog` (revisión de CV), `confirmar()`, `pedir_texto()` | Toplevels reutilizables; no tocan la BD |
 | `ui_v2/configuracion.py` | `cargar`/`guardar` (merge), `paleta_actual`, `directorio_csv`, `guardar_env`, `leer_env`/`valor_env`, `puerto_cdp`, `guardar_navegador` | Persistencia **SIN Tk**: `ui_config.json` (compartido con la UI clásica) y `.env` |
-| `ui_v2/data/*.py` | `JobsStore`, `ProfileStore`, `AtsStore`, `FuentesStore`, `ScrapingStore`, `CuentasStore`, `Paso5Store` + dataclasses | **SIN Tkinter**: las pestañas no ven SQLite ni el keyring |
+| `ui_v2/data/*.py` | `JobsStore`, `ProfileStore`, `AtsStore`, `FuentesStore`, `ScrapingStore`, `CuentasStore`, `Paso5Store`, `RetencionStore` + dataclasses | **SIN Tkinter**: las pestañas no ven SQLite ni el keyring |
 | `ui_v2/tabs/base.py` | `BaseTab`, `TabContext` | El CONTRATO de una pestaña (+ helpers de hilos: cola + vigilante) |
 | `ui_v2/tabs/*.py` | `DatosCrudosTab`, `PerfilTab`, `VacantesTab`, `ScrapingTab`, `CuentasTab`, `ConfiguracionTab` | Composición de widgets; hablan con el store |
 | `ui_v2/app.py` | `AppShell`, `crear_app()`, `main()`, `PESTANIAS` | El shell no conoce el contenido de las pestañas |
@@ -195,7 +195,7 @@ Bugs del dominio corregidos al hacer la pestaña (afectan también al CLI):
 
 ### Configuración (`tabs/configuracion.py`)
 
-Siete tarjetas (una `Card` cada una), modeladas sobre la ventana de
+Nueve tarjetas (una `Card` cada una), modeladas sobre la ventana de
 configuración de la UI clásica pero **planas** y sin Toplevel:
 
 | Tarjeta | Qué configura | Dónde se guarda |
@@ -206,6 +206,8 @@ configuración de la UI clásica pero **planas** y sin Toplevel:
 | **Sondas de scraping** | Activa/pausa fuentes (`source_sites.enabled`), con filtro por plataforma, selección múltiple, "todas" y aviso si no queda ninguna activa | BD (`source_sites`) |
 | **Apariencia** | Esquema de color (`theme.PALETAS`: claro azul / claro verde / oscuro) | `~/.jobpulse_v15/ui_config.json` (clave `paleta`) |
 | **Cachés** | Qué ocupa `data/usuario/` (caché de la IA y caché de embeddings) y botones **Limpiar** | — (disco) |
+| **Retención y vigencia** | Ventana de meses (1/2/3/6/12) y si se ocultan los avisos vencidos (O8/O10) | `~/.jobpulse_v15/ui_config.json` (`retencion_puestos_meses`, `solo_vigentes`) |
+| **Diagnóstico** | Integridad de la BD, calidad de los datos y huecos del enriquecimiento (botón **Ejecutar diagnóstico**) | — (solo lectura) |
 | **Exportaciones CSV** | Directorio inicial de los diálogos "Exportar CSV" | `~/.jobpulse_v15/ui_config.json` (clave `csv_dir`) |
 
 Reglas que esta pestaña respeta:
@@ -281,3 +283,44 @@ Reglas:
 > bloque. En los tests hay que guardar el mock en otra variable
 > (`parche.start()` + `limpiar = parche.start()`) si se quiere usarlo
 > después.
+
+#### Retención y vigencia (O8/O10) — punto 6
+
+La política de qué avisos siguen "vigentes" vive en el **mismo archivo de
+preferencias del sistema** que usa la UI clásica
+(`~/.jobpulse_v15/ui_config.json`):
+
+| Clave | Qué es | Por defecto |
+|---|---|---|
+| `retencion_puestos_meses` | Ventana en meses (1, 2, 3, 6 o 12) | 6 |
+| `solo_vigentes` | ¿La UI oculta los avisos vencidos? | `True` |
+
+- El store `RetencionStore` (`ui_v2/data/retencion.py`) **sin Tk** lee y
+  escribe esas claves (merge: no pisa `paleta`, `csv_dir` ni las de la UI
+  clásica).
+- `JobsStore` (Datos crudos) y `AtsStore` (Vacantes) pasan
+  `solo_vigentes` + `ventana_retencion_meses` a `Repository.search_jobs`,
+  que **OCULTA** (no borra) los avisos vencidos, fuera de ventana o sin
+  fecha legible.
+- La misma instancia del store se comparte por los servicios del shell
+  (`app.py`), así que la pestaña de Configuración y las de avisos hablan
+  de la misma política.
+
+> Ocultar **nunca** es borrar: la BD conserva todo (regla O8).
+
+#### Diagnóstico (punto 6)
+
+El módulo `src/jobpulse_v15/diagnostico.py` (**sin Tk**) reunion en un
+informe de solo lectura las tres medidas que siempre importan:
+
+| Fuente | Qué mide |
+|---|---|
+| `Database.check_integrity()` | `PRAGMA integrity_check`, `foreign_key_check` y versión del esquema |
+| `ia_estado.snapshot_enriquecimiento(bd)` | Huecos (críticos/secundarios) que el pase IA podría rellenar; los "recuperables" excluyen las descripciones basura (< 200 chars) |
+| `Repository.get_data_quality_summary()` | Empresa/país/ubicación sin normalizar, análisis pendiente/parcial/error, campos desconocidos/ambiguos, duplicados potenciales |
+
+En la UI corre **en un hilo** (la BD real tiene 535 avisos) y el informe
+se pinta en un `Text` de solo lectura dentro de la tarjeta
+"Diagnóstico". `ia_estado.snapshot_enriquecimiento` ahora acepta la ruta
+de la BD (`bd=...`) para poder medir la base que la UI tiene abierta y no
+la del proyecto.

@@ -18,6 +18,7 @@ from jobpulse_v15.ui_v2.configuracion import paleta_actual
 from jobpulse_v15.ui_v2.data.jobs import JobsStore
 from jobpulse_v15.ui_v2.data.paso5 import Paso5Store
 from jobpulse_v15.ui_v2.data.profile import ProfileStore
+from jobpulse_v15.ui_v2.data.retencion import RetencionStore
 from jobpulse_v15.ui_v2.tabs.base import BaseTab, TabContext
 from jobpulse_v15.ui_v2.tabs.configuracion import ConfiguracionTab
 from jobpulse_v15.ui_v2.tabs.crudos import DatosCrudosTab
@@ -54,11 +55,15 @@ class AppShell:
         self.repository = repository
         self.theme = theme or apply_theme(root)
         self.pestanias = list(pestanias)
+        # La politica de retencion (O8/O10) la comparten los stores de
+        # avisos y la pestana de Configuracion (misma instancia).
+        retencion_store = RetencionStore()
         self.contexto = TabContext(
             repository=repository,
             theme=self.theme,
             services={
-                "jobs_store": JobsStore(repository),
+                "retencion_store": retencion_store,
+                "jobs_store": JobsStore(repository, retencion_store),
                 "profile_store": ProfileStore(repository),
                 "paso5_store": Paso5Store(repository),
                 # Servicio que ConfiguracionTab usa para cambiar el

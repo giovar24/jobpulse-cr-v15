@@ -116,8 +116,13 @@ def skills_de_aviso(valor: Any) -> list[str]:
 class AtsStore:
     """Calcula y ordena el ranking ATS de las vacantes contra el perfil."""
 
-    def __init__(self, repository: Repository) -> None:
+    def __init__(self, repository: Repository, retencion_store: Any = None) -> None:
         self.repository = repository
+        if retencion_store is None:
+            from jobpulse_v15.ui_v2.data.retencion import RetencionStore
+
+            retencion_store = RetencionStore()
+        self.retencion = retencion_store
 
     # -- datos base --
     def perfil(self) -> dict[str, Any]:
@@ -125,8 +130,17 @@ class AtsStore:
         return perfil_ats_desde_facts(self.repository.list_candidate_profile_facts())
 
     def avisos(self, limite: int = 5000) -> list[dict[str, Any]]:
-        """Avisos guardados (los que la UI puede ver)."""
-        return self.repository.search_jobs(limit=limite)
+        """Avisos guardados (los que la UI puede ver).
+
+        Respeta la **retención** (O8/O10): por defecto solo los avisos
+        vigentes (la preferencia se cambia en Configuración).
+        """
+        solo_vigentes, ventana = self.retencion.ventana_consulta()
+        return self.repository.search_jobs(
+            limit=limite,
+            solo_vigentes=solo_vigentes,
+            ventana_retencion_meses=ventana,
+        )
 
     def areas_por_aviso(self) -> dict[str, str]:
         with self.repository.database.connection() as connection:

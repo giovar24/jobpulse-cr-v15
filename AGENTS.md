@@ -123,7 +123,7 @@ Cuando el usuario dice "vamos a otra sesión":
 .\.venv\Scripts\python.exe -X utf8 clean_run.py SI
 
 # Tests: pytest vive en el python del SISTEMA (el venv NO lo tiene).
-python -m pytest tests/ -q   # baseline 2026-11-03: 694 passed + 235 subtests
+python -m pytest tests/ -q   # baseline 2026-11-03: 718 passed + 241 subtests
 
 # UI clásica (completa, intacta)
 .\.venv\Scripts\python.exe -m jobpulse_v15.ui
@@ -458,14 +458,26 @@ desmarca (pestaña **“Áreas de empleo”** en `ui_perfil.py` → hechos
     del bloque, guardarlo en otra variable (`parche.start()` →
     `mock = parche.start()`), porque `with patch(...) as m:` deja `m`
     sin definir fuera del `with` (NameError).
+31. **La retención OCULTA, nunca borra** (O8/O10): `JobsStore` y `AtsStore`
+    (UI v2) pasan `solo_vigentes` + `ventana_retencion_meses` a
+    `Repository.search_jobs`; la política vive en `ui_config.json`
+    (`retencion_puestos_meses`, `solo_vigentes`) — el MISMO archivo que usa
+    la UI clásica, así que todo se escribe con merge
+    (`ui_v2/data/retencion.py::RetencionStore`).
+32. **El diagnóstico es de SOLO LECTURA**: `jobpulse_v15/diagnostico.py`
+    reúne `Database.check_integrity()` + `ia_estado.snapshot_enriquecimiento(bd)`
+    + `Repository.get_data_quality_summary()`. `snapshot_enriquecimiento`
+    ahora acepta la ruta de la BD (`bd=...`) para medir la base abierta
+    por la UI y no la del proyecto.
 
-## Estado de referencia (verificado 2026-11-03, tras la tarjeta de cachés)
+## Estado de referencia (verificado 2026-11-03, tras retención + diagnóstico)
 
-- Suite: **694 tests verdes** + 235 subtests (`python -m pytest tests/ -q`,
-  ~2 min); `test_matching.py` 87, `test_areas.py` 20, `test_ubicaciones_cr.py`
+- Suite: **718 tests verdes** + 241 subtests (`python -m pytest tests/ -q`,
+  ~3 min); `test_matching.py` 87, `test_areas.py` 20, `test_ubicaciones_cr.py`
   34, `test_idiomas.py` 7, `test_salario.py` 16, `test_ats_ranking.py` 44,
   `test_scraper.py` 11, `test_browser_manager.py` 21, `test_cuentas.py` 9,
-  `test_paso5.py` 6, `test_caches.py` 12, `test_ui_v2.py` 84.
+  `test_paso5.py` 6, `test_caches.py` 12, `test_diagnostico.py` 6,
+  `test_retencion.py` 13, `test_ui_v2.py` 89.
 - **UI v2 (`src/jobpulse_v15/ui_v2/`, 2026-11-02)**: interfaz **plana y
   modular** que convive con la UI clásica (`ui.py`, intacta). Lanzador
   `jobpulse-v15-v2.bat` o `python -m jobpulse_v15.ui_v2`. Capas: `theme.py`
@@ -487,7 +499,9 @@ desmarca (pestaña **“Áreas de empleo”** en `ui_perfil.py` → hechos
   **Configuración** (IA local —arrancar/detener, O7.3—, IA externa → `.env`,
   **navegador Brave/CDP** —ruta, perfil y puerto; Verificar/Abrir/Detener—,
   sondas de scraping on/off, esquema de color, **cachés** —tamaño y
-  limpieza de la caché IA y de embeddings—, directorio por defecto de
+  limpieza de la caché IA y de embeddings—, **retención** —ventana de
+  meses y "solo vigentes"—, **diagnóstico** —integridad, calidad y
+  huecos—, directorio por defecto de
   CSV). Detalle y patrones de Tk: `docs/UI_V2_ARQUITECTURA.md`; gotchas
   21–24, 29–30.
 - **BD `data/jobpulse_v15.db` = corpus REAL del usuario** (corrida manual del
@@ -541,5 +555,5 @@ desmarca (pestaña **“Áreas de empleo”** en `ui_perfil.py` → hechos
   `codigo_canonico` del perfil + migración `017`, las `educacion_no_confirmada`
   sin firma de segunda persona, O5.3 re-barrido de descripciones basura, O6.4
   dedupe de slugs ES/EN al importar CV, sucursal de Harvie en el título,
-  Paso 7, O8.2/O8.4, O2/O4/O9, O10 `solo_vigentes` y pestañas nuevas de la
+  Paso 7, O8.2/O8.4, O2/O4/O9 y pestañas nuevas de la
   UI v2 — el shell ya está listo).

@@ -103,7 +103,8 @@ class VacantesTab(BaseTab):
     def __init__(self, context) -> None:
         super().__init__(context)
         self.store: AtsStore = context.services.setdefault(
-            "ats_store", AtsStore(context.repository)
+            "ats_store",
+            AtsStore(context.repository, context.services.get("retencion_store")),
         )
         self.paso5: Paso5Store = context.services.setdefault(
             "paso5_store", Paso5Store(context.repository)

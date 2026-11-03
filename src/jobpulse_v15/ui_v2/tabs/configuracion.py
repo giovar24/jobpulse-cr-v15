@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
-"""Pestaña "Configuración": IA, navegador, sondas, apariencia, cachés y CSV.
+"""Pestaña "Configuración": IA, navegador, sondas, apariencia, cachés,
+retención, diagnóstico y CSV.
 
-Siete tarjetas (una Card cada una):
+Nueve tarjetas (una Card cada una):
 
 1. **IA local** — estado/arranque/detención del servidor llama.cpp.
    Política O7.3: solo se detiene el servidor que ESTA UI arrancó; uno que
@@ -22,7 +23,11 @@ Siete tarjetas (una Card cada una):
 6. **Cachés** — qué ocupa `data/usuario/` (caché de la IA y caché de
    embeddings) y botones para limpiarlas (el dominio está en
    `jobpulse_v15.caches`, sin Tk).
-7. **Exportaciones CSV** — directorio inicial de los diálogos "Exportar CSV".
+7. **Retención y vigencia** — ventana de meses (1/2/3/6/12) y si se ocultan
+   los avisos vencidos (O8/O10: ocultar, nunca borrar).
+8. **Diagnóstico** — integridad de la BD, calidad de los datos y huecos del
+   enriquecimiento (`jobpulse_v15.diagnostico`, sin Tk; corre en un hilo).
+9. **Exportaciones CSV** — directorio inicial de los diálogos "Exportar CSV".
 
 Patrones: un solo gestor de geometría por padre; hilos que solo tocan Tk vía
 `_programar` (marco.after); ningún color escrito a mano (van de `theme`).
@@ -35,10 +40,12 @@ from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 from typing import Any
 
+from jobpulse_v15.ciclo_vida import MESES_PERMITIDOS
 from jobpulse_v15.configuration_window import IA_PROVIDERS
 from jobpulse_v15.ia_servidor import asegurar_servidor, servidor_arriba
 from jobpulse_v15.ui_v2 import configuracion
 from jobpulse_v15.ui_v2.data.fuentes import FuentesStore
+from jobpulse_v15.ui_v2.data.retencion import RetencionStore
 from jobpulse_v15.ui_v2.dialogs import confirmar
 from jobpulse_v15.ui_v2.tabs.base import BaseTab
 from jobpulse_v15.ui_v2.theme import NOMBRES_PALETA, PALETA_DEFECTO, paleta_por_nombre
@@ -61,13 +68,16 @@ class ConfiguracionTab(BaseTab):
 
     key = "configuracion"
     title = "Configuración"
-    subtitle = "IA, navegador, sondas de scraping, apariencia, cachés y CSV"
+    subtitle = "IA, navegador, sondas, apariencia, cachés, retención y diagnóstico"
     icon = "⚙"
 
     def __init__(self, context) -> None:
         super().__init__(context)
         self.store: FuentesStore = context.services.setdefault(
             "fuentes_store", FuentesStore(context.repository)
+        )
+        self.retencion: RetencionStore = context.services.setdefault(
+            "retencion_store", RetencionStore()
         )
         self._widgets: dict[str, Any] = {}
         self._csv_var = tk.StringVar(value="")
@@ -95,12 +105,15 @@ class ConfiguracionTab(BaseTab):
         self._card_sondas(scroll.inner)
         self._card_apariencia(scroll.inner)
         self._card_caches(scroll.inner)
+        self._card_retencion(scroll.inner)
+        self._card_diagnostico(scroll.inner)
         self._card_csv(scroll.inner)
 
         self._cargar_ia()
         self._cargar_navegador()
         self._cargar_apariencia()
         self._cargar_caches()
+        self._cargar_retencion()
         return marco
 
     # -- tarjeta 1: IA local ----------------------------------------
@@ -555,11 +568,183 @@ class ConfiguracionTab(BaseTab):
             f"{resultado.tamano_liberado} liberados.",
         )
 
-    # -- tarjeta 7: exportaciones CSV -------------------------------
+    # -- tarjeta 7: retención y vigencia ----------------------------
+    def _card_retencion(self, parent: tk.Misc) -> None:
+        theme = self.theme
+        card = Card(parent, theme)
+        card.grid(row=6, column=0, sticky="ew", pady=(0, theme.metrics.gap))
+        card.body.columnconfigure(0, weight=1)
+
+        SectionTitle(card.body, theme, "Retención y vigencia",
+                     hint="O8/O10 · ocultar, nunca borrar").grid(
+            row=0, column=0, sticky="ew")
+
+        form = tk.Frame(card.body, bg=theme.color("surface"))
+        form.grid(row=1, column=0, sticky="ew", pady=(8, 0))
+        form.columnconfigure(1, weight=1)
+
+        tk.Label(
+            form, text="Retención:", bg=theme.color("surface"),
+            fg=theme.color("text_muted"), font=theme.font(9), anchor="w",
+        ).grid(row=0, column=0, sticky="w", pady=3, padx=(0, 10))
+        combo = ttk.Combobox(
+            form, values=[str(m) for m in MESES_PERMITIDOS], state="readonly",
+            width=8, font=theme.font(9),
+        )
+        self._widgets["retencion_meses"] = combo
+        combo.grid(row=0, column=1, sticky="w", pady=3)
+        tk.Label(
+            form, text="meses (un aviso más viejo deja de mostrarse)",
+            bg=theme.color("surface"), fg=theme.color("text_faint"),
+            font=theme.font(8), anchor="w",
+        ).grid(row=0, column=2, sticky="w", padx=(10, 0))
+
+        self._widgets["retencion_solo_vigentes"] = tk.BooleanVar(value=True)
+        ttk.Checkbutton(
+            form, text="Solo vacantes vigentes",
+            variable=self._widgets["retencion_solo_vigentes"],
+        ).grid(row=1, column=0, columnspan=3, sticky="w", pady=(8, 0))
+
+        botones = tk.Frame(card.body, bg=theme.color("surface"))
+        botones.grid(row=2, column=0, sticky="w", pady=(10, 0))
+        FlatButton(botones, theme, "Guardar", command=self.guardar_retencion,
+                   variant="accent").pack(side="left")
+
+        self._widgets["retencion_estado"] = tk.Label(
+            card.body, text="", bg=theme.color("surface"),
+            fg=theme.color("text_muted"), font=theme.font(9), anchor="w",
+        )
+        self._widgets["retencion_estado"].grid(row=3, column=0, sticky="ew",
+                                                pady=(8, 0))
+
+        tk.Label(
+            card.body,
+            text=("La retención solo OCULTA los avisos vencidos o "
+                  "publicados fuera de la ventana: no borra nada de la base. "
+                  "Afecta a las pestañas «Datos crudos» y «Vacantes»."),
+            bg=theme.color("surface"), fg=theme.color("text_faint"),
+            font=theme.font(8), anchor="w", wraplength=760, justify="left",
+        ).grid(row=4, column=0, sticky="ew", pady=(8, 0))
+
+    def _cargar_retencion(self) -> None:
+        """Puebla la tarjeta con la política vigente."""
+        try:
+            retencion = self.retencion.retencion()
+        except Exception as exc:  # noqa: BLE001
+            etiqueta = self._widgets.get("retencion_estado")
+            if etiqueta is not None:
+                etiqueta.configure(text=f"No se pudo leer: {exc}")
+            return
+        self._widgets["retencion_meses"].set(str(retencion.meses))
+        self._widgets["retencion_solo_vigentes"].set(retencion.solo_vigentes)
+        estado = (f"Vigencia: {retencion.texto_corte} · "
+                  f"{'solo vigentes' if retencion.solo_vigentes else 'muestra todo'}")
+        self._widgets["retencion_estado"].configure(text=estado)
+
+    def guardar_retencion(self) -> None:
+        """Guarda la ventana de retención y la preferencia de vigencia."""
+        texto = str(self._widgets["retencion_meses"].get() or "").strip()
+        if texto not in {str(m) for m in MESES_PERMITIDOS}:
+            self._warn("Retención inválida",
+                       "Elige una ventana válida (1, 2, 3, 6 o 12 meses).")
+            return
+        meses = int(texto)
+        try:
+            self.retencion.guardar_meses(meses)
+            self.retencion.guardar_solo_vigentes(
+                bool(self._widgets["retencion_solo_vigentes"].get()))
+        except (ValueError, OSError) as exc:
+            self._error("No se pudo guardar la retención", str(exc))
+            return
+        self._cargar_retencion()
+        self._info("Retención guardada",
+                   "Se aplicó a las pestañas «Datos crudos» y «Vacantes».\n"
+                   "Recuerda: ocultar no es borrar.")
+
+    # -- tarjeta 8: diagnóstico --------------------------------------
+    def _card_diagnostico(self, parent: tk.Misc) -> None:
+        theme = self.theme
+        card = Card(parent, theme)
+        card.grid(row=7, column=0, sticky="ew", pady=(0, theme.metrics.gap))
+        card.body.columnconfigure(0, weight=1)
+
+        SectionTitle(card.body, theme, "Diagnóstico",
+                     hint="integridad · calidad · huecos").grid(
+            row=0, column=0, sticky="ew")
+
+        barra = tk.Frame(card.body, bg=theme.color("surface"))
+        barra.grid(row=1, column=0, sticky="ew", pady=(8, 0))
+        self._widgets["diagnostico_boton"] = FlatButton(
+            barra, theme, "Ejecutar diagnóstico", variant="accent",
+            command=self.ejecutar_diagnostico,
+        )
+        self._widgets["diagnostico_boton"].pack(side="left")
+        self._widgets["diagnostico_estado"] = tk.Label(
+            barra, text="", bg=theme.color("surface"),
+            fg=theme.color("text_muted"), font=theme.font(9), anchor="w",
+        )
+        self._widgets["diagnostico_estado"].pack(side="left", padx=(12, 0))
+
+        contenedor = tk.Frame(card.body, bg=theme.color("surface_alt"),
+                              highlightbackground=theme.color("border"),
+                              highlightthickness=1)
+        contenedor.grid(row=2, column=0, sticky="ew", pady=(8, 0))
+        texto = tk.Text(
+            contenedor, height=14, wrap="word", bd=0, relief="flat",
+            bg=theme.color("surface_alt"), fg=theme.color("text"),
+            font=theme.mono(9), padx=10, pady=8, state="disabled",
+        )
+        texto.pack(side="left", fill="both", expand=True)
+        self._widgets["diagnostico_texto"] = texto
+        self._set_texto(texto, "Pulsa «Ejecutar diagnóstico» para revisar "
+                                 "la base de datos (solo lectura).")
+
+    def ejecutar_diagnostico(self) -> None:
+        """Corre el diagnóstico en un hilo y pinta el informe."""
+        boton = self._widgets.get("diagnostico_boton")
+        if boton is not None:
+            boton.configure(state="disabled")
+        estado = self._widgets.get("diagnostico_estado")
+        if estado is not None:
+            estado.configure(text="Diagnosticando…")
+
+        def tarea() -> None:
+            from jobpulse_v15 import diagnostico as modulo
+
+            reporte = modulo.diagnostico(self.context.repository)
+            self._programar(lambda: self._pintar_diagnostico(reporte))
+
+        self._lanzar_hilo(tarea)
+
+    def _pintar_diagnostico(self, reporte: Any) -> None:
+        boton = self._widgets.get("diagnostico_boton")
+        if boton is not None:
+            boton.configure(state="normal")
+        estado = self._widgets.get("diagnostico_estado")
+        if estado is not None:
+            estado.configure(
+                text=reporte.estado_integridad,
+                fg=self.theme.color("success" if reporte.ok else "danger"),
+            )
+        texto = self._widgets.get("diagnostico_texto")
+        if texto is not None:
+            self._set_texto(texto, reporte.texto())
+
+    def _set_texto(self, widget: tk.Text, contenido: str) -> None:
+        """Escribe en un Text de solo lectura."""
+        try:
+            widget.configure(state="normal")
+            widget.delete("1.0", "end")
+            widget.insert("1.0", contenido or "—")
+            widget.configure(state="disabled")
+        except tk.TclError:
+            pass
+
+    # -- tarjeta 9: exportaciones CSV -------------------------------
     def _card_csv(self, parent: tk.Misc) -> None:
         theme = self.theme
         card = Card(parent, theme)
-        card.grid(row=6, column=0, sticky="ew")
+        card.grid(row=8, column=0, sticky="ew")
         card.body.columnconfigure(0, weight=1)
 
         SectionTitle(card.body, theme, "Exportaciones CSV",
@@ -598,6 +783,7 @@ class ConfiguracionTab(BaseTab):
         self.verificar_ia_local()
         self.verificar_cdp()
         self._cargar_caches()
+        self._cargar_retencion()
 
     def refresh(self) -> None:
         """Recarga las sondas (el resto NO: no pisar ediciones del usuario)."""
