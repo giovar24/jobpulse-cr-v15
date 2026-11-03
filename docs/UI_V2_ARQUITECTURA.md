@@ -1,13 +1,13 @@
 # UI v2 — arquitectura (plana y modular)
 
 Fecha: 2026-11-02. Autor: sesión de UI v2.
-Actualizado: 2026-11-03 (pestaña **Configuración**).
+Actualizado: 2026-11-03 (pestaña **Cuentas**).
 
 La **UI clásica** (`src/jobpulse_v15/ui.py`, 3978 líneas) **no se toca**:
 sigue siendo la interfaz completa. La UI v2 vive aparte, en
-`src/jobpulse_v15/ui_v2/`, y por ahora trae cinco pestañas (Datos crudos,
-Perfil, Vacantes, Scraping, Configuración). El objetivo es **agregar
-funciones sin comprometer lo que ya funciona**.
+`src/jobpulse_v15/ui_v2/`, y por ahora trae seis pestañas (Datos crudos,
+Perfil, Vacantes, Scraping, Cuentas, Configuración). El objetivo es
+**agregar funciones sin comprometer lo que ya funciona**.
 
 ## Arranque
 
@@ -22,11 +22,11 @@ funciones sin comprometer lo que ya funciona**.
 |---|---|---|
 | `ui_v2/theme.py` | `Palette`, `Metrics`, `Theme`, `apply_theme()`, `PALETAS` | ÚNICA fuente de color, tipografía y espaciado |
 | `ui_v2/widgets.py` | `Card`, `StatTile`, `Badge`, `SearchField`, `FlatButton`, `EmptyState`, `ScrollFrame`, `SectionTitle`, `KeyValue` | Componentes planos reutilizables |
-| `ui_v2/dialogs.py` | `RevisionImportacionDialog` (revisión de CV), `confirmar()` | Toplevels reutilizables; no tocan la BD |
+| `ui_v2/dialogs.py` | `RevisionImportacionDialog` (revisión de CV), `confirmar()`, `pedir_texto()` | Toplevels reutilizables; no tocan la BD |
 | `ui_v2/configuracion.py` | `cargar`/`guardar` (merge), `paleta_actual`, `directorio_csv`, `guardar_env`, `leer_env`/`valor_env`, `puerto_cdp`, `guardar_navegador` | Persistencia **SIN Tk**: `ui_config.json` (compartido con la UI clásica) y `.env` |
-| `ui_v2/data/*.py` | `JobsStore`, `ProfileStore`, `AtsStore`, `FuentesStore`, `ScrapingStore` + dataclasses | **SIN Tkinter**: las pestañas no ven SQLite |
+| `ui_v2/data/*.py` | `JobsStore`, `ProfileStore`, `AtsStore`, `FuentesStore`, `ScrapingStore`, `CuentasStore` + dataclasses | **SIN Tkinter**: las pestañas no ven SQLite ni el keyring |
 | `ui_v2/tabs/base.py` | `BaseTab`, `TabContext` | El CONTRATO de una pestaña (+ helpers de hilos: cola + vigilante) |
-| `ui_v2/tabs/*.py` | `DatosCrudosTab`, `PerfilTab`, `VacantesTab`, `ScrapingTab`, `ConfiguracionTab` | Composición de widgets; hablan con el store |
+| `ui_v2/tabs/*.py` | `DatosCrudosTab`, `PerfilTab`, `VacantesTab`, `ScrapingTab`, `CuentasTab`, `ConfiguracionTab` | Composición de widgets; hablan con el store |
 | `ui_v2/app.py` | `AppShell`, `crear_app()`, `main()`, `PESTANIAS` | El shell no conoce el contenido de las pestañas |
 
 El flujo de una pestaña es: **widgets → store (dataclasses) → Repository → BD**.
@@ -150,6 +150,32 @@ que toca la arquitectura:
 - El dispatcher canónico `scrape_dispatch.construir_llamada` ahora pasa
   `skip_source_job_ids` (las ofertas descartadas a mano): el CLI ya lo
   hacía, el dispatcher no, y por eso se re-procesaba lo descartado.
+
+### Cuentas (`tabs/cuentas.py`)
+
+Las **credenciales de los sitios que piden login** (ANE, Indeed, LinkedIn y
+todo lo que los proveedores detectaron en vivo). Es la versión plana de la
+pestaña "Credenciales / Login" de la UI clásica.
+
+- El store `CuentasStore` (`data/cuentas.py`) envuelve
+  `jobpulse_v15.credenciales` (la única verdad) y devuelve dataclasses
+  (`SitioCuenta`) **sin la contraseña**.
+- La tabla lista: sitio, grupo, método de acceso, usuario, estado
+  (con credencial / pendiente / sin credencial) y auto-login.
+- El formulario edita: sitio, usuario, contraseña, método SSO, URL y nota;
+  además **Agregar sitio** y **Quitar sitio** (los *seeds* del sistema —ANE,
+  Indeed, LinkedIn— no se pueden quitar).
+- La **contraseña nunca se lee ni se muestra**: el campo arranca vacío y
+  vacío significa "conserva la que ya está guardada". Al guardar, la clave va
+  al **Administrador de Credenciales de Windows** (keyring) y los metadatos a
+  `data/empresas/credenciales.json` (gitignored).
+
+Bugs del dominio corregidos al hacer la pestaña (afectan también al CLI):
+
+| Bug | Antes | Ahora |
+|---|---|---|
+| `usuario=None` reventaba | `usuario.strip()` → `AttributeError` (la UI clásica pasaba `... or None`) | `upsert_credencial` normaliza (`str(usuario or "")`) |
+| `tiene_credencial` siempre False con keyring | el JSON no tiene la contraseña, solo el metadato `password_almacen` | se **verifica contra el almacén** antes de decir que hay credencial |
 
 ### Configuración (`tabs/configuracion.py`)
 

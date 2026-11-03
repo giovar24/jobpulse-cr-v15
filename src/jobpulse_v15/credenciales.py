@@ -463,12 +463,22 @@ def upsert_credencial(empresa: str, usuario: str, password: str = "",
     posterior). El scraper pedira sesion cuando lo necesite.
     """
     era_nuevo = not sitio_en_flujo(empresa)
+    # Normalizar SIEMPRE: los callers (CLI y UI) pueden pasar None (la UI
+    # clásica hacía `usuario=... or None`) y `usuario.strip()` reventaba.
+    empresa = str(empresa or "").strip()
+    usuario = str(usuario or "").strip()
+    password = str(password or "")
+    sso = str(sso or "").strip()
+    url = str(url or "").strip()
+    nota = str(nota or "")
+    if not empresa:
+        return {}
     data = cargar_credenciales()
     clave = _norm(empresa)
     prev = data.get(clave) or {}
     reg = {
-        "empresa": empresa.strip(),
-        "usuario": usuario.strip(),
+        "empresa": empresa,
+        "usuario": usuario,
         "password": "",  # NUNCA texto plano en el JSON; va al keyring
         "sso": (sso or prev.get("sso", "")) if not password else "",
         "url": url or prev.get("url", ""),
@@ -624,19 +634,36 @@ def lista_sitios_login() -> List[dict]:
     pends = _pendientes()
     for k, it in items.items():
         c = None
+        clave_json = ""
         for ck, cv in creds.items():
             if _norm(ck) == k or _norm(cv.get("empresa", "")) == k:
                 c = cv
+                clave_json = ck
                 break
         if c is None and k == "ane":
             c = credencial("ANE")   # fallback .env
         if c and c.get("sso"):
             it["sso"] = c.get("sso")
+        # La contraseña NUNCA está en el JSON (vive en el keyring): el
+        # indicador tiene que preguntar al almacén, no quedarse con el
+        # metadato (si no, una cuenta con clave guardada sale "sin credencial").
+        tiene_password = bool(c.get("password")) if c else False
+        if c and not tiene_password and c.get("password_almacen") == "keyring":
+            tiene_password = bool(_password_leer(clave_json or c.get("empresa", "")))
         it["tiene_credencial"] = bool(
             c and c.get("usuario")
-            and (c.get("password") or c.get("sso") or it.get("sso")))
+            and (tiene_password or c.get("sso") or it.get("sso")))
         it["usuario"] = (c or {}).get("usuario") or (c or {}).get("fuente") or ""
         it["password_fuente"] = (c or {}).get("fuente", "json" if c else "")
+        it["password_almacen"] = (c or {}).get("password_almacen", "")
+        if it["password_almacen"] == "keyring":
+            it["almacen"] = "Administrador de Credenciales"
+        elif it["password_fuente"] == ".env":
+            it["almacen"] = ".env"
+        elif (c or {}).get("password"):
+            it["almacen"] = "archivo local"
+        else:
+            it["almacen"] = ""
         it["acceso"] = ("vía " + it["sso"].capitalize()) if it.get("sso") \
             else ("password" if it["tiene_credencial"] else "")
         p = pends.get(k)

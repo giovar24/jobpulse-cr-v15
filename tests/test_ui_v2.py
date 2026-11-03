@@ -796,7 +796,7 @@ class TestConfiguracionTab(unittest.TestCase):
         self.root = _tkroot_reintentos()
         self.theme = apply_theme(self.root)
         self.shell = AppShell(self.root, self.repository, theme=self.theme)
-        self.shell.mostrar(4)  # pestaña "configuracion"
+        self.shell.mostrar(5)  # pestaña "configuracion"
         self.pestana = self.shell.pestana_activa()
         self.assertEqual(self.pestana.key, "configuracion")
 
@@ -829,7 +829,7 @@ class TestConfiguracionTab(unittest.TestCase):
         claves = [clase.key for clase in PESTANIAS]
         self.assertIn("configuracion", claves)
         self.assertEqual(claves, ["crudos", "perfil", "vacantes", "scraping",
-                                  "configuracion"])
+                                  "cuentas", "configuracion"])
 
     def test_monta_las_seis_tarjetas_y_lista_las_sondas(self):
         self.root.update()
@@ -1188,6 +1188,139 @@ class TestScrapingTab(unittest.TestCase):
                     root.update_idletasks()
                     root.destroy()
                     gc.collect()
+
+
+class TestCuentasTab(unittest.TestCase):
+    """La pestaña de Cuentas lista los sitios de login y guarda credenciales.
+
+    Nada de archivos del usuario ni de keyring real: las rutas de
+    `jobpulse_v15.credenciales` van a un temporal y el almacén seguro se
+    simula con un dict.
+    """
+
+    def setUp(self):
+        from jobpulse_v15 import credenciales
+
+        self.credenciales = credenciales
+        self.temp_dir = tempfile.TemporaryDirectory()
+        base = Path(self.temp_dir.name)
+        self.claves: dict[str, str] = {}
+
+        def _guardar(empresa, password):
+            self.claves[empresa.strip().casefold()] = password
+            return True
+
+        def _leer(empresa):
+            return self.claves.get((empresa or "").strip().casefold())
+
+        def _borrar(empresa):
+            self.claves.pop((empresa or "").strip().casefold(), None)
+
+        parches = [
+            unittest.mock.patch.object(credenciales, "CRED_JSON",
+                                       base / "credenciales.json"),
+            unittest.mock.patch.object(credenciales, "REQ_JSON",
+                                       base / "login_requerido.json"),
+            unittest.mock.patch.object(credenciales, "PENDING_JSON",
+                                       base / "pending_login.json"),
+            unittest.mock.patch.object(credenciales, "LOGIN_SITES_JSON",
+                                       base / "login_sites.json"),
+            unittest.mock.patch.object(credenciales, "_password_guardar",
+                                       _guardar),
+            unittest.mock.patch.object(credenciales, "_password_leer", _leer),
+            unittest.mock.patch.object(credenciales, "_password_borrar", _borrar),
+        ]
+        for parche in parches:
+            parche.start()
+            self.addCleanup(parche.stop)
+
+        self.database = Database(base / "cuentas-ui.db")
+        self.database.initialize()
+        self.repository = Repository(self.database)
+        self.root = _tkroot_reintentos()
+        self.theme = apply_theme(self.root)
+        self.shell = AppShell(self.root, self.repository, theme=self.theme)
+        self.shell.mostrar(4)  # pestaña "cuentas"
+        self.pestana = self.shell.pestana_activa()
+        self.assertEqual(self.pestana.key, "cuentas")
+
+    def tearDown(self):
+        for _ in range(5):
+            self.root.update()
+            time.sleep(0.01)
+        self.root.update_idletasks()
+        self.root.destroy()
+        gc.collect()
+        self.temp_dir.cleanup()
+
+    def test_la_pestana_esta_registrada(self):
+        self.assertIn("cuentas", [clase.key for clase in PESTANIAS])
+
+    def test_lista_los_sitios_de_login(self):
+        self.root.update()
+        tabla = self.pestana._widgets["tabla"]
+        iids = set(tabla.get_children())
+        self.assertIn("ANE", iids)
+        self.assertIn("Indeed", iids)
+        valores = tabla.item("ANE", "values")
+        self.assertIn("Sin credencial", valores)
+
+    def test_seleccionar_llena_el_formulario_sin_la_password(self):
+        self.root.update()
+        tabla = self.pestana._widgets["tabla"]
+        tabla.selection_set("ANE")
+        self.pestana._seleccion_cambiada()
+        self.root.update()
+        self.assertEqual(self.pestana._get("empresa"), "ANE")
+        self.assertEqual(self.pestana._get("password"), "")
+        # El campo de contraseña está enmascarado.
+        self.assertEqual(self.pestana._widgets["password"].cget("show"), "*")
+
+    def test_guardar_escribe_la_credencial_y_actualiza_la_tabla(self):
+        self.root.update()
+        tabla = self.pestana._widgets["tabla"]
+        tabla.selection_set("ANE")
+        self.pestana._seleccion_cambiada()
+        self.pestana._set("usuario", "giovar24")
+        self.pestana._set("password", "clave-secreta")
+        self.pestana.guardar()
+        self.root.update()
+        # La contraseña quedó en el almacén, no en la tabla.
+        self.assertEqual(self.claves.get("ane"), "clave-secreta")
+        valores = tabla.item("ANE", "values")
+        self.assertIn("Con credencial", valores)
+        self.assertNotIn("clave-secreta", " ".join(str(v) for v in valores))
+        self.assertEqual(self.pestana._get("password"), "")
+
+    def test_eliminar_credencial(self):
+        self.root.update()
+        self.pestana._set("empresa", "ANE")
+        self.pestana._set("usuario", "giovar24")
+        self.pestana._set("password", "clave-secreta")
+        self.pestana.guardar()
+        self.root.update()
+        self.pestana.eliminar()
+        self.root.update()
+        self.assertEqual(self.claves, {})
+        valores = self.pestana._widgets["tabla"].item("ANE", "values")
+        self.assertIn("Sin credencial", valores)
+
+    def test_sin_empresa_no_guarda(self):
+        self.root.update()
+        self.pestana.limpiar_formulario()
+        self.pestana.guardar()
+        self.assertEqual(self.claves, {})
+        self.assertIn("sitio", self.pestana._widgets["estado"].cget("text"))
+
+    def test_quitar_un_seed_no_se_permite(self):
+        """ANE/Indeed/LinkedIn son seeds del sistema: no se quitan."""
+        self.root.update()
+        tabla = self.pestana._widgets["tabla"]
+        tabla.selection_set("ANE")
+        self.pestana.quitar_sitio()
+        self.assertIn("base del sistema",
+                      self.pestana._widgets["estado"].cget("text"))
+        self.assertIn("ANE", set(tabla.get_children()))
 
 
 if __name__ == "__main__":

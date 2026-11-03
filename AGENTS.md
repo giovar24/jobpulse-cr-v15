@@ -123,14 +123,14 @@ Cuando el usuario dice "vamos a otra sesión":
 .\.venv\Scripts\python.exe -X utf8 clean_run.py SI
 
 # Tests: pytest vive en el python del SISTEMA (el venv NO lo tiene).
-python -m pytest tests/ -q   # baseline 2026-11-03: 655 passed + 231 subtests
+python -m pytest tests/ -q   # baseline 2026-11-03: 671 passed + 231 subtests
 
 # UI clásica (completa, intacta)
 .\.venv\Scripts\python.exe -m jobpulse_v15.ui
 
 # UI v2 (plana y modular; por ahora: Datos crudos + Perfil + Vacantes +
-# Scraping + Configuración) — ver docs/UI_V2_ARQUITECTURA.md. Agregar una
-# pestaña = módulo + 1 línea en PESTANIAS.
+# Scraping + Cuentas + Configuración) — ver docs/UI_V2_ARQUITECTURA.md.
+# Agregar una pestaña = módulo + 1 línea en PESTANIAS.
 .\jobpulse-v15-v2.bat
 .\.venv\Scripts\python.exe -X utf8 -m jobpulse_v15.ui_v2
 
@@ -438,13 +438,22 @@ desmarca (pestaña **“Áreas de empleo”** en `ui_perfil.py` → hechos
     (las frases de tarea se filtran: `ats.es_frase_de_tarea`). El numerador
     son las que el perfil cubre (cotejo por tokens, con alias de
     fabricante: "Microsoft Excel" ≈ "Excel Avanzado").
+28. **Las contraseñas NUNCA se muestran ni se guardan en el JSON**: la clave
+    va al **Administrador de Credenciales de Windows** (keyring) y
+    `data/empresas/credenciales.json` (gitignored) solo guarda metadatos
+    (`password_almacen="keyring"`). Por eso `tiene_credencial` NO puede
+    mirar el JSON: tiene que **preguntar al almacén** (si no, toda cuenta
+    con clave en el keyring salía "sin credencial" — bug corregido el
+    2026-11-03). En la UI (pestaña "Cuentas") el campo de contraseña arranca
+    vacío y vacío = "conserva la guardada".
 
-## Estado de referencia (verificado 2026-11-03, tras la tarjeta de navegador)
+## Estado de referencia (verificado 2026-11-03, tras la pestaña de Cuentas)
 
-- Suite: **655 tests verdes** + 231 subtests (`python -m pytest tests/ -q`,
+- Suite: **671 tests verdes** + 231 subtests (`python -m pytest tests/ -q`,
   ~2 min); `test_matching.py` 87, `test_areas.py` 20, `test_ubicaciones_cr.py`
   34, `test_idiomas.py` 7, `test_salario.py` 16, `test_ats_ranking.py` 44,
-  `test_scraper.py` 11, `test_browser_manager.py` 21, `test_ui_v2.py` 72.
+  `test_scraper.py` 11, `test_browser_manager.py` 21, `test_cuentas.py` 9,
+  `test_ui_v2.py` 79.
 - **UI v2 (`src/jobpulse_v15/ui_v2/`, 2026-11-02)**: interfaz **plana y
   modular** que convive con la UI clásica (`ui.py`, intacta). Lanzador
   `jobpulse-v15-v2.bat` o `python -m jobpulse_v15.ui_v2`. Capas: `theme.py`
@@ -458,7 +467,9 @@ desmarca (pestaña **“Áreas de empleo”** en `ui_perfil.py` → hechos
   (**ranking ATS** de los avisos contra el perfil: score 0-100, veredicto,
   desglose y skills que faltan; export CSV), **Scraping** (lanzar un
   barrido de las fuentes: grupos `directos`/`cr-gov`/`cr-jobs`, páginas,
-  puerto CDP, bitácora en vivo; dominio en `src/jobpulse_v15/scraper.py`) y
+  puerto CDP, bitácora en vivo; dominio en `src/jobpulse_v15/scraper.py`),
+  **Cuentas** (credenciales de los sitios que piden login: tabla + formulario;
+  la contraseña va al keyring y NUNCA se muestra) y
   **Configuración** (IA local —arrancar/detener, O7.3—, IA externa → `.env`,
   **navegador Brave/CDP** —ruta, perfil y puerto; Verificar/Abrir/Detener—,
   sondas de scraping on/off, esquema de color, directorio por defecto de

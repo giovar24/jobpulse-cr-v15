@@ -175,3 +175,23 @@ def confirmar(parent: tk.Misc, titulo: str, mensaje: str) -> bool:
     from tkinter import messagebox
 
     return bool(messagebox.askyesno(titulo, mensaje, parent=parent.winfo_toplevel()))
+
+
+def pedir_texto(parent: tk.Misc, titulo: str, mensaje: str,
+                valor_inicial: str = "", *, password: bool = False) -> str:
+    """Pide una línea de texto (modal). Devuelve "" si se cancela.
+
+    Es el equivalente plano de `simpledialog.askstring` pero con el estilo
+    de la UI v2 (plano, sin Toplevel_tk feo).
+    """
+    from tkinter import simpledialog
+
+    try:
+        raiz = parent.winfo_toplevel()
+    except tk.TclError:  # pragma: no cover - depende del SO
+        raiz = parent
+    valor = simpledialog.askstring(
+        titulo, mensaje, initialvalue=valor_inicial, parent=raiz,
+        show="*" if password else "",
+    )
+    return str(valor or "").strip()
