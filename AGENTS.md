@@ -16,7 +16,7 @@ del repo `jobpulse_cr`). Objetivo: orientación instantánea sin re-explorar.
    `tools/auditar.py`) NO aplican aquí. **Peligro**: la rama `fork-v15` del
    repo viejo conserva la password de ANE previa a la purga — jamás pushearla
    a GitHub.
-4. **No pushear sin confirmación del usuario** (main va sin pushear).
+4. **No pushear sin confirmación del usuario.**
 
 ## Al cerrar sesión (OBLIGATORIO)
 
@@ -37,6 +37,7 @@ Cuando el usuario dice "vamos a otra sesión":
 | `docs/PASO5_EVIDENCIA_*.md` | Evidencia literal del matching (GENERADO — no editar a mano) |
 | `docs/PASO5_REVISION_PENDIENTES.md` | Hoja de firma: `educacion_no_confirmada` (sin veredictos, regenerable) |
 | `docs/UI_V2_ARQUITECTURA.md` | UI v2 (plana y modular): capas, cómo agregar una pestaña, patrones de Tk |
+| `docs/FLUJO_CLI_VS_UI.md` | CLI vs. UI paso a paso: qué comparten y qué hace solo cada uno |
 | `DESARROLLO_v15.md` | Arquitectura, objetivos O1–O10 (canónicos en §3), decisiones |
 | `README.md` | Setup equipo nuevo: venv, `pip install -e .`, `init-db`, backup |
 
@@ -58,6 +59,9 @@ Cuando el usuario dice "vamos a otra sesión":
 - **Esquema solo con migraciones**: cambio de BD = archivo nuevo
   `src/jobpulse_v15/migrations/00N_*.sql`; nunca `ALTER` manual ni editar una
   migración ya aplicada.
+- **Secretos y datos personales NUNCA al repo**: `.env`, `data/usuario/`,
+  `data/empresas/` y CVs (`*.pdf`/`*.docx`/`*.doc`) están gitignoreados a
+  propósito — no "arreglar" el `.gitignore` ni commitear rutas con datos.
 - **Cada fetcher nuevo** lleva test en `tests/test_<nombre>.py`.
 
 ## Comandos esenciales
@@ -118,9 +122,8 @@ Cuando el usuario dice "vamos a otra sesión":
 # perfil y config). OJO: reinicia conteos como el de jobs.
 .\.venv\Scripts\python.exe -X utf8 clean_run.py SI
 
-# Tests: pytest vive en el python del SISTEMA (el venv NO lo tiene). Suite
-# completa ~1.7 min (verificada 2026-11-02: 544 passed + 204 subtests).
-python -m pytest tests/ -q
+# Tests: pytest vive en el python del SISTEMA (el venv NO lo tiene).
+python -m pytest tests/ -q   # baseline 2026-11-02: 544 passed + 204 subtests
 
 # UI clásica (completa, intacta)
 .\.venv\Scripts\python.exe -m jobpulse_v15.ui
@@ -413,57 +416,29 @@ desmarca (pestaña **“Áreas de empleo”** en `ui_perfil.py` → hechos
   export CSV) y **Perfil** (importar CV con diálogo de revisión revertible +
   alta/edición manual de `candidate_profile_facts`). Detalle y patrones de Tk:
   `docs/UI_V2_ARQUITECTURA.md`; gotchas 21–24.
-- **4 bugs de extracción corregidos el 01-11**: (1, tarde) la UI no tenía
-  `fetcher_map["harvie"]` → 189 avisos nunca raspados; (2, tarde) la puerta del
-  extractor de salario exigía `salary_raw`, que las APIs casi nunca traen
-  (0 de 354) → **módulo nuevo `salario.py`** (el MISMO regex para el extractor
-  Python y el contador SQL vía función SQLite `RE()`); (3, tarde) `save_job` no
-  validaba la ciudad del adaptador/IA → **9 avisos con ciudad basura**
-  corregidos con la puerta `ciudad_es_valida` (adaptador + IA + catálogo);
-  (4, noche) la puerta del salary era **demasiado laxa** (marca + moneda a
-  cualquier distancia → 8 falsos positivos: "Compensation: Paid in USD", "your
-  hourly rate in USD", funding de "$26 million") → ahora exige **marca +
-  CIFRA con moneda en la misma frase** (≤80 chars, sin cruzar un punto), y
-  `contexto_salario` se centra en la **cifra** (no en la palabra). Además
-  `workable.py` ya no **descarta la columna Salary** de la tabla.
-- BD (`data/jobpulse_v15.db`): contiene la **corrida manual del usuario**
-  (**535 avisos**, no vaciada: es la evidencia en uso). Esquema versión **16**
-  (la `017` de la capa B sigue pendiente). Jobs 535 · `job_analysis` vigentes
-  535 · `job_area` 535 · `job_requirements` 1071 · **`job_match` 0** (la UI no
-  persiste el Paso 5: falta correr `run_paso5.py`) · `source_runs` 129 ·
-  `source_run_sites` 129 (67 ok · 61 zero_results · 1 error). `db check` ok.
-  Perfil/config conservados: 48 facts · 129 sitios · 14 plataformas · 20 áreas ·
-  51 reglas de área · 70 conceptos.
-- **Estimado de extracción (8 campos × 535 avisos = 4280 celdas)**:
-  **extraído 76.0 %** (3254) · **falta de dato real 23.9 %** (1023) ·
-  **error de extracción 0.07 %** (3). Por campo: date_published 100 % ·
-  skills 99.6 % · employment_type 92.1 % · languages 95.5 % · region 80.7 % ·
-  city 72.7 % · work_mode 65.8 % · salary_min 1.7 % (11 avisos declaran
-  compensación → 9 extraídos; los 2 que faltan son **fallos del modelo**:
-  "₡ 625000" y "$19,984,600 CRC", prompt ya endurecido). Los 3 casos de error
-  son de **prompt/modelo**, no de lógica.
-- Requisitos del corpus: **1071 vigentes, 0 sin `evidence`, 0 evidencia no
-  literal** → 100 % trazables. 22 descripciones basura (<200 chars, login-wall
-  → O5.3). `posting_language` con **0 `undetermined`**.
-- Los **61 `zero_results`** son correctos (tableros sin vacantes de CR,
-  verificado a mano en `bask-health-1`, `cynet-corp`, `utopia-life-worth-living`);
-  Workable los marca `needs_review` con `consecutive_zero_runs = 9`. El único
-  `error` es un aviso de Workday sin ubicación (`review_required`).
-- El **TÍTULO de un aviso no sirve como fuente de ubicación**: el catálogo
-  devuelve el título entero como ciudad ("Senior Accountant"). No hacerlo.
-- Corrida vigente del Paso 5 (BD anterior): **`20261101_084012`** (`valida=1`,
-  553 jobs): calificada 179 · sin_requisitos 140 · revisar_a_mano 106 ·
-  descartada 89 · datos_insuficientes 39. Queda en el historial; el corpus
-  actual está **sin calificar**.
-- 30 `educacion_no_confirmada` ABIERTAS (las firma una segunda persona).
+- **BD `data/jobpulse_v15.db` = corpus REAL del usuario** (corrida manual del
+  01-11, sin vaciar: es la evidencia en uso). NO "limpiarla" sin confirmación
+  explícita — la única vía es `clean_run.py SI`. Esquema versión **16**; la
+  migración `017` sigue pendiente. Censos vivos: `tools/estado_bd.py`,
+  `tools/progreso_enriquecimiento.py`, `ia_estado.snapshot_enriquecimiento` —
+  no confiar en números transcritos de ningún doc.
+- **La UI NO persiste el Paso 5**: solo `run_paso5.py` crea corridas en
+  `job_match`; desde la UI el matching se calcula sin quedarse guardado.
+- **Invariantes de calidad**: todo requisito vigente lleva `evidence` literal
+  (trazable al texto del aviso) — uno sin evidence es un bug. El salario casi
+  nunca existe como dato (~1–2 % de avisos declara cifra con moneda): la
+  ausencia es falta de dato real, NO error del extractor (gotcha 18).
+- Corridas exitosas con **0 ofertas** en racha → sitio `needs_review`
+  (`consecutive_zero_runs`): nunca se desactiva solo; revisar a mano antes de
+  reactivar (`site mark-reviewed`).
 - Modelo local canónico: **Gemma 3n E2B QAT** (8k ctx, MTP draft, puerto
   8081); Qwen 3.5 2B descartado (~6.5x más lento). Ver
-  `docs/IA_ENRIQUECIMIENTO.md`. **IA APAGADA al cierre** (puerto 8081 libre).
+  `docs/IA_ENRIQUECIMIENTO.md`. La IA no se pre-arranca: la UI la levanta
+  bajo demanda (botón "Enriquecer") y la apaga al terminar.
 - Fuentes activas: 7/7 plataformas ATS validadas (seeds versionados en
   `src/jobpulse_v15/seeds/*.json`) + ANE/Indeed/LinkedIn/Elempleo (browser) +
-  Harvie/CINDE/Procomer. 129 sitios habilitados; la corrida del 01-11
-  confirmó **Harvie entra desde la UI (181 avisos)**; ANE requiere sesión
-  iniciada (si no, se omite limpio).
+  Harvie/CINDE/Procomer. ANE requiere sesión iniciada (si no, se omite
+  limpio).
 - Pipeline real: scrape (adaptadores **en el paquete raíz**:
   `workday.py`, `greenhouse.py`, `ashby.py`, `lever.py`, `recruitee.py`,
   `workable.py`, `successfactors.py`, `ane.py`, `indeed.py`, `linkedin.py`,
@@ -481,12 +456,12 @@ desmarca (pestaña **“Áreas de empleo”** en `ui_perfil.py` → hechos
 - **Hueco del PERFIL (visible, capa B pendiente)**: `save_candidate_profile_facts`
   **no** escribe `codigo_canonico` y el Paso 5 exige
   `codigo_canonico IS NOT NULL` para skill/idioma/educación (`matching.py`
-  `_cargar_facts`). Por eso los 48 facts del perfil son **invisibles para el
+  `_cargar_facts`). Por eso los facts del perfil son **invisibles para el
   motor** hasta resolver la capa B (reutilizable: `conceptos.resolver`). La UI
   v2 lo muestra en la columna "Canónico" para no ocultarlo.
-- Pendientes: ver "Pendiente inmediato" del handoff más reciente (corrida
-  manual nueva, las 30 `educacion_no_confirmada`, capa B `codigo_canonico` +
-  migración `017` — **incluye ahora el `codigo_canonico` de los facts del
-  perfil**, O5.3 re-barrido basura, Paso 7, O8.2 ciclo de vida, sucursal de
-  Harvie en el título, O2/O4/O9, y el Paso 5 desde la UI sin persistir
-  `job_match`).
+- Pendientes: ver "Pendiente inmediato" del handoff más reciente (capa B
+  `codigo_canonico` del perfil + migración `017`, las `educacion_no_confirmada`
+  sin firma de segunda persona, O5.3 re-barrido de descripciones basura, O6.4
+  dedupe de slugs ES/EN al importar CV, sucursal de Harvie en el título,
+  Paso 7, O8.2/O8.4, O2/O4/O9, O10 `solo_vigentes`, Paso 5 desde la UI
+  (persistir corridas) y pestañas nuevas de la UI v2 — el shell ya está listo).
