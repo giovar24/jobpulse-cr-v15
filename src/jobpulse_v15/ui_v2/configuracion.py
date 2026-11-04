@@ -8,9 +8,11 @@ sobrescribir el dict completo perdería sus claves (bug ya vivido en
 `configuration_window._save_all`).
 
 Claves que usa la UI v2:
-- `paleta`  : nombre del esquema de color (ver `theme.PALETAS`).
-- `csv_dir` : directorio inicial de los diálogos "Exportar CSV"
-              ("" = sin fijo → Tk usa su última carpeta).
+- `paleta`   : nombre del esquema de color (ver `theme.PALETAS`).
+- `densidad` : densidad de la interfaz (ver `theme.DENSIDADES`).
+- `idioma`   : idioma de la interfaz (ver `i18n.IDIOMAS`).
+- `csv_dir`  : directorio inicial de los diálogos "Exportar CSV"
+               ("" = sin fijo → Tk usa su última carpeta).
 
 El `.env` del proyecto (IA_PROVEEDOR/IA_BASE_URL/IA_MODEL/IA_API_KEY, los
 límites opt-in IA_MAX_LLAMADAS/IA_RPM y la configuración del navegador
@@ -32,6 +34,7 @@ ENV = Path(__file__).resolve().parents[3] / ".env"
 
 CLAVE_PALETA = "paleta"
 CLAVE_CSV_DIR = "csv_dir"
+CLAVE_DENSIDAD = "densidad"
 
 # Claves del .env que guardan la configuración del navegador (punto 2).
 CLAVE_BRAVE_BIN = "BRAVE_BIN"
@@ -67,6 +70,11 @@ def guardar(claves: dict[str, Any], ruta: Path | None = None) -> dict[str, Any]:
 def paleta_actual(ruta: Path | None = None) -> str:
     """Nombre de la paleta guardada ("" si nunca se eligió)."""
     return str(cargar(ruta).get(CLAVE_PALETA) or "")
+
+
+def densidad_actual(ruta: Path | None = None) -> str:
+    """Nombre de la densidad guardada ("" si nunca se eligió)."""
+    return str(cargar(ruta).get(CLAVE_DENSIDAD) or "")
 
 
 def directorio_csv(ruta: Path | None = None) -> str | None:

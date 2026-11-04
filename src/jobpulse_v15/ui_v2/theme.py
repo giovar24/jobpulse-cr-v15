@@ -141,6 +141,59 @@ class Metrics:
     detail_width: int = 460
     font_family: str = "Segoe UI"
     font_mono: str = "Consolas"
+    # Escala tipográfica: multiplica TODOS los tamaños pedidos a
+    # `Theme.font`/`Theme.mono` y a los estilos de `apply_theme`. Es lo que
+    # hace que "compacta" y "amplia" cambien de verdad el aspecto.
+    font_scale: float = 1.0
+
+
+# --- Densidades (compacta / normal / amplia) ---------------------------------
+# La elegida se guarda en ui_config.json (clave "densidad"); `crear_app()` la
+# aplica al arrancar y la tarjeta "Apariencia" la cambia en caliente junto
+# con el esquema de color (misma reconstrucción). Agregar una densidad =
+# 1 entrada aquí (y su nombre visible en NOMBRES_DENSIDAD).
+
+DENSIDADES: dict[str, Metrics] = {
+    "compacta": Metrics(
+        sidebar_width=210,
+        header_height=62,
+        row_height=24,
+        radius=8,
+        pad=12,
+        gap=10,
+        pad_small=8,
+        pad_tiny=4,
+        detail_width=420,
+        font_scale=0.92,
+    ),
+    "normal": Metrics(),
+    "amplia": Metrics(
+        sidebar_width=258,
+        header_height=92,
+        row_height=38,
+        radius=12,
+        pad=26,
+        gap=20,
+        pad_small=14,
+        pad_tiny=8,
+        detail_width=540,
+        font_scale=1.1,
+    ),
+}
+
+# Nombre visible (lo que muestra el combo de Configuración).
+NOMBRES_DENSIDAD: dict[str, str] = {
+    "compacta": "Compacta",
+    "normal": "Normal",
+    "amplia": "Amplia",
+}
+
+DENSIDAD_DEFECTO = "normal"
+
+
+def metrics_por_nombre(nombre: str | None) -> Metrics:
+    """Densidad por nombre; cualquier valor desconocido cae al defecto."""
+    return DENSIDADES.get(nombre or "", DENSIDADES[DENSIDAD_DEFECTO])
 
 
 @dataclass(frozen=True)
@@ -155,16 +208,21 @@ class Theme:
         return getattr(self.palette, nombre)
 
     def font(self, size: int = 10, weight: str = "normal") -> str:
-        """Especificación de fuente para Tk.
+        """Especificación de fuente para Tk (el tamaño va escalado por la
+        densidad: `metrics.font_scale`).
 
         OJO: la familia va entre LLAVES. Tk parte la especificación por
         espacios: "Segoe UI 10" se lee como familia "Segoe", tamaño "UI"
         -> "expected integer but got 'UI'". Con llaves: `{Segoe UI} 10`.
         """
-        return f"{{{self.metrics.font_family}}} {size} {weight}"
+        return f"{{{self.metrics.font_family}}} {self.escalar(size)} {weight}"
 
     def mono(self, size: int = 9) -> str:
-        return f"{{{self.metrics.font_mono}}} {size}"
+        return f"{{{self.metrics.font_mono}}} {self.escalar(size)}"
+
+    def escalar(self, size: int) -> int:
+        """Tamaño pedido convertido al de la densidad vigente."""
+        return max(6, int(round(size * self.metrics.font_scale)))
 
 
 def _configurar_fuentes(root: tk.Misc, metrics: Metrics) -> None:
@@ -173,9 +231,10 @@ def _configurar_fuentes(root: tk.Misc, metrics: Metrics) -> None:
         default = tkfont.nametofont("TkDefaultFont")
     except tk.TclError:  # pragma: no cover - depende del SO
         return
-    default.configure(family=metrics.font_family, size=10)
+    tam = max(6, int(round(10 * metrics.font_scale)))
+    default.configure(family=metrics.font_family, size=tam)
     named = tkfont.nametofont("TkTextFont")
-    named.configure(family=metrics.font_family, size=10)
+    named.configure(family=metrics.font_family, size=tam)
 
 
 def apply_theme(root: tk.Misc, palette: Palette | None = None,
@@ -183,6 +242,16 @@ def apply_theme(root: tk.Misc, palette: Palette | None = None,
     """Aplica el tema plano a `root` y devuelve el `Theme` para reutilizarlo."""
     paleta = palette or Palette()
     medidas = metrics or Metrics()
+    k = medidas.font_scale  # escala de la densidad (padding de controles)
+
+    def _fu(base: int, peso: str = "") -> str:
+        """Especificación de fuente escalada por la densidad vigente."""
+        tam = max(6, int(round(base * medidas.font_scale)))
+        return f"{{{medidas.font_family}}} {tam}" + (f" {peso}" if peso else "")
+
+    def _pad(ancho: int, alto: int) -> tuple[int, int]:
+        return (int(round(ancho * k)), int(round(alto * k)))
+
     estilos = ttk.Style(root)
     try:
         estilos.theme_use("clam")
@@ -194,8 +263,8 @@ def apply_theme(root: tk.Misc, palette: Palette | None = None,
     # La fuente por defecto va CON LLAVES y con tamaño: "Segoe UI" a secas
     # lo parsea Tk como familia "Segoe" + tamaño "UI" (error al crear
     # cualquier widget que no lleve fuente explícita).
-    fuente = f"{{{medidas.font_family}}} 10"
-    fuente_mono = f"{{{medidas.font_mono}}} 9"
+    fuente = _fu(10)
+    fuente_mono = _fu(9)
     root.option_add("*Font", fuente)
     root.configure(background=paleta.bg)
 
@@ -236,19 +305,19 @@ def apply_theme(root: tk.Misc, palette: Palette | None = None,
         "Title.TLabel",
         background=paleta.surface,
         foreground=paleta.text,
-        font=f'{{{medidas.font_family}}} 16 bold',
+        font=_fu(16, "bold"),
     )
     estilos.configure(
         "Subtitle.TLabel",
         background=paleta.surface,
         foreground=paleta.text_muted,
-        font=f'{{{medidas.font_family}}} 9',
+        font=_fu(9),
     )
     estilos.configure(
         "Section.TLabel",
         background=paleta.surface,
         foreground=paleta.text_faint,
-        font=f'{{{medidas.font_family}}} 8 bold',
+        font=_fu(8, "bold"),
     )
 
     # --- Botones planos ---
@@ -260,7 +329,7 @@ def apply_theme(root: tk.Misc, palette: Palette | None = None,
         focuscolor=paleta.surface,
         borderwidth=1,
         relief="flat",
-        padding=(14, 8),
+        padding=_pad(14, 8),
         font=fuente,
     )
     estilos.map(
@@ -276,8 +345,8 @@ def apply_theme(root: tk.Misc, palette: Palette | None = None,
         focuscolor=paleta.accent,
         borderwidth=0,
         relief="flat",
-        padding=(16, 9),
-        font=f'{{{medidas.font_family}}} 10 bold',
+        padding=_pad(16, 9),
+        font=_fu(10, "bold"),
     )
     estilos.map(
         "Accent.TButton",
@@ -290,7 +359,7 @@ def apply_theme(root: tk.Misc, palette: Palette | None = None,
         foreground=paleta.text_muted,
         borderwidth=0,
         relief="flat",
-        padding=(10, 6),
+        padding=_pad(10, 6),
         font=fuente,
     )
     estilos.map(
@@ -304,7 +373,7 @@ def apply_theme(root: tk.Misc, palette: Palette | None = None,
         foreground=paleta.sidebar_text,
         borderwidth=0,
         relief="flat",
-        padding=(18, 11),
+        padding=_pad(18, 11),
         anchor="w",
         font=fuente,
     )
@@ -325,7 +394,7 @@ def apply_theme(root: tk.Misc, palette: Palette | None = None,
         insertcolor=paleta.text,
         borderwidth=1,
         relief="flat",
-        padding=8,
+        padding=int(round(8 * k)),
     )
     estilos.map(
         "TEntry",
@@ -344,7 +413,7 @@ def apply_theme(root: tk.Misc, palette: Palette | None = None,
         darkcolor=paleta.border_strong,
         borderwidth=1,
         relief="flat",
-        padding=6,
+        padding=int(round(6 * k)),
     )
     estilos.map(
         "TCombobox",
@@ -380,8 +449,8 @@ def apply_theme(root: tk.Misc, palette: Palette | None = None,
         foreground=paleta.text_muted,
         borderwidth=0,
         relief="flat",
-        padding=(8, 9),
-        font=f'{{{medidas.font_family}}} 8 bold',
+        padding=_pad(8, 9),
+        font=_fu(8, "bold"),
     )
     estilos.map(
         "Flat.Treeview.Heading",

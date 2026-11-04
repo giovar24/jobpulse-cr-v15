@@ -27,9 +27,9 @@ from jobpulse_v15.ui_v2.tabs.perfil import PerfilTab
 from jobpulse_v15.ui_v2.tabs.scraping import ScrapingTab
 from jobpulse_v15.ui_v2.tabs.vacantes import VacantesTab
 from jobpulse_v15.ui_v2.theme import (
-    Metrics,
     Theme,
     apply_theme,
+    metrics_por_nombre,
     paleta_por_nombre,
 )
 from jobpulse_v15.ui_v2.widgets import FlatButton
@@ -230,7 +230,11 @@ class AppShell:
         servidor IA vive en `tabs.configuracion` (módulo) y por eso
         sobrevive a este rebuild.
         """
-        theme = apply_theme(self.root, paleta_por_nombre(nombre), Metrics())
+        theme = apply_theme(
+            self.root,
+            paleta_por_nombre(nombre),
+            metrics_por_nombre(configuracion.densidad_actual()),
+        )
         self.theme = theme
         self.contexto.theme = theme
         for widget in self.root.winfo_children():
@@ -253,8 +257,9 @@ def crear_app(root: tk.Tk | None = None, database_path: str | Path | None = None
               *, pestanias: Sequence[Type[BaseTab]] = PESTANIAS):
     """Crea la app v2 completa (tema + shell) y devuelve (root, shell).
 
-    Aplica la paleta guardada en ui_config.json (clave «paleta»); si no
-    hay ninguna o es desconocido, cae al esquema por defecto.
+    Aplica la paleta y la densidad guardadas en ui_config.json (claves
+    «paleta» y «densidad»); si no hay ninguna o son desconocidas, caen a los
+    valores por defecto.
 
     Antes de montar nada carga el `.env` del proyecto (override=False: lo
     que el usuario exportó en la sesión manda) para que la configuración
@@ -264,7 +269,11 @@ def crear_app(root: tk.Tk | None = None, database_path: str | Path | None = None
     base = Database(database_path) if database_path else Database()
     base.initialize()
     root = root or tk.Tk()
-    theme = apply_theme(root, paleta_por_nombre(paleta_actual()), Metrics())
+    theme = apply_theme(
+        root,
+        paleta_por_nombre(paleta_actual()),
+        metrics_por_nombre(configuracion.densidad_actual()),
+    )
     shell = AppShell(root, Repository(base), theme=theme, pestanias=pestanias)
     return root, shell
 

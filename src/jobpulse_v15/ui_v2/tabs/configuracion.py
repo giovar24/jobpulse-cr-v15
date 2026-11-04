@@ -18,8 +18,9 @@ Nueve tarjetas (una Card cada una):
    variable que leen el CLI, los scripts y la pestaña de Scraping.
 4. **Sondas de scraping** — activa/pausa `source_sites` (la única verdad
    que miran `run_scrapes.py`, `run_full_flow.py` y `Repository.select_sites`).
-5. **Apariencia** — esquema de color (`theme.PALETAS`) → `ui_config.json` y
-   reconstrucción en caliente vía el servicio `reconstruir_ui`.
+5. **Apariencia** — esquema de color (`theme.PALETAS`) y densidad
+   (`theme.DENSIDADES`) → `ui_config.json` y reconstrucción en caliente vía
+   el servicio `reconstruir_ui`.
 6. **Cachés** — qué ocupa `data/usuario/` (caché de la IA y caché de
    embeddings) y botones para limpiarlas (el dominio está en
    `jobpulse_v15.caches`, sin Tk).
@@ -48,7 +49,13 @@ from jobpulse_v15.ui_v2.data.fuentes import FuentesStore
 from jobpulse_v15.ui_v2.data.retencion import RetencionStore
 from jobpulse_v15.ui_v2.dialogs import confirmar
 from jobpulse_v15.ui_v2.tabs.base import BaseTab
-from jobpulse_v15.ui_v2.theme import NOMBRES_PALETA, PALETA_DEFECTO, paleta_por_nombre
+from jobpulse_v15.ui_v2.theme import (
+    DENSIDAD_DEFECTO,
+    NOMBRES_DENSIDAD,
+    NOMBRES_PALETA,
+    PALETA_DEFECTO,
+    paleta_por_nombre,
+)
 from jobpulse_v15.ui_v2.widgets import Card, FlatButton, ScrollFrame, SectionTitle
 
 TODAS_LAS_PLATAFORMAS = "Todas las plataformas"
@@ -386,8 +393,8 @@ class ConfiguracionTab(BaseTab):
         card.grid(row=4, column=0, sticky="ew", pady=(0, theme.metrics.gap))
         card.body.columnconfigure(0, weight=1)
 
-        SectionTitle(card.body, theme, "Esquema de color",
-                     hint="ui_config.json · clave «paleta»").grid(
+        SectionTitle(card.body, theme, "Apariencia",
+                     hint="ui_config.json · claves «paleta» y «densidad»").grid(
             row=0, column=0, sticky="ew")
 
         fila = tk.Frame(card.body, bg=theme.color("surface"))
@@ -403,8 +410,20 @@ class ConfiguracionTab(BaseTab):
         combo.bind("<<ComboboxSelected>>", lambda _e: self._preview_paleta())
         self._widgets["paleta"] = combo
 
+        fila_d = tk.Frame(card.body, bg=theme.color("surface"))
+        fila_d.grid(row=2, column=0, sticky="w", pady=(6, 0))
+        tk.Label(fila_d, text="Densidad:", bg=theme.color("surface"),
+                 fg=theme.color("text_muted"), font=theme.font(9)).pack(
+            side="left")
+        combo_d = ttk.Combobox(
+            fila_d, values=list(NOMBRES_DENSIDAD.values()), state="readonly",
+            width=22, font=theme.font(9),
+        )
+        combo_d.pack(side="left", padx=(8, 0))
+        self._widgets["densidad"] = combo_d
+
         preview = tk.Frame(card.body, bg=theme.color("surface"))
-        preview.grid(row=2, column=0, sticky="w", pady=(10, 0))
+        preview.grid(row=3, column=0, sticky="w", pady=(10, 0))
         for nombre in ("bg", "surface", "accent", "sidebar_bg"):
             muestrario = tk.Frame(
                 preview, width=52, height=24, bg=theme.color(nombre),
@@ -423,7 +442,7 @@ class ConfiguracionTab(BaseTab):
         self._widgets["muestra_texto"] = muestra_texto
 
         botones = tk.Frame(card.body, bg=theme.color("surface"))
-        botones.grid(row=3, column=0, sticky="w", pady=(10, 0))
+        botones.grid(row=4, column=0, sticky="w", pady=(10, 0))
         FlatButton(botones, theme, "Aplicar ahora",
                    command=self.aplicar_paleta, variant="accent").pack(
             side="left")
@@ -431,11 +450,11 @@ class ConfiguracionTab(BaseTab):
         tk.Label(
             card.body,
             text=("Se guarda en ~/.jobpulse_v15/ui_config.json y la "
-                  "interfaz se reconstruye con el nuevo esquema (o se "
-                  "aplicará al reiniciar)."),
+                  "interfaz se reconstruye con el nuevo esquema y la nueva "
+                  "densidad (o se aplicarán al reiniciar)."),
             bg=theme.color("surface"), fg=theme.color("text_faint"),
             font=theme.font(8), anchor="w",
-        ).grid(row=4, column=0, sticky="ew", pady=(8, 0))
+        ).grid(row=5, column=0, sticky="ew", pady=(8, 0))
 
     # -- tarjeta 6: cachés -------------------------------------------
     def _card_caches(self, parent: tk.Misc) -> None:
@@ -1379,6 +1398,10 @@ class ConfiguracionTab(BaseTab):
         if clave not in NOMBRES_PALETA:
             clave = PALETA_DEFECTO
         self._widgets["paleta"].set(NOMBRES_PALETA[clave])
+        densidad = configuracion.densidad_actual() or DENSIDAD_DEFECTO
+        if densidad not in NOMBRES_DENSIDAD:
+            densidad = DENSIDAD_DEFECTO
+        self._widgets["densidad"].set(NOMBRES_DENSIDAD[densidad])
         self._preview_paleta()
 
     def _clave_paleta_elegida(self) -> str:
@@ -1386,6 +1409,13 @@ class ConfiguracionTab(BaseTab):
         return next(
             (k for k, v in NOMBRES_PALETA.items() if v == visible),
             PALETA_DEFECTO,
+        )
+
+    def _clave_densidad_elegida(self) -> str:
+        visible = self._widgets["densidad"].get()
+        return next(
+            (k for k, v in NOMBRES_DENSIDAD.items() if v == visible),
+            DENSIDAD_DEFECTO,
         )
 
     def _preview_paleta(self) -> None:
@@ -1397,8 +1427,12 @@ class ConfiguracionTab(BaseTab):
         texto.configure(bg=paleta.surface, fg=paleta.text)
 
     def aplicar_paleta(self) -> None:
-        clave = self._clave_paleta_elegida()
-        configuracion.guardar({configuracion.CLAVE_PALETA: clave})
+        """Guarda esquema + densidad y reconstruye la app en caliente."""
+        claves = {
+            configuracion.CLAVE_PALETA: self._clave_paleta_elegida(),
+            configuracion.CLAVE_DENSIDAD: self._clave_densidad_elegida(),
+        }
+        configuracion.guardar(claves)
         servicio = self.context.services.get("reconstruir_ui")
         if servicio is None:
             self._info("Esquema guardado",
@@ -1406,7 +1440,7 @@ class ConfiguracionTab(BaseTab):
             return
         # after(1): este callback termina ANTES de destruir los widgets.
         try:
-            self.frame.after(1, lambda: servicio(clave))
+            self.frame.after(1, lambda: servicio(claves[configuracion.CLAVE_PALETA]))
         except tk.TclError:
             pass
 

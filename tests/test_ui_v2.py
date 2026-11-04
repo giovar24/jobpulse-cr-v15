@@ -53,7 +53,13 @@ from jobpulse_v15.ui_v2.tabs import scraping as scraping_mod
 from jobpulse_v15.ui_v2.tabs import vacantes as vacantes_mod
 from jobpulse_v15.ui_v2.tabs.base import TabContext
 from jobpulse_v15.ui_v2.tabs.vacantes import VacantesTab
-from jobpulse_v15.ui_v2.theme import PALETAS, apply_theme
+from jobpulse_v15.ui_v2.theme import (
+    DENSIDADES,
+    NOMBRES_DENSIDAD,
+    PALETAS,
+    apply_theme,
+    metrics_por_nombre,
+)
 
 
 def _tkroot_reintentos(intentos: int = 5) -> tk.Tk:
@@ -627,6 +633,12 @@ class TestConfiguracionPersistencia(unittest.TestCase):
         roto.write_text("{no es json", encoding="utf-8")
         self.assertEqual(config_ui.cargar(roto), {})
 
+    def test_densidad_se_guarda_y_se_lee(self):
+        """Sin densidad guardada → '' (crear_app cae a «normal»)."""
+        self.assertEqual(config_ui.densidad_actual(), "")
+        config_ui.guardar({config_ui.CLAVE_DENSIDAD: "compacta"})
+        self.assertEqual(config_ui.densidad_actual(), "compacta")
+
     def test_directorio_csv_solo_si_la_carpeta_existe(self):
         self.assertIsNone(config_ui.directorio_csv())
         carpeta = Path(self.temp_dir.name) / "exports"
@@ -999,6 +1011,24 @@ class TestConfiguracionTab(unittest.TestCase):
         # La nueva instancia ya arranca con la paleta elegida.
         self.assertEqual(
             self.shell.pestana_activa()._widgets["paleta"].get(), "Oscuro")
+
+    def test_cambiar_la_densidad_guarda_y_reconstruye(self):
+        """Mismo botón «Aplicar ahora»: guarda densidad y remonta la app."""
+        self.root.update()
+        self.pestana._widgets["densidad"].set("Compacta")
+        self.pestana.aplicar_paleta()
+        self.assertTrue(self._esperar(
+            lambda: self.shell.theme.metrics.row_height
+            == DENSIDADES["compacta"].row_height),
+            "la app no se reconstruyó con la densidad compacta")
+        datos = config_ui.cargar()
+        self.assertEqual(datos.get("densidad"), "compacta")
+        # La pestaña conserva la activa y recarga sus combos desde el JSON.
+        self.assertEqual(self.shell.pestana_activa().key, "configuracion")
+        self.assertEqual(
+            self.shell.pestana_activa()._widgets["densidad"].get(), "Compacta")
+        # La densidad también cambia la tipografía (font_scale < 1).
+        self.assertLess(self.shell.theme.metrics.font_scale, 1.0)
 
     def test_directorio_csv_se_guarda_y_se_puede_limpiar(self):
         self.root.update()
@@ -1495,6 +1525,42 @@ class TestCuentasTab(unittest.TestCase):
         self.assertIn("base del sistema",
                       self.pestana._widgets["estado"].cget("text"))
         self.assertIn("ANE", set(tabla.get_children()))
+
+
+class TestDensidad(unittest.TestCase):
+    """Densidades de la UI v2: métricas, escalado tipográfico y defectos."""
+
+    def test_las_tres_densidades_estan_definidas(self):
+        self.assertEqual(set(DENSIDADES), {"compacta", "normal", "amplia"})
+        self.assertEqual(set(NOMBRES_DENSIDAD), set(DENSIDADES))
+        self.assertLess(DENSIDADES["compacta"].row_height,
+                        DENSIDADES["normal"].row_height)
+        self.assertLess(DENSIDADES["normal"].row_height,
+                        DENSIDADES["amplia"].row_height)
+        self.assertLess(DENSIDADES["compacta"].pad, DENSIDADES["normal"].pad)
+        self.assertLess(DENSIDADES["normal"].pad, DENSIDADES["amplia"].pad)
+        self.assertLess(DENSIDADES["compacta"].font_scale, 1.0)
+        self.assertGreater(DENSIDADES["amplia"].font_scale, 1.0)
+
+    def test_valor_desconocido_cae_al_defecto(self):
+        self.assertIs(metrics_por_nombre("gigante"), DENSIDADES["normal"])
+        self.assertIs(metrics_por_nombre(None), DENSIDADES["normal"])
+        self.assertIs(metrics_por_nombre(""), DENSIDADES["normal"])
+
+    def test_theme_escala_las_fuentes_segun_la_densidad(self):
+        root = _tkroot_reintentos()
+        try:
+            normal = apply_theme(root)
+            self.assertEqual(normal.font(10), "{Segoe UI} 10 normal")
+            compacta = apply_theme(root, metrics=DENSIDADES["compacta"])
+            self.assertEqual(compacta.font(10), "{Segoe UI} 9 normal")
+            self.assertEqual(compacta.mono(9), "{Consolas} 8")
+            amplia = apply_theme(root, metrics=DENSIDADES["amplia"])
+            self.assertEqual(amplia.font(10), "{Segoe UI} 11 normal")
+            # Mínimo piso: una fuente de 1 px no se leería.
+            self.assertTrue(compacta.font(1).endswith(" 6 normal"))
+        finally:
+            root.destroy()
 
 
 if __name__ == "__main__":
