@@ -2,7 +2,8 @@
 
 Fecha: 2026-11-02. Autor: sesión de UI v2.
 Actualizado: 2026-11-03 (pestaña **Cuentas** + **Paso 5 persistido** +
-tarjetas de **cachés**, **retención** y **diagnóstico**).
+tarjetas de **cachés**, **retención** y **diagnóstico**; **punto 7**: densidad
+compacta/normal/amplia + **i18n es/en** con selector en Apariencia).
 
 La **UI clásica** (`src/jobpulse_v15/ui.py`, 3978 líneas) **no se toca**:
 sigue siendo la interfaz completa. La UI v2 vive aparte, en
@@ -21,10 +22,11 @@ Perfil, Vacantes, Scraping, Cuentas, Configuración). El objetivo es
 
 | Módulo | Qué es | Regla |
 |---|---|---|
-| `ui_v2/theme.py` | `Palette`, `Metrics`, `Theme`, `apply_theme()`, `PALETAS` | ÚNICA fuente de color, tipografía y espaciado |
-| `ui_v2/widgets.py` | `Card`, `StatTile`, `Badge`, `SearchField`, `FlatButton`, `EmptyState`, `ScrollFrame`, `SectionTitle`, `KeyValue` | Componentes planos reutilizables |
-| `ui_v2/dialogs.py` | `RevisionImportacionDialog` (revisión de CV), `confirmar()`, `pedir_texto()` | Toplevels reutilizables; no tocan la BD |
-| `ui_v2/configuracion.py` | `cargar`/`guardar` (merge), `paleta_actual`, `directorio_csv`, `guardar_env`, `leer_env`/`valor_env`, `puerto_cdp`, `guardar_navegador` | Persistencia **SIN Tk**: `ui_config.json` (compartido con la UI clásica) y `.env` |
+| `ui_v2/theme.py` | `Palette`, `Metrics`, `Theme`, `apply_theme()`, `PALETAS`, `DENSIDADES` | ÚNICA fuente de color, tipografía, espaciado y **densidad** |
+| `ui_v2/widgets.py` | `Card`, `StatTile`, `Badge`, `SearchField`, `FlatButton`, `EmptyState`, `ScrollFrame`, `SectionTitle`, `KeyValue` | Componentes planos reutilizables; **traducción automática** vía `i18n.t()` |
+| `ui_v2/i18n.py` | `t()`, `establecer_idioma()`, `IDIOMAS`, catálogo es→en | **i18n sin Tk**; la clave es el literal en español; sin traducción → devuelve la clave |
+| `ui_v2/dialogs.py` | `RevisionImportacionDialog`, `confirmar()`, `pedir_texto()` | Toplevels reutilizables; no tocan la BD |
+| `ui_v2/configuracion.py` | `cargar`/`guardar` (merge), `paleta_actual`, `densidad_actual`, `idioma_actual`, `directorio_csv`, `guardar_env`, `leer_env`/`valor_env`, `puerto_cdp`, `guardar_navegador` | Persistencia **SIN Tk**: `ui_config.json` (compartido con la UI clásica) y `.env` |
 | `ui_v2/data/*.py` | `JobsStore`, `ProfileStore`, `AtsStore`, `FuentesStore`, `ScrapingStore`, `CuentasStore`, `Paso5Store`, `RetencionStore` + dataclasses | **SIN Tkinter**: las pestañas no ven SQLite ni el keyring |
 | `ui_v2/tabs/base.py` | `BaseTab`, `TabContext` | El CONTRATO de una pestaña (+ helpers de hilos: cola + vigilante) |
 | `ui_v2/tabs/*.py` | `DatosCrudosTab`, `PerfilTab`, `VacantesTab`, `ScrapingTab`, `CuentasTab`, `ConfiguracionTab` | Composición de widgets; hablan con el store |
@@ -324,3 +326,64 @@ se pinta en un `Text` de solo lectura dentro de la tarjeta
 "Diagnóstico". `ia_estado.snapshot_enriquecimiento` ahora acepta la ruta
 de la BD (`bd=...`) para poder medir la base que la UI tiene abierta y no
 la del proyecto.
+
+---
+
+#### Densidad de la interfaz (punto 7a)
+
+La UI v2 tiene tres **densidades** (compacta / normal / amplia) que cambian
+el **espaciado**, el **tamaño de fuente** y las **dimensiones** de los
+widgets de un solo golpe. Se guardan en `ui_config.json` (clave `densidad`)
+y se aplican al arrancar (`crear_app()`) y en caliente (tarjeta
+"Apariencia" → "Aplicar ahora" → `reconstruir_ui`).
+
+| Densidad | `row_height` | `pad` | `font_scale` | Uso típico |
+|---|---|---|---|---|
+| **Compacta** | 24 | 12 | 0.92 | Pantallas pequeñas / mucha información |
+| **Normal** | 30 | 18 | 1.00 | Defecto |
+| **Amplia** | 38 | 26 | 1.10 | Accesibilidad / pantallas grandes |
+
+Técnicamente:
+- `theme.DENSIDADES` define tres `Metrics` (el `Metrics` base es "normal").
+- `Theme.font(size)` y `Theme.mono(size)` aplican `font_scale` (piso 6 px).
+- `apply_theme()` escala también el `padding` de los estilos ttk
+  (`Flat.TButton`, `TEntry`, `TCombobox`, `Flat.Treeview`, etc.) vía
+  `k = metrics.font_scale`.
+- El cambio de densidad **reconstruye la app entera** (igual que el cambio
+  de paleta): los widgets viejos se destruyen y los nuevos se montan con
+  las métricas vigentes.
+
+---
+
+#### i18n español / inglés (punto 7b)
+
+La UI v2 es **bilingüe** (es / en) con un catálogo centralizado en
+`ui_v2/i18n.py`. No hay archivos `.po` ni dependencias externas.
+
+**Cómo funciona:**
+- La **clave** del catálogo es el literal **en español** tal como está
+  escrito en el código; el valor es su traducción al inglés.
+- `t(clave)` devuelve la traducción si el idioma vigente es `en`, y la
+  **misma clave** si es `es` (o si no está en el catálogo): así una
+  cadena sin traducir **nunca rompe**.
+- `i18n.establecer_idioma(codigo)` fija el idioma (`es` o `en`); se lee
+  de `ui_config.json` (clave `idioma`) al arrancar y al reconstruir.
+
+**Dónde se usa `t()`:**
+1. **Componentes** (`widgets.py`): `SectionTitle`, `StatTile`, `Badge`,
+   `FlatButton`, `EmptyState`, `KeyValue`, `SearchField` traducen sus
+   propios argumentos. Una pestaña nueva que use componentes queda
+   traducida sin escribir `t()`.
+2. **Texto fijo suelto** (etiquetas `tk.Label`, `ttk.Checkbutton`,
+   `tree.heading`, `messagebox`, títulos de diálogo): `t("literal")` en
+   el punto.
+3. **Texto dinámico**: `t("{} de {} activas").format(a, b)`.
+
+**Cobertura actual**: ~130 textos únicos en 10 archivos (`app.py`,
+`dialogs.py`, `tabs/*.py`). El test `TestDensidad` + los tests de UI v2
+validan que el cambio de idioma + densidad + paleta funciona en caliente.
+
+**Selector en la UI**: tarjeta "Apariencia" → combo "Idioma" con los
+nombres visibles de `IDIOMAS` ("Español" / "English"). Al pulsar
+"Aplicar ahora" se guarda `idioma` + `densidad` + `paleta` y se
+reconstruye la app.

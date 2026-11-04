@@ -470,20 +470,23 @@ desmarca (pestaña **“Áreas de empleo”** en `ui_perfil.py` → hechos
     ahora acepta la ruta de la BD (`bd=...`) para medir la base abierta
     por la UI y no la del proyecto.
 
-## Estado de referencia (verificado 2026-11-03, tras retención + diagnóstico)
+## Estado de referencia (verificado 2026-11-03, tras punto 7: densidad + i18n)
 
-- Suite: **718 tests verdes** + 241 subtests (`python -m pytest tests/ -q`,
-  ~3 min); `test_matching.py` 87, `test_areas.py` 20, `test_ubicaciones_cr.py`
+- Suite: **723 tests verdes** + 241 subtests (`python -m pytest tests/ -q`,
+  ~2:30 min); `test_matching.py` 87, `test_areas.py` 20, `test_ubicaciones_cr.py`
   34, `test_idiomas.py` 7, `test_salario.py` 16, `test_ats_ranking.py` 44,
   `test_scraper.py` 11, `test_browser_manager.py` 21, `test_cuentas.py` 9,
   `test_paso5.py` 6, `test_caches.py` 12, `test_diagnostico.py` 6,
-  `test_retencion.py` 13, `test_ui_v2.py` 89.
-- **UI v2 (`src/jobpulse_v15/ui_v2/`, 2026-11-02)**: interfaz **plana y
+  `test_retencion.py` 13, `test_ui_v2.py` 94 (5 nuevos: densidad + i18n).
+- **UI v2 (`src/jobpulse_v15/ui_v2/`, 2026-11-03)**: interfaz **plana y
   modular** que convive con la UI clásica (`ui.py`, intacta). Lanzador
   `jobpulse-v15-v2.bat` o `python -m jobpulse_v15.ui_v2`. Capas: `theme.py`
-  (única fuente de estilo), `widgets.py`, `dialogs.py`, `configuracion.py`
-  (persistencia **sin Tk**), `data/` (stores **sin Tk**), `tabs/base.py`
-  (contrato), `tabs/*.py`, `app.py` (shell + `PESTANIAS`).
+  (única fuente de estilo + **densidades**), `widgets.py` (traducción
+  automática con `i18n.t()`), `dialogs.py`, `i18n.py` (catálogo es→en),
+  `configuracion.py` (persistencia **sin Tk**), `data/` (stores **sin Tk**),
+  `tabs/base.py` (contrato + hilos cola+vigilante), `tabs/*.py`,
+  `app.py` (shell + `PESTANIAS` + `reconstruir_con_paleta` que aplica
+  densidad+idioma+paleta).
   Agregar una pestaña = módulo nuevo + 1 línea en `PESTANIAS`. Pestañas:
   **Datos crudos** (avisos con valores originales + panel de texto crudo +
   export CSV), **Perfil** (importar CV con diálogo de revisión revertible +
@@ -498,12 +501,13 @@ desmarca (pestaña **“Áreas de empleo”** en `ui_perfil.py` → hechos
   la contraseña va al keyring y NUNCA se muestra) y
   **Configuración** (IA local —arrancar/detener, O7.3—, IA externa → `.env`,
   **navegador Brave/CDP** —ruta, perfil y puerto; Verificar/Abrir/Detener—,
-  sondas de scraping on/off, esquema de color, **cachés** —tamaño y
+  sondas de scraping on/off, **apariencia** —esquema de color + **densidad**
+  (compacta/normal/amplia) + **idioma** (es/en)—, **cachés** —tamaño y
   limpieza de la caché IA y de embeddings—, **retención** —ventana de
   meses y "solo vigentes"—, **diagnóstico** —integridad, calidad y
   huecos—, directorio por defecto de
   CSV). Detalle y patrones de Tk: `docs/UI_V2_ARQUITECTURA.md`; gotchas
-  21–24, 29–30.
+  21–24, 29–32.
 - **BD `data/jobpulse_v15.db` = corpus REAL del usuario** (corrida manual del
   01-11, sin vaciar: es la evidencia en uso). NO "limpiarla" sin confirmación
   explícita — la única vía es `clean_run.py SI`. Esquema versión **16**; la
@@ -551,6 +555,9 @@ desmarca (pestaña **“Áreas de empleo”** en `ui_perfil.py` → hechos
   `_cargar_facts`). Por eso los facts del perfil son **invisibles para el
   motor** hasta resolver la capa B (reutilizable: `conceptos.resolver`). La UI
   v2 lo muestra en la columna "Canónico" para no ocultarlo.
+- **Punto 7 completado**: densidad (3 niveles, `font_scale` + métricas) + i18n
+  (es/en, ~130 textos, componentes traducen solos, selector en Configuración
+  → Apariencia, reconstrucción en caliente).
 - Pendientes: ver "Pendiente inmediato" del handoff más reciente (capa B
   `codigo_canonico` del perfil + migración `017`, las `educacion_no_confirmada`
   sin firma de segunda persona, O5.3 re-barrido de descripciones basura, O6.4
