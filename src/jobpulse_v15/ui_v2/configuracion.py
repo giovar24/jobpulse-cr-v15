@@ -35,6 +35,7 @@ ENV = Path(__file__).resolve().parents[3] / ".env"
 CLAVE_PALETA = "paleta"
 CLAVE_CSV_DIR = "csv_dir"
 CLAVE_DENSIDAD = "densidad"
+CLAVE_IDIOMA = "idioma"
 
 # Claves del .env que guardan la configuración del navegador (punto 2).
 CLAVE_BRAVE_BIN = "BRAVE_BIN"
@@ -75,6 +76,11 @@ def paleta_actual(ruta: Path | None = None) -> str:
 def densidad_actual(ruta: Path | None = None) -> str:
     """Nombre de la densidad guardada ("" si nunca se eligió)."""
     return str(cargar(ruta).get(CLAVE_DENSIDAD) or "")
+
+
+def idioma_actual(ruta: Path | None = None) -> str:
+    """Código del idioma guardado ("" si nunca se eligió)."""
+    return str(cargar(ruta).get(CLAVE_IDIOMA) or "")
 
 
 def directorio_csv(ruta: Path | None = None) -> str | None:
