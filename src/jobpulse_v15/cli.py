@@ -216,6 +216,11 @@ def main() -> int:
     site_list = site_commands.add_parser("list", help="Listar sitios.")
     site_list.add_argument("--enabled-only", action="store_true")
     site_list.add_argument("--group")
+    site_list.add_argument(
+        "--needs-review",
+        action="store_true",
+        help="Mostrar solo los sitios marcados para revision manual.",
+    )
 
     site_state = site_commands.add_parser(
         "set-enabled", help="Activar o pausar un sitio."
@@ -224,9 +229,19 @@ def main() -> int:
     state = site_state.add_mutually_exclusive_group(required=True)
     state.add_argument("--enabled", action="store_true")
     state.add_argument("--disabled", action="store_true")
-    site_commands.add_parser(
+    mark_reviewed = site_commands.add_parser(
         "mark-reviewed", help="Limpiar la bandera de revision manual."
-    ).add_argument("--id", required=True)
+    )
+    mark_reviewed_target = mark_reviewed.add_mutually_exclusive_group(required=True)
+    mark_reviewed_target.add_argument("--id")
+    mark_reviewed_target.add_argument(
+        "--all-needs-review",
+        action="store_true",
+        help=(
+            "Resolver TODOS los sitios marcados para revision (reinicia su "
+            "rache de ceros). Revisa la lista antes: no se pausa ningun sitio."
+        ),
+    )
 
     site_seed = site_commands.add_parser(
         "seed-cr",
@@ -683,6 +698,14 @@ def main() -> int:
             "incompleto, con error o campos ambiguos/desconocidos."
         ),
     )
+    search.add_argument(
+        "--solo-requisitos-obligatorios",
+        action="store_true",
+        help=(
+            "Mostrar solo vacantes cuyo analisis vigente declara al menos un "
+            "requisito obligatorio (los 'preferred' no cuentan)."
+        ),
+    )
     review_reason_choices = sorted(JOB_REVIEW_REASON_CODES) + [
         f"{prefix}:{category}"
         for prefix in sorted(JOB_REVIEW_FIELD_PREFIXES)
@@ -843,7 +866,9 @@ def main() -> int:
                 print(f"Sitio registrado: {args.id}")
             elif args.command == "site" and args.site_command == "list":
                 sites = repository.list_sites(
-                    enabled_only=args.enabled_only, run_group=args.group
+                    enabled_only=args.enabled_only,
+                    run_group=args.group,
+                    needs_review_only=args.needs_review,
                 )
                 print(json.dumps(sites, ensure_ascii=False, indent=2))
             elif args.command == "site" and args.site_command == "set-enabled":
@@ -855,9 +880,24 @@ def main() -> int:
                 state_text = "activo" if args.enabled else "pausado"
                 print(f"Sitio {args.id}: {state_text}")
             elif args.command == "site" and args.site_command == "mark-reviewed":
-                if not repository.mark_site_reviewed(args.id):
-                    parser.error(f"No existe el sitio {args.id!r}.")
-                print(f"Sitio {args.id}: revision marcada como resuelta.")
+                if args.all_needs_review:
+                    pendientes = repository.list_sites(needs_review_only=True)
+                    for sitio in pendientes:
+                        repository.mark_site_reviewed(str(sitio["site_id"]))
+                    print(
+                        f"{len(pendientes)} sitio(s) marcados como revisados "
+                        f"(rache de ceros reiniciado)."
+                    )
+                    for sitio in pendientes:
+                        print(
+                            f"  {sitio['site_id']} "
+                            f"(plataforma={sitio['platform_id']}, "
+                            f"ceros={sitio['consecutive_zero_runs']})"
+                        )
+                else:
+                    if not repository.mark_site_reviewed(args.id):
+                        parser.error(f"No existe el sitio {args.id!r}.")
+                    print(f"Sitio {args.id}: revision marcada como resuelta.")
             elif args.command == "site" and args.site_command == "seed-cr":
                 from jobpulse_v15.seed_ats import registrar_directorio
 
@@ -2196,6 +2236,9 @@ def main() -> int:
                         include_manually_skipped=args.include_manually_skipped,
                         needs_review_only=args.needs_review,
                         review_reason=args.review_reason,
+                        solo_requisitos_obligatorios=(
+                            args.solo_requisitos_obligatorios
+                        ),
                         sort_by=args.sort_by,
                         published_from=args.published_from,
                         published_to=args.published_to,

@@ -562,6 +562,39 @@ class TestVacantesTab(unittest.TestCase):
         self.assertEqual(len(pestana._widgets["tabla"].get_children()), 1)
         self.assertEqual(pestana.filas[0].title, "IT Support Specialist")
 
+    def test_columna_requisitos_y_filtro_de_requisitos_obligatorios(self):
+        """O2.2: columna "Req." + casilla "solo con requisitos obligatorios"."""
+        pestana = self._pestana()
+        pestana.filas = [
+            VacanteAts(job_id="job-a", title="Puesto A", company="Acme",
+                       area="—", score=70.0, veredicto="ajustable",
+                       semantica_pct=None, skills_pct=None,
+                       experiencia_pct=None, educacion_pct=None,
+                       idiomas_pct=None, req_obligatorios=3),
+            VacanteAts(job_id="job-b", title="Puesto B", company="Acme",
+                       area="—", score=50.0, veredicto="debil",
+                       semantica_pct=None, skills_pct=None,
+                       experiencia_pct=None, educacion_pct=None,
+                       idiomas_pct=None, req_obligatorios=0),
+        ]
+        pestana._pintar_tabla()
+        self.root.update()
+
+        tabla = pestana._widgets["tabla"]
+        self.assertEqual(tabla.set("job-a", "req"), "3")
+        self.assertEqual(tabla.set("job-b", "req"), "0")
+        self.assertEqual(len(tabla.get_children()), 2)
+
+        pestana._widgets["solo_requisitos"].set(True)
+        pestana._pintar_tabla()
+        self.root.update()
+        self.assertEqual(tabla.get_children(), ("job-a",))
+
+        pestana._widgets["solo_requisitos"].set(False)
+        pestana._pintar_tabla()
+        self.root.update()
+        self.assertEqual(len(tabla.get_children()), 2)
+
     def test_el_paso5_persiste_la_corrida_y_puebla_la_columna(self):
         """El botón corre el matching y deja la corrida en `job_match`."""
         pestana = self._pestana()

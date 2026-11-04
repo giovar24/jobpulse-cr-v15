@@ -34,8 +34,8 @@ Cuando el usuario dice "vamos a otra sesión":
 | `docs/HANDOFF_SESION_*.md` | Bitácora por sesión (empezar siempre por el más nuevo) |
 | `docs/IA_ENRIQUECIMIENTO.md` | Operación del pase IA: modelo local, caché, depuración |
 | `docs/SITIOS_PROBLEMATICOS.md` | Guía ANE / Indeed / LinkedIn (login-wall, Cloudflare) |
-| `docs/PASO5_EVIDENCIA_*.md` | Evidencia literal del matching (GENERADO — no editar a mano) |
-| `docs/PASO5_REVISION_PENDIENTES.md` | Hoja de firma: `educacion_no_confirmada` (sin veredictos, regenerable) |
+| `docs/PASO5_EVIDENCIA_*.md` | Evidencia literal del matching (GENERADO — no editar a mano) · la vigente = `PASO5_EVIDENCIA_2026-11-03.md` (corrida `20261103_155215`) |
+| `docs/PASO5_REVISION_PENDIENTES.md` | Hoja de firma: `educacion_no_confirmada` (sin veredictos, regenerable) — regenerada el 2026-11-04 contra la corrida vigente (30 casos) |
 | `docs/UI_V2_ARQUITECTURA.md` | UI v2 (plana y modular): capas, cómo agregar una pestaña, patrones de Tk |
 | `docs/FLUJO_CLI_VS_UI.md` | CLI vs. UI paso a paso: qué comparten y qué hace solo cada uno |
 | `DESARROLLO_v15.md` | Arquitectura, objetivos O1–O10 (canónicos en §3), decisiones |
@@ -76,6 +76,11 @@ Cuando el usuario dice "vamos a otra sesión":
 
 # CLI de orquestación: scrape, site, platform, credenciales, login, run, quality…
 .\.venv\Scripts\python.exe -m jobpulse_v15 --help
+
+# Salud de los sitios (O3): listar los marcados y resolver la revision manual
+.\.venv\Scripts\python.exe -X utf8 -m jobpulse_v15 site list --needs-review
+.\.venv\Scripts\python.exe -X utf8 -m jobpulse_v15 site mark-reviewed --id <site_id>
+.\.venv\Scripts\python.exe -X utf8 -m jobpulse_v15 site mark-reviewed --all-needs-review
 
 # Servidor IA local (Gemma 3n E2B QAT, puerto 8081) — verificar/arrancar
 .\ia-server.bat                # o: .\.venv\Scripts\python.exe start_ia_server.py
@@ -123,7 +128,7 @@ Cuando el usuario dice "vamos a otra sesión":
 .\.venv\Scripts\python.exe -X utf8 clean_run.py SI
 
 # Tests: pytest vive en el python del SISTEMA (el venv NO lo tiene).
-python -m pytest tests/ -q   # baseline 2026-11-03: 718 passed + 241 subtests
+python -m pytest tests/ -q   # baseline 2026-11-04: 736 passed + 241 subtests
 
 # UI clásica (completa, intacta)
 .\.venv\Scripts\python.exe -m jobpulse_v15.ui
@@ -298,6 +303,55 @@ ese caso mandan los que pide. Implementación: `matching.requisitos_efectivos`
   autor de la regla se descarta por sesgo). NO actualizar estados hasta esa
   firma.
 
+## Conteo de requisitos obligatorios — O2.2 (2026-11-04)
+
+Una sola definición, compartida por CLI, UI clásica y UI v2:
+`req_obligatorios` = nº de requisitos con `requirement_level='required'` del
+análisis **vigente** (`job_analysis.is_current = 1`). Los `preferred` NO
+cuentan ("Preferred" no bloquea, misma regla dura del Paso 5) y los análisis
+viejos tampoco.
+
+- Definición + filtro en SQL: `Repository.search_jobs` → parámetro
+  `solo_requisitos_obligatorios` y columna `req_obligatorios` en cada fila.
+  **La definición vive en el repositorio, no en cada UI** (paridad CLI/UI).
+- UI clásica (`ui.py`): columna **"Req."** en la tabla de vacantes + casilla
+  "Solo vacantes con requisitos obligatorios" (se resetea con los demás
+  filtros).
+- UI v2 (`ui_v2/tabs/vacantes.py`): columna **"req"** ("Req.") antes de
+  "Paso 5" + casilla "Solo con requisitos obligatorios" (i18n es/en).
+- CLI: `search --solo-requisitos-obligatorios`; el CSV de búsqueda añade
+  `requisitos_obligatorios` **al final** (no desplaza los índices de las
+  columnas ya publicadas).
+- El ranking ATS (score 0-100) es otra cosa: un RANKING, no una calificación.
+  No toca los umbrales congelados ni los estados del Paso 5.
+- **Alcance (importante)**: la columna "Req." cuenta solo lo que el
+  EXTRACTOR marcó `required`. El motor del Paso 5 decide la obligatoriedad
+  por el **TEXTO** ("Required Qualifications: ..." → obligatorio aunque el
+  extractor lo haya marcado `ambiguous`/`inferred`), así que hay avisos
+  `calificada` con "Req." = 0 (en la BD real: 122 de 173). "Req." = 0
+  significa **"el extractor no confirmó ningún requisito obligatorio"**, NO
+  "el aviso no tiene requisitos": el filtro es un triage conservador, no el
+  veredicto del motor. La definición vive en SQL (paridad CLI/UI); alinearla
+  con el texto del aviso exigiría llamar al motor, no al repositorio.
+
+## Salud de los sitios — O3 (2026-11-04)
+
+`source_sites.review_required = 1` = el sitio pidió revisión manual (3 ceros
+seguidos → `needs_review`; un error → `error`). La revisión es el **acuse de
+recibo** del sitio:
+
+- `Repository.mark_site_reviewed` **reinicia `consecutive_zero_runs = 0`**
+  (sin ese reset, un sitio con 12 ceros volvía a marcarse en la siguiente
+  corrida con 0 y la revisión manual no servía de nada). No desactiva el
+  sitio ni borra datos: solo baja la bandera y deja el último estado
+  observado.
+- `clean_run.py` reinicia también la salud de los sitios
+  (`health_status='unknown'`, rache=0, `review_required=0`): la salud se
+  deriva de las corridas, y si se borran las corridas se borra su veredicto.
+- CLI: `site list --needs-review` y `site mark-reviewed --id <site_id>` /
+  `--all-needs-review` (mutuamente excluyentes). `list_sites` acepta
+  `needs_review_only=True`.
+
 ## Filtro por ÁREA de empleo (nuevo 2026-10-30)
 
 Módulo real: `src/jobpulse_v15/areas.py` (tests: `tests/test_areas.py`).
@@ -469,15 +523,30 @@ desmarca (pestaña **“Áreas de empleo”** en `ui_perfil.py` → hechos
     + `Repository.get_data_quality_summary()`. `snapshot_enriquecimiento`
     ahora acepta la ruta de la BD (`bd=...`) para medir la base abierta
     por la UI y no la del proyecto.
+33. **La salud de los sitios se deriva de las corridas**: `consecutive_zero_runs`
+    NO se reinicia solo; hay que hacer el acuse (`site mark-reviewed`) o
+    limpiar la BD (`clean_run.py` lo hace por ti). Un rache alto sin
+    resolver = sitios marcados en la siguiente corrida con 0.
 
-## Estado de referencia (verificado 2026-11-03, tras punto 7: densidad + i18n)
+## Estado de referencia (verificado 2026-11-04, tras O2.2 + O3)
 
-- Suite: **723 tests verdes** + 241 subtests (`python -m pytest tests/ -q`,
-  ~2:30 min); `test_matching.py` 87, `test_areas.py` 20, `test_ubicaciones_cr.py`
+- Suite: **736 tests verdes** + 241 subtests (`python -m pytest tests/ -q`,
+  ~2:15 min); `test_matching.py` 87, `test_areas.py` 20, `test_ubicaciones_cr.py`
   34, `test_idiomas.py` 7, `test_salario.py` 16, `test_ats_ranking.py` 44,
   `test_scraper.py` 11, `test_browser_manager.py` 21, `test_cuentas.py` 9,
   `test_paso5.py` 6, `test_caches.py` 12, `test_diagnostico.py` 6,
-  `test_retencion.py` 13, `test_ui_v2.py` 94 (5 nuevos: densidad + i18n).
+  `test_retencion.py` 13, `test_ui_v2.py` 95 (O2.2), `test_repository.py` 51
+  (O2.2 + O3), `test_clean_run.py` 6 (O3), `test_cli_sitios.py` 6 (O2.2 + O3).
+- **O2.2 COMPLETADO**: columna "Req." + filtro "solo con requisitos
+  obligatorios" en UI clásica, UI v2 y CLI (ver §"Conteo de requisitos
+  obligatorios"). Definición única en `Repository.search_jobs`.
+- **O3 COMPLETADO**: los 62 sitios marcados (61 `zero_results` + 1 `error`)
+  se resolvieron con `site mark-reviewed --all-needs-review` (la BD real:
+  0 pendientes, 0 raches, 535 avisos intactos). Ojo: **el 0 no siempre es
+  legítimo** — `workday-intel` devolvía 2 ofertas CR en vivo con 13 ceros
+  acumulados; los raches altos venían de corridas borradas por `clean_run`,
+  que hasta ahora NO reiniciaba la salud de los sitios (ya corregido).
+  `workday-synnex` es el único `error` real (anuncio caído en Workday).
 - **UI v2 (`src/jobpulse_v15/ui_v2/`, 2026-11-03)**: interfaz **plana y
   modular** que convive con la UI clásica (`ui.py`, intacta). Lanzador
   `jobpulse-v15-v2.bat` o `python -m jobpulse_v15.ui_v2`. Capas: `theme.py`
@@ -492,7 +561,9 @@ desmarca (pestaña **“Áreas de empleo”** en `ui_perfil.py` → hechos
   export CSV), **Perfil** (importar CV con diálogo de revisión revertible +
   alta/edición manual de `candidate_profile_facts`), **Vacantes**
   (**ranking ATS** de los avisos contra el perfil: score 0-100, veredicto,
-  desglose y skills que faltan; export CSV; botón **Ejecutar Paso 5** que
+  desglose y skills que faltan; columna **"Req."** (requisitos obligatorios
+  del aviso) + casilla "Solo con requisitos obligatorios"; export CSV;
+  botón **Ejecutar Paso 5** que
   deja la corrida PERSISTIDA en `job_match` + casilla "Evaluar todo"),
   **Scraping** (lanzar un
   barrido de las fuentes: grupos `directos`/`cr-gov`/`cr-jobs`, páginas,
@@ -562,5 +633,7 @@ desmarca (pestaña **“Áreas de empleo”** en `ui_perfil.py` → hechos
   `codigo_canonico` del perfil + migración `017`, las `educacion_no_confirmada`
   sin firma de segunda persona, O5.3 re-barrido de descripciones basura, O6.4
   dedupe de slugs ES/EN al importar CV, sucursal de Harvie en el título,
-  Paso 7, O8.2/O8.4, O2/O4/O9 y pestañas nuevas de la
-  UI v2 — el shell ya está listo).
+  Paso 7, O8.2/O8.4, O4 (sin objeto: el gate ya no existe → proponer cerrarlo
+  como *superseded*), O9 y pestañas nuevas de la
+  UI v2 — el shell ya está listo). **O2 y O3 ya NO están pendientes**
+  (O2.2 y O3 completados el 2026-11-04).

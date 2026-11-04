@@ -103,6 +103,7 @@ _EN: dict[str, str] = {
     # --- vacantes (tabs/vacantes.py) ---
     "Buscar por puesto o empresa…": "Search by position or company…",
     "Solo áreas de mi perfil": "Only areas in my profile",
+    "Solo con requisitos obligatorios": "Only with mandatory requirements",
     "Evaluar todo": "Evaluate everything",
     "Ejecutar Paso 5": "Run Step 5",
     "Recalcular": "Recalculate",

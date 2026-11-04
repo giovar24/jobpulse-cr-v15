@@ -406,6 +406,7 @@ class JobPulseWindow:
         self.include_preferred_var = tk.BooleanVar(value=False)
         self.include_manually_skipped_var = tk.BooleanVar(value=False)
         self.needs_review_only_var = tk.BooleanVar(value=False)
+        self.solo_requisitos_var = tk.BooleanVar(value=False)
         self.review_reason_var = tk.StringVar(value="Cualquiera")
         self.sort_by_var = tk.StringVar(value="Actividad reciente")
         self.published_from_var = tk.StringVar()
@@ -578,7 +579,13 @@ class JobPulseWindow:
             text="Solo mostrar vacantes con motivos de revision",
             variable=self.needs_review_only_var,
             command=self.search_jobs,
-        ).grid(row=4, column=0, columnspan=8, sticky="w", pady=(8, 0))
+        ).grid(row=4, column=0, columnspan=4, sticky="w", pady=(8, 0))
+        ttk.Checkbutton(
+            filters,
+            text="Solo vacantes con requisitos obligatorios",
+            variable=self.solo_requisitos_var,
+            command=self.search_jobs,
+        ).grid(row=4, column=4, columnspan=4, sticky="w", pady=(8, 0))
         self._add_entry(
             filters,
             "Tipo de empleo",
@@ -674,6 +681,7 @@ class JobPulseWindow:
             "work_mode",
             "posting_language",
             "date_published",
+            "req_obligatorios",
             "profile_compatibility",
             "data_review",
             "manual_status",
@@ -693,6 +701,7 @@ class JobPulseWindow:
             "work_mode": "Modalidad",
             "posting_language": "Idioma",
             "date_published": "Publicada",
+            "req_obligatorios": "Req.",
             "profile_compatibility": "Perfil",
             "data_review": "Datos",
             "manual_status": "Estado manual",
@@ -704,6 +713,7 @@ class JobPulseWindow:
             "work_mode": 100,
             "posting_language": 90,
             "date_published": 105,
+            "req_obligatorios": 60,
             "profile_compatibility": 125,
             "data_review": 90,
             "manual_status": 105,
@@ -873,6 +883,7 @@ class JobPulseWindow:
                 limit=limit,
                 include_manually_skipped=self.include_manually_skipped_var.get(),
                 needs_review_only=self.needs_review_only_var.get(),
+                solo_requisitos_obligatorios=self.solo_requisitos_var.get(),
                 review_reason=JOB_REVIEW_REASON_OPTIONS[
                     self.review_reason_var.get()
                 ],
@@ -960,6 +971,7 @@ class JobPulseWindow:
                     job.get("work_mode") or "unknown",
                     job.get("posting_language") or "undetermined",
                     job.get("date_published") or "",
+                    str(job.get("req_obligatorios", 0)),
                     PROFILE_COMPATIBILITY_LABELS[profile_status],
                     format_job_review_summary(job.get("review_reasons", [])),
                     MANUAL_JOB_STATUS_LABELS.get(job.get("user_status"), ""),
@@ -1118,6 +1130,7 @@ class JobPulseWindow:
         self.include_preferred_var.set(False)
         self.include_manually_skipped_var.set(False)
         self.needs_review_only_var.set(False)
+        self.solo_requisitos_var.set(False)
         self.review_reason_var.set("Cualquiera")
         self.sort_by_var.set("Actividad reciente")
         self.published_from_var.set("")

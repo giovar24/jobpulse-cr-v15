@@ -1,4 +1,4 @@
-# Paso 5 — HOJA DE REVISIÓN PENDIENTE (corrida `20261101_084012`)
+# Paso 5 — HOJA DE REVISIÓN PENDIENTE (corrida `20261103_155215`)
 
 > Documento GENERADO por `generar_revision_pendientes.py` — contiene
 > **solo textos literales de la BD, sin ningún veredicto**.
@@ -37,7 +37,24 @@ depende de ellas y hay que decidirlas **con una fuente**, no por impulso:
 Columnas de la tabla de firmas: `veredicto` (bloqueo real / no bloqueo /
 dudoso), `criterio que lo justifica`, `revisor`, `fecha`.
 
-### 1. `linkedin-4483157697` — Technical Support Specialist (Tier 2)
+### 1. `linkedin-4460642248` — Technical Support Specialist
+
+| veredicto | criterio | revisor | fecha |
+|---|---|---|---|
+|   |   |   |   |
+
+**Texto 1 (verbatim):**
+
+> ve self-service resources for clients Provide regular status updates to management, clients, and all relevant stakeholders Analyze customer needs and platform usage to provide strategic recommendations for improved performance, functionality, and efficiency Required Qualifications: 5+ years of experience in Customer Support/Technical Support roles Bachelor's degree in Computer Science, Information Technology, or equivalent Fluent in English (spoken and written) Strong problem-solving skills with deep investigative and analytical abilities Excellent technical writing skills with experience creating clear, concise documentation and knowledge base articles Ability to work independently and think outside the box
+
+**Requisito(s) `education` extraído(s) por el extractor** — la
+citas son literales del texto de la oferta:
+
+- `value_text="Bachelor's degree"` · `requirement_level='required'` · evidencia: > What You'll Do: Provide expert-level technical support for Magentrix software, troubleshooting issues and isolating root causes Think quickly and critically to diagnose, investigate, and resolve complex technical problems efficiently Guide customers in navigating the platform and its various modules to ensure optimal use and efficiency Apply solution engineering principles to design and recommend tailored configurations, integrations, and optimizations that meet customer needs Go above and beyond to deliver the 'Magentrix Magic Experience' by providing outstanding customer service at every interaction Work closely with internal teams to escalate and resolve complex technical issues, sharing innovative ideas to enhance support processes Maintain and update Knowledge Base articles to improve self-service resources for clients Provide regular status updates to management, clients, and all relevant stakeholders Analyze customer needs and platform usage to provide strategic recommendations for improved performance, functionality, and efficiency Required Qualifications: 5+ years of experience in Customer Support/Technical Support roles Bachelor's degree in Computer Science, Information Technology, or equivalent Fluent in English (spoken and written) Strong problem-solving skills with deep investigative and analytical abilities Excellent technical writing skills with experience creating clear, concise documentation and knowledge base articles Ability to work independently and think outside the box to solve technical challenges Ability to work Eastern Time Zone hours (8 AM to 8 PM ET) Current residence in Brazil Experience in customer-facing roles with demonstrated communication excellence Bonus Skills: Technical knowledge of CSS, JavaScript, JSON, C#, .NET, and HTML Previous experience with CRM systems (Salesforce, Microsoft Dynamics, or HubSpot) Salesforce Administration Experience with SAML-based SSO and identity management solutions Customer Success experience What Sets You Apart: You're a fast thinker who thrives in dynamic environments You have a knack for thinking outside the box You're naturally curious and enjoy deep investigation You can work independently while maintaining strong team collaboration Why Join Us: Join a growing, innovative company Develop your skills with a supportive team Career advancement opportunities and professional growth paths Make a real impact on customer success Remote work flexibility Compensation: $1,000 - $1,300 USD/monthly Ready to take your career to the next level?
+
+---
+
+### 2. `linkedin-4483157697` — Technical Support Specialist (Tier 2)
 
 | veredicto | criterio | revisor | fecha |
 |---|---|---|---|
@@ -54,7 +71,7 @@ citas son literales del texto de la oferta:
 
 ---
 
-### 2. `recruitee-transperfect-2770002` — Client Service Executive
+### 3. `recruitee-transperfect-2770002` — Client Service Executive
 
 | veredicto | criterio | revisor | fecha |
 |---|---|---|---|
@@ -71,7 +88,7 @@ citas son literales del texto de la oferta:
 
 ---
 
-### 3. `workday-Accounts-Payable-Representative_J-020440` — Accounts Payable Representative
+### 4. `workday-Accounts-Payable-Representative_J-020440` — Accounts Payable Representative
 
 | veredicto | criterio | revisor | fecha |
 |---|---|---|---|
@@ -88,7 +105,7 @@ citas son literales del texto de la oferta:
 
 ---
 
-### 4. `workday-Analyst-Payroll_R273170` — Analyst Payroll
+### 5. `workday-Analyst-Payroll_R273170` — Analyst Payroll
 
 | veredicto | criterio | revisor | fecha |
 |---|---|---|---|
@@ -105,7 +122,7 @@ citas son literales del texto de la oferta:
 
 ---
 
-### 5. `workday-Audience-Management_26999789` — Audience Management
+### 6. `workday-Audience-Management_26999789` — Audience Management
 
 | veredicto | criterio | revisor | fecha |
 |---|---|---|---|
@@ -122,7 +139,7 @@ citas son literales del texto de la oferta:
 
 ---
 
-### 6. `workday-Buyer-Planner-Sr_31163601` — Buyer Planner Sr
+### 7. `workday-Buyer-Planner-Sr_31163601` — Buyer Planner Sr
 
 | veredicto | criterio | revisor | fecha |
 |---|---|---|---|
@@ -139,7 +156,7 @@ citas son literales del texto de la oferta:
 
 ---
 
-### 7. `workday-Cardiac-Specialist-II_R18282-1` — Cardiac Specialist II
+### 8. `workday-Cardiac-Specialist-II_R18282-1` — Cardiac Specialist II
 
 | veredicto | criterio | revisor | fecha |
 |---|---|---|---|
@@ -156,7 +173,7 @@ citas son literales del texto de la oferta:
 
 ---
 
-### 8. `workday-Clinical-Project-Manager_R18034-1` — Clinical Project Manager
+### 9. `workday-Clinical-Project-Manager_R18034-1` — Clinical Project Manager
 
 | veredicto | criterio | revisor | fecha |
 |---|---|---|---|
@@ -177,7 +194,7 @@ citas son literales del texto de la oferta:
 
 ---
 
-### 9. `workday-Commercial-Analyst_R-01372758` — Commercial Analyst
+### 10. `workday-Commercial-Analyst_R-01372758` — Commercial Analyst
 
 | veredicto | criterio | revisor | fecha |
 |---|---|---|---|
@@ -194,7 +211,7 @@ citas son literales del texto de la oferta:
 
 ---
 
-### 10. `workday-Creative-Execution-Manager--CrM-_261002442` — Creative Execution Manager (CrM)
+### 11. `workday-Creative-Execution-Manager--CrM-_261002442` — Creative Execution Manager (CrM)
 
 | veredicto | criterio | revisor | fecha |
 |---|---|---|---|
@@ -211,7 +228,7 @@ citas son literales del texto de la oferta:
 
 ---
 
-### 11. `workday-Credit---Collections-Specialist--2_R232432` — Credit & Collections Specialist
+### 12. `workday-Credit---Collections-Specialist--2_R232432` — Credit & Collections Specialist
 
 | veredicto | criterio | revisor | fecha |
 |---|---|---|---|
@@ -228,7 +245,7 @@ citas son literales del texto de la oferta:
 
 ---
 
-### 12. `workday-Datacenter-Engineer--L3-ERT_1212932-2` — Datacenter Engineer- L3/ERT
+### 13. `workday-Datacenter-Engineer--L3-ERT_1212932-2` — Datacenter Engineer- L3/ERT
 
 | veredicto | criterio | revisor | fecha |
 |---|---|---|---|
@@ -250,7 +267,7 @@ citas son literales del texto de la oferta:
 
 ---
 
-### 13. `workday-Datacenter-Engineer--L3-ERT_1212933-2` — Datacenter Engineer- L3/ERT
+### 14. `workday-Datacenter-Engineer--L3-ERT_1212933-2` — Datacenter Engineer- L3/ERT
 
 | veredicto | criterio | revisor | fecha |
 |---|---|---|---|
@@ -267,7 +284,7 @@ citas son literales del texto de la oferta:
 
 ---
 
-### 14. `workday-Fire-Protection-Project-Development-Specialist_WD30282840` — Fire Protection Project Development Specialist
+### 15. `workday-Fire-Protection-Project-Development-Specialist_WD30282840` — Fire Protection Project Development Specialist
 
 | veredicto | criterio | revisor | fecha |
 |---|---|---|---|
@@ -284,7 +301,7 @@ citas son literales del texto de la oferta:
 
 ---
 
-### 15. `workday-HR-Benefits-Operations-Analyst_261003280` — HR Benefits Operations Analyst
+### 16. `workday-HR-Benefits-Operations-Analyst_261003280` — HR Benefits Operations Analyst
 
 | veredicto | criterio | revisor | fecha |
 |---|---|---|---|
@@ -298,23 +315,6 @@ citas son literales del texto de la oferta:
 citas son literales del texto de la oferta:
 
 - `value_text='Bachelor'` · `requirement_level='inferred'` · evidencia: > Proven organization and time management skills Demonstrated problem-solving and decision-making skills Consistently demonstrates clear and concise written and verbal communication skills Education: Bachelor’s degree/University degree or equivalent experience This job description provides a high-level review of the types of work performed.
-
----
-
-### 16. `workday-HR-Generalist-Senior---Global-Discipline-Delivery_261004191` — HR Generalist Senior - Global Discipline Delivery
-
-| veredicto | criterio | revisor | fecha |
-|---|---|---|---|
-|   |   |   |   |
-
-**Texto 1 (verbatim):**
-
-> skills • Self-motivated and detail oriented • Proven organization and time management skills • Demonstrated problem-solving and decision-making skills • Analytical skills • Experience working with remote locations • Working knowledge of HR functions and applicable Employment laws • Working knowledge of industry standards and practices Education: • Bachelor’s degree/University degree or equivalent experience English advanced ------------------------------------------------------ Job Family Group: Human Resources ------------------------------------------------------ Job Family: HR Advisors & Generalist ------------------------------------------------------ Time Type: Full time --------------------------------------------------
-
-**Requisito(s) `education` extraído(s) por el extractor** — la
-citas son literales del texto de la oferta:
-
-- `value_text='Bachelor'` · `requirement_level='inferred'` · evidencia: > Qualifications: • 5-8 years of relevant experience • Experience in Human Resources, employee relations or related field • Proficient in Microsoft Office and Human Resources Management Systems • Ability to work unsupervised and adjust priorities quickly as circumstances dictate • Consistently demonstrates clear and concise written and verbal communication skills • Self-motivated and detail oriented • Proven organization and time management skills • Demonstrated problem-solving and decision-making skills • Analytical skills • Experience working with remote locations • Working knowledge of HR functions and applicable Employment laws • Working knowledge of industry standards and practices Education: • Bachelor’s degree/University degree or equivalent experience English advanced ------------------------------------------------------ Job Family Group: Human Resources ------------------------------------------------------ Job Family: HR Advisors & Generalist ------------------------------------------------------ Time Type: Full time ------------------------------------------------------ Most Relevant Skills Please see the requirements listed above.
 
 ---
 
@@ -553,7 +553,7 @@ citas son literales del texto de la oferta:
 
 ---
 
-### 30. `workday-SharePoint-Application-Developer_R55630-1` — SharePoint Application Developer
+### 30. `workday-TnF-Manager-Systems---Software_1214477-2` — TnF Manager Systems / Software
 
 | veredicto | criterio | revisor | fecha |
 |---|---|---|---|
@@ -561,11 +561,15 @@ citas son literales del texto de la oferta:
 
 **Texto 1 (verbatim):**
 
-> resolve SharePoint-related issues. Support migrations and modernization from legacy SharePoint environments. Establish development standards and documentation. Collaborate with business users, IT teams, and vendors to deliver solutions. Performs other additional duties as assigned. What We’re Looking For: 3 to 5 Years of relevant work experience. Bachelor's Degree with Computer Science / MIS field of study required. Core SharePoint Skills SharePoint Online SharePoint Framework (SPFx) SharePoint site architecture Lists, libraries, and content types Permissions and security management Development Skills JavaScript (ES6+) TypeScript HTML5 and CSS3 React (most common with SPFx) REST APIs Microsoft Graph API JSON formatting for SharePoint lists and columns XML & CAML C# for CSOM in VS development (legacy but still used) Client-side web parts and extensions PowerShell (PnP) Microsoft Power Platform Power Automate Power Apps Document management Managed metadata and taxonomy Other Education/Certifications: Advanced study preferred (e.g., Master’s in Information Systems/Software Engineering) or equivalent hands-on experience with Microsoft 365 development. Microsoft Certified: Power Platform Developer Associate (PL-400) SharePoint Online architecture and governance: permissions/security management, managed metadata/taxonomy, content types, and PnP PowerShell; migration/modernization experience Working Conditions: Professional environment (Hybrid). Occasional non-standard work hours or overtime as business requires. Represents the company to the customer
+> nd infrastructure procurement, vendor coordination, and resource justification. Reports project status, risks, and business impact to senior management and stakeholders. Encourages continuous improvement, innovation, and cost savings through in-house solutions that reduce reliance on external tools and equipment. Education and Experience Required: Bachelor's or Master's degree in Computer Science, Computer/Electronics Engineering, Information Systems, or equivalent. Typically 8+ years of software engineering experience, including at least 2–3 years leading or managing engineering teams. English communication skills Knowledge and Skills: Proven experience leading software engineering teams and delivering complex tools, a
+
+**Texto 2 (verbatim):**
+
+> t environments. Experience with project and portfolio management, including prioritization, planning, and risk management. Strong people leadership skills: coaching, performance management, conflict resolution, and team building. Strong analytical, problem-solving, and decision-making skills. Excellent written and verbal communication skills, with mastery of English and the local language. Able to present technical strategy, project status, and resource needs to senior leadership and negotiate options with them. Accessibility HPE is committed to creating an inclusive and accessible workplace and encourages applications from all qualified individuals, including those with disabilities. If you belie
 
 **Requisito(s) `education` extraído(s) por el extractor** — la
 citas son literales del texto de la oferta:
 
-- `value_text="Bachelor's Degree"` · `requirement_level='ambiguous'` · evidencia: > Bachelor's Degree with Computer Science / MIS field of study required.
+- `value_text="Bachelor's"` · `requirement_level='required'` · evidencia: > Education and Experience Required: Bachelor's or Master's degree in Computer Science, Computer/Electronics Engineering, Information Systems, or equivalent.
 
 ---

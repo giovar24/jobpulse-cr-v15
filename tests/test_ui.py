@@ -166,6 +166,7 @@ class TestJobSearchCSV(unittest.TestCase):
                     "profile_compatibility": "Coincide",
                     "review_reasons": ["missing_company", "analysis_partial"],
                     "source_url": "https://example.test/job-1",
+                    "req_obligatorios": 2,
                     "description_raw": "Should not be exported",
                     "raw_payload_json": '{"private":"source payload"}',
                 }
@@ -192,6 +193,7 @@ class TestJobSearchCSV(unittest.TestCase):
                 "compatibilidad_perfil",
                 "motivos_revision",
                 "url_fuente",
+                "requisitos_obligatorios",
             ],
         )
         self.assertEqual(
@@ -213,6 +215,7 @@ class TestJobSearchCSV(unittest.TestCase):
                 "Coincide",
                 "missing_company;analysis_partial",
                 "https://example.test/job-1",
+                "2",
             ],
         )
         self.assertNotIn("Should not be exported", output.getvalue())
@@ -1514,6 +1517,81 @@ class TestManualJobStateUI(unittest.TestCase):
         detail = window.detail_text.get("1.0", "end")
         self.assertIn("Analisis parcial", detail)
         self.assertIn("Campo license desconocido", detail)
+
+    def test_requirement_column_and_filter_show_only_mandatory_requirements(self):
+        """O2.2: columna "Req." + filtro "solo con requisitos obligatorios"."""
+        self.repository.save_job(
+            {
+                "job_id": "workday-REQ-2",
+                "title": "Help Desk",
+                "company": "Intel",
+                "country": "CR",
+                "city": "Heredia",
+                "location_raw": "Heredia, Costa Rica",
+            },
+            site_id="intel-cr",
+            source_job_id="REQ-2",
+        )
+        window = JobPulseWindow(self.root, self.repository)
+        self.assertEqual(
+            window.jobs_table.set("workday-REQ-1", "req_obligatorios"), "0"
+        )
+
+        self.repository.save_analysis(
+            "workday-REQ-1",
+            text_hash="req-column-hash",
+            extractor_version="rules-1",
+            analysis_status="complete",
+            field_statuses={"language": "found"},
+            requirements=[
+                {
+                    "category": "language",
+                    "value_code": "en",
+                    "value_text": "English",
+                    "requirement_level": "required",
+                    "evidence": "Advanced English required.",
+                    "origin": "rule",
+                    "confidence": 0.9,
+                }
+            ],
+        )
+        # El segundo aviso solo declara una preferencia: no es obligatorio.
+        self.repository.save_analysis(
+            "workday-REQ-2",
+            text_hash="req-column-hash-2",
+            extractor_version="rules-1",
+            analysis_status="partial",
+            field_statuses={"language": "found"},
+            requirements=[
+                {
+                    "category": "language",
+                    "value_code": "en",
+                    "value_text": "English",
+                    "requirement_level": "preferred",
+                    "evidence": "English is a plus.",
+                    "origin": "rule",
+                    "confidence": 0.6,
+                }
+            ],
+        )
+        window.search_jobs()
+        self.assertEqual(
+            window.jobs_table.set("workday-REQ-1", "req_obligatorios"), "1"
+        )
+        self.assertEqual(
+            window.jobs_table.set("workday-REQ-2", "req_obligatorios"), "0"
+        )
+
+        window.solo_requisitos_var.set(True)
+        window.search_jobs()
+        self.assertEqual(window.jobs_table.get_children(), ("workday-REQ-1",))
+
+        window.solo_requisitos_var.set(False)
+        window.search_jobs()
+        self.assertEqual(
+            set(window.jobs_table.get_children()),
+            {"workday-REQ-1", "workday-REQ-2"},
+        )
 
     def test_batch_analysis_cancel_does_not_process_visible_jobs(self):
         window = JobPulseWindow(self.root, self.repository)

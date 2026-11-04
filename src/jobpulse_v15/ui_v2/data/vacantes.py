@@ -71,6 +71,9 @@ class VacanteAts:
     analysis_status: str = ""
     estado_paso5: str = ""
     source_url: str = ""
+    # O2.2: cuantos requisitos OBLIGATORIOS declara el aviso (analisis
+    # vigente). Los `preferred` no cuentan (misma regla dura del Paso 5).
+    req_obligatorios: int = 0
     componentes: Mapping[str, str] = field(default_factory=dict)
 
     @property
@@ -260,6 +263,7 @@ class AtsStore:
                     analysis_status=_texto(comparacion.get("analysis_status")),
                     estado_paso5=estados.get(job_id, ""),
                     source_url=_texto(aviso.get("source_url")),
+                    req_obligatorios=int(aviso.get("req_obligatorios") or 0),
                     componentes={
                         clave: componente.detalle
                         for clave, componente in ranking.componentes.items()
@@ -326,13 +330,16 @@ def filtrar(
     veredicto: str = "",
     solo_mi_perfil: bool = False,
     areas_perfil: Sequence[str] = (),
+    solo_requisitos: bool = False,
 ) -> list[VacanteAts]:
-    """Filtra el ranking por texto, veredicto y areas del perfil."""
+    """Filtra el ranking por texto, veredicto, areas del perfil y requisitos."""
     termino = (texto or "").casefold().strip()
     areas_perfil = set(areas_perfil or ())
     resultado: list[VacanteAts] = []
     for fila in filas:
         if veredicto and fila.veredicto != veredicto:
+            continue
+        if solo_requisitos and fila.req_obligatorios < 1:
             continue
         if solo_mi_perfil and areas_perfil and fila.area not in areas_perfil:
             continue
@@ -368,6 +375,7 @@ CAMPOS_CSV: tuple[str, ...] = (
     "idioma_aviso",
     "analisis",
     "paso5",
+    "requisitos_obligatorios",
     "job_id",
     "url",
 )
@@ -397,6 +405,7 @@ def exportar_csv(filas: Sequence[VacanteAts], ruta: str | Path) -> int:
                     "idioma_aviso": fila.posting_language,
                     "analisis": fila.analysis_status,
                     "paso5": fila.estado_paso5,
+                    "requisitos_obligatorios": fila.req_obligatorios,
                     "job_id": fila.job_id,
                     "url": fila.source_url,
                 }

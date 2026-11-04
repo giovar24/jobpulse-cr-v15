@@ -147,6 +147,33 @@ class TestCleanRun(unittest.TestCase):
         self.assertEqual(estado["integrity_check"], ["ok"])
         self.assertEqual(estado["foreign_key_violations"], [])
 
+    def test_reinicia_la_salud_de_los_sitios_al_borrar_las_corridas(self):
+        """La salud se deriva de las corridas: si se borran, se reinicia.
+
+        Sin este reset, cada `clean_run` dejaba vivos los raches de ceros y
+        las banderas de revision de corridas anteriores.
+        """
+        for _ in range(2):
+            run_id = self.repo.start_run("full")
+            self.repo.record_site_result(
+                run_id,
+                "workday-demo",
+                jobs_found=0,
+                jobs_valid=0,
+                jobs_new=0,
+                jobs_duplicate=0,
+            )
+            self.repo.finish_run(run_id)
+        sitio = self.repo.list_sites()[0]
+        self.assertEqual(sitio["consecutive_zero_runs"], 2)
+
+        self.assertEqual(self._limpia(), 0)
+
+        sitio = self.repo.list_sites()[0]
+        self.assertEqual(sitio["consecutive_zero_runs"], 0)
+        self.assertFalse(sitio["review_required"])
+        self.assertEqual(sitio["health_status"], "unknown")
+
 
 if __name__ == "__main__":
     unittest.main()

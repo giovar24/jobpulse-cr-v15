@@ -241,12 +241,20 @@ class Repository:
             return cursor.rowcount == 1
 
     def mark_site_reviewed(self, site_id: str) -> bool:
-        """Quita la bandera de revision sin ocultar el ultimo estado observado."""
+        """Quita la bandera de revision y reinicia el rache de ceros.
+
+        La revision manual es el ACUSE de recibo del sitio: despues de ella, el
+        rache empieza de cero y el sitio vuelve a marcarse solo si falla 3
+        corridas seguidas. Sin reiniciar el rache, un sitio con 12 ceros
+        volveria a marcarse en la siguiente corrida con 0 (y la revision
+        manual no serviria de nada).
+        """
         with self.database.connection() as connection:
             cursor = connection.execute(
                 """
                 UPDATE source_sites
                 SET review_required = 0,
+                    consecutive_zero_runs = 0,
                     health_status = CASE
                         WHEN health_status = 'needs_review' THEN 'zero_results'
                         ELSE health_status
@@ -259,11 +267,17 @@ class Repository:
             return cursor.rowcount == 1
 
     def list_sites(
-        self, *, enabled_only: bool = False, run_group: str | None = None
+        self,
+        *,
+        enabled_only: bool = False,
+        run_group: str | None = None,
+        needs_review_only: bool = False,
     ) -> list[dict[str, Any]]:
         """Lista sitios; el filtro de grupo usa la configuracion validada."""
         if run_group is not None:
             self._required_text(run_group, "run_group")
+        if not isinstance(needs_review_only, bool):
+            raise ValueError("needs_review_only debe ser booleano.")
 
         query = """
             SELECT s.*, p.name AS platform_name, p.provider_type
@@ -273,6 +287,8 @@ class Repository:
         conditions = []
         if enabled_only:
             conditions.append("s.enabled = 1")
+        if needs_review_only:
+            conditions.append("s.review_required = 1")
         if conditions:
             query += " WHERE " + " AND ".join(conditions)
         query += " ORDER BY p.name, s.site_name"
@@ -1885,6 +1901,7 @@ class Repository:
         include_manually_skipped: bool = False,
         needs_review_only: bool = False,
         review_reason: str | None = None,
+        solo_requisitos_obligatorios: bool = False,
         sort_by: str = "last_seen",
         published_from: str | None = None,
         published_to: str | None = None,
@@ -1905,6 +1922,11 @@ class Repository:
         ventana (port de `purge_expired` de v1.x, pero OCULTANDO, no
         borrando); `ventana_retencion_meses` define la ventana (None ->
         default de `ciclo_vida`).
+
+        O2.2: `solo_requisitos_obligatorios=True` deja solo las vacantes cuyo
+        analisis vigente declara AL MENOS un requisito `required` (los
+        `preferred` no cuentan). Cada fila trae `req_obligatorios`: cuantos
+        requisitos obligatorios declara el aviso (0 si no declara ninguno).
         """
         limit = self._positive_int(limit, "limit")
         if not isinstance(solo_vigentes, bool):
@@ -1929,6 +1951,8 @@ class Repository:
             raise ValueError("include_manually_skipped debe ser booleano.")
         if not isinstance(needs_review_only, bool):
             raise ValueError("needs_review_only debe ser booleano.")
+        if not isinstance(solo_requisitos_obligatorios, bool):
+            raise ValueError("solo_requisitos_obligatorios debe ser booleano.")
         if sort_by not in {"last_seen", "date_published"}:
             raise ValueError("sort_by debe ser 'last_seen' o 'date_published'.")
         published_from = self._validate_optional_date(
@@ -2203,6 +2227,22 @@ class Repository:
                 """
             )
 
+        if solo_requisitos_obligatorios:
+            # O2.2: solo vacantes cuyo analisis vigente declara al menos un
+            # requisito OBLIGATORIO (`required`). Los `preferred` no bloquean
+            # y no cuentan (misma regla dura del Paso 5).
+            conditions.append(
+                """
+                EXISTS (
+                    SELECT 1
+                    FROM job_analysis AS ja
+                    JOIN job_requirements AS jr ON jr.analysis_id = ja.analysis_id
+                    WHERE ja.job_id = j.job_id AND ja.is_current = 1
+                      AND jr.requirement_level = 'required'
+                )
+                """
+            )
+
         query = """
             SELECT j.*,
                 (SELECT r.source_url FROM job_source_records AS r
@@ -2213,7 +2253,12 @@ class Repository:
                 COALESCE(
                     (SELECT u.skip_automatic FROM user_job_state AS u
                      WHERE u.job_id = j.job_id), 0
-                ) AS skip_automatic
+                ) AS skip_automatic,
+                (SELECT COUNT(*)
+                 FROM job_analysis AS ja
+                 JOIN job_requirements AS jr ON jr.analysis_id = ja.analysis_id
+                 WHERE ja.job_id = j.job_id AND ja.is_current = 1
+                   AND jr.requirement_level = 'required') AS req_obligatorios
             FROM jobs AS j
         """
         if not include_manually_skipped:

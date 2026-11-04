@@ -2,11 +2,18 @@
 
 Comparación del flujo ejecutado en la corrida limpia del **2026-10-31**
 (scripts `run_full_flow.py` + `run_paso5.py` + evidencia) contra el flujo que
-ofrece la **UI** (`src/jobpulse_v15/ui.py`).
+ofrecen las **dos UIs**: la clásica (`src/jobpulse_v15/ui.py`) y la v2
+(`src/jobpulse_v15/ui_v2/`, plana y modular).
 
 Regla que se mantiene: **la UI y el CLI deben compartir el mismo motor**. Lo
 que hoy comparten está marcado como *compartido*; lo que no, se señala como
 diferencia con su consecuencia.
+
+> **Actualizado 2026-11-04.** Desde entonces: el Paso 5 **SÍ se ejecuta desde
+> la UI v2** (pestaña "Vacantes" → botón "Ejecutar Paso 5", que deja la
+> corrida PERSISTIDA en `job_match` con `corrida_id` + `valida`, igual que el
+> CLI). La UI clásica sigue sin ejecutarlo. La evidencia y la hoja de firma
+> siguen siendo **solo CLI**.
 
 ## 1. Tabla resumen
 
@@ -16,9 +23,11 @@ diferencia con su consecuencia.
 | 2. Análisis por reglas | `run_full_flow.run_analysis()` | **Analizar** / **Analizar sin analizar** / (casilla del barrido) | ✅ `analysis_flow.extract_job_analysis` |
 | 3. Enriquecimiento IA | `run_enriquecimiento.py` (servidor local bajo demanda) | **Enriquecer** (diálogo propio) | ✅ `ia_enrichment.pase_completo` + `ia_servidor` |
 | 4. Comparar con el perfil | **no lo hace** (imprime "abre la UI") | **Buscar** con filtro de compatibilidad + área | ⚠️ UI usa `repository.compare_jobs_to_candidate_profile` |
-| 5. Matching (Paso 5) | `run_paso5.py` → tabla `job_match` (corrida nueva) | **no lo hace** | ❌ solo CLI |
+| 5. Matching (Paso 5) | `run_paso5.py` → tabla `job_match` (corrida nueva) | UI v2: **Ejecutar Paso 5** → `job_match` (corrida nueva). UI clásica: no | ✅ (v2) `matching.ejecutar_paso5` vía `ui_v2/data/paso5.py` |
 | 6. Evidencia / firma | `generar_evidencia_paso5.py`, `verificar_evidencia.py`, `generar_revision_pendientes.py` | **no lo hace** | ❌ solo CLI |
 | 7. Brave/CDP | `run_scrape` lo abre y lo cierra **solo si lo abrió** (O7.2) | igual (barrido, re-login ANE, enriquecimiento) | ✅ `browser_manager.asegurar_brave` |
+| 8. Filtro "solo con requisitos obligatorios" (O2.2) | `search --solo-requisitos-obligatorios` | UI clásica + UI v2: columna **"Req."** + casilla | ✅ `Repository.search_jobs` (SQL; definición única) |
+| 9. Salud de los sitios (O3) | `site list --needs-review`, `site mark-reviewed [--all-needs-review]` | UI clásica: pestaña Fuentes (revisión manual) | ✅ `Repository.list_sites` / `mark_site_reviewed` |
 
 ## 2. Etapa por etapa
 
@@ -85,10 +94,15 @@ educativa**; su "Perfil" es una comparación optimista que exige análisis
 auditable del sistema (con `descartada`/`fuera_de_area` y evidencia) **solo
 existe por CLI** hoy.
 
-### 2.5 Paso 5 y evidencia (5-6) — solo CLI
+### 2.5 Paso 5 y evidencia (5-6) — el motor es compartido, la evidencia no
 
 - `run_paso5.py` crea una **corrida nueva** (nunca `UPDATE` in-place) y la
   marca `valida=1`, dejando las anteriores en `valida=0`.
+- **Desde 2026-11-03 la UI v2 hace lo mismo**: el botón "Ejecutar Paso 5"
+  (pestaña "Vacantes") llama a `matching.ejecutar_paso5` vía
+  `ui_v2/data/paso5.py` y deja la corrida **persistida** en `job_match`; la
+  casilla "Evaluar todo" = `--evaluar-todo`. La columna "Paso 5" de la tabla
+  muestra el estado de esa corrida. La UI clásica sigue sin ejecutarlo.
 - `generar_evidencia_paso5.py` escribe `docs/PASO5_EVIDENCIA_<corrida>.md`
   (el nombre lo decide la corrida vigente, no una fecha fija) con la cita
   literal de cada descarte.
@@ -97,8 +111,36 @@ existe por CLI** hoy.
 - `generar_revision_pendientes.py` produce la hoja
   `docs/PASO5_REVISION_PENDIENTES.md` (las `educacion_no_confirmada`), que
   **solo firma una segunda persona**.
-- La UI no tiene ninguno de los tres: si se quiere el veredicto auditable,
-  hay que correr el CLI después de usar la UI.
+- Ni la UI clásica ni la v2 generan evidencia ni hoja de firma: si se quiere
+  la evidencia auditable, hay que correr el CLI después de usar la UI.
+
+### 2.6 Filtro de requisitos obligatorios (O2.2) — compartido
+
+La definición es **una sola y vive en SQL**
+(`Repository.search_jobs`): `req_obligatorios` = nº de requisitos
+`requirement_level='required'` del análisis vigente (`is_current = 1`); los
+`preferred` no cuentan y los análisis viejos tampoco.
+
+- CLI: `search --solo-requisitos-obligatorios`; el CSV añade
+  `requisitos_obligatorios` al final.
+- UI clásica: columna "Req." + casilla "Solo vacantes con requisitos
+  obligatorios".
+- UI v2: columna "req" + casilla "Solo con requisitos obligatorios"
+  (filtro en `ui_v2/data/vacantes.py::filtrar`).
+- **Alcance**: la columna cuenta lo que el EXTRACTOR marcó `required`; el
+  motor del Paso 5 decide la obligatoriedad por el TEXTO del aviso, así que
+  hay avisos `calificada` con "Req." = 0 (122 de 173 en la BD real). "Req." = 0
+  = "el extractor no confirmó ningún obligatorio", no "no tiene requisitos".
+  Es un triage conservador; el veredicto es la columna "Paso 5".
+
+### 2.7 Salud de los sitios (O3) — compartido
+
+`site list --needs-review` y `site mark-reviewed` (con `--id` o
+`--all-needs-review`) operates sobre `source_sites`. La revisión manual
+**reinicia el rache de ceros** (`consecutive_zero_runs = 0`): es el acuse de
+recibo del sitio; sin ese reset el sitio volvía a marcarse en la siguiente
+corrida con 0. `clean_run.py` reinicia la salud de todos los sitios (la
+salud se deriva de las corridas, y `clean_run` borra las corridas).
 
 ## 3. Lo que la corrida limpia hizo distinto de la UI
 
@@ -111,12 +153,17 @@ existe por CLI** hoy.
 5. El "PASO 4" del CLI solo imprime un aviso: la comparación con el perfil se
    ve en la UI.
 
-## 4. Recomendaciones (no ejecutadas)
+## 4. Recomendaciones
 
-1. **La UI debería poder correr el Paso 5** (botón "Evaluar con el motor") y
-   mostrar `estado`/`motivo` en la columna de compatibilidad, para que el
-   veredicto de la UI y el del CLI sean el mismo dato (`job_match`).
+1. ~~**La UI debería poder correr el Paso 5**~~ → **hecho en la UI v2**
+   (2026-11-03): botón "Ejecutar Paso 5" en la pestaña "Vacantes", corrida
+   persistida en `job_match`. Falta el equivalente en la UI clásica.
 2. Unificar `compare_jobs_to_candidate_profile` con `matching.evaluar` o
    documentar explícitamente que la compatibilidad de la UI es informativa.
+   (La UI v2 ya muestra **ambos**: el score ATS, que es un *ranking*, y el
+   estado del Paso 5, que es el veredicto auditable.)
 3. Que el CLI imprima al final el resumen `GROUP BY estado` de la corrida
    (hoy hay que leerlo en la BD).
+4. La evidencia y la hoja de firma siguen siendo solo CLI: se podría ofrecer
+   un botón "Generar evidencia" en la UI v2 para cerrar el ciclo sin cambiar
+   de terminal.

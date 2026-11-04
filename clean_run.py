@@ -79,6 +79,24 @@ def main() -> int:
                 print(f"  🗑️  {table}: {count} filas borradas")
 
         conn.execute("PRAGMA foreign_keys = ON")
+
+        # La salud de los sitios se deriva de las corridas: si se borran las
+        # corridas, tambien se borra su veredicto. Sin este reset, cada
+        # `clean_run` dejaba vivos los raches de ceros y las banderas de
+        # revision de corridas anteriores (y el sitio se volvia a marcar solo
+        # en la siguiente corrida con 0).
+        if "source_sites" in existing:
+            conn.execute(
+                """
+                UPDATE source_sites
+                SET health_status = 'unknown',
+                    consecutive_zero_runs = 0,
+                    review_required = 0,
+                    updated_at = CURRENT_TIMESTAMP
+                """
+            )
+            print("  ♻️  source_sites: salud y raches reiniciados")
+
         conn.commit()
 
         # Vacuum para liberar espacio

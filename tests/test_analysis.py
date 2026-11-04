@@ -346,11 +346,14 @@ class TestRuleBasedExtractor(unittest.TestCase):
                 self.assertEqual(main(), 0)
             csv_rows = list(csv.reader(io.StringIO(csv_output.getvalue())))
             self.assertEqual(csv_rows[0][0], "job_id")
-            self.assertEqual(csv_rows[0][-1], "url_fuente")
+            # O2.2: `requisitos_obligatorios` va al final (no desplaza los
+            # indices de las columnas ya publicadas).
+            self.assertEqual(csv_rows[0][-1], "requisitos_obligatorios")
+            self.assertEqual(csv_rows[0][-2], "url_fuente")
             self.assertEqual(csv_rows[1][0], "job-analysis")
             self.assertEqual(csv_rows[1][1], "Engineer")
             self.assertEqual(
-                csv_rows[1][-2], "missing_company;missing_country"
+                csv_rows[1][-3], "missing_company;missing_country"
             )
             self.assertNotIn("description_raw", csv_output.getvalue())
 

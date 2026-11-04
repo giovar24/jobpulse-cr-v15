@@ -45,7 +45,6 @@ from jobpulse_v15.ui_v2.widgets import (
     StatTile,
 )
 from jobpulse_v15.ui_v2.i18n import t
-from jobpulse_v15.ui_v2.i18n import t
 
 COLUMNAS = (
     "score",
@@ -57,6 +56,7 @@ COLUMNAS = (
     "skills",
     "experiencia",
     "idiomas",
+    "req",
     "paso5",
 )
 
@@ -70,6 +70,7 @@ TITULOS = {
     "skills": "Skills",
     "experiencia": "Exp.",
     "idiomas": "Idiomas",
+    "req": "Req.",
     "paso5": "Paso 5",
 }
 
@@ -83,6 +84,7 @@ ANCHOS = {
     "skills": 70,
     "experiencia": 70,
     "idiomas": 80,
+    "req": 55,
     "paso5": 130,
 }
 
@@ -164,23 +166,30 @@ class VacantesTab(BaseTab):
             command=self._pintar_tabla,
         ).grid(row=0, column=2, padx=(12, 0))
 
+        self._widgets["solo_requisitos"] = tk.BooleanVar(value=False)
+        ttk.Checkbutton(
+            barra, text=t("Solo con requisitos obligatorios"),
+            variable=self._widgets["solo_requisitos"],
+            command=self._pintar_tabla,
+        ).grid(row=0, column=3, padx=(12, 0))
+
         self._widgets["evaluar_todo"] = tk.BooleanVar(value=False)
         ttk.Checkbutton(
             barra, text=t("Evaluar todo"),
             variable=self._widgets["evaluar_todo"],
-        ).grid(row=0, column=3, padx=(12, 0))
+        ).grid(row=0, column=4, padx=(12, 0))
 
         self._widgets["paso5"] = FlatButton(
             barra, theme, "Ejecutar Paso 5", command=self.ejecutar_paso5,
             variant="accent",
         )
-        self._widgets["paso5"].grid(row=0, column=4, padx=(12, 0))
+        self._widgets["paso5"].grid(row=0, column=5, padx=(12, 0))
 
         FlatButton(barra, theme, "Recalcular", command=self.recalcular, variant="flat").grid(
-            row=0, column=5, padx=(8, 0)
+            row=0, column=6, padx=(8, 0)
         )
         FlatButton(barra, theme, "Exportar CSV", command=self.exportar, variant="flat").grid(
-            row=0, column=6, padx=(8, 0)
+            row=0, column=7, padx=(8, 0)
         )
 
     def _build_resumen(self, parent: tk.Misc) -> None:
@@ -433,12 +442,14 @@ class VacantesTab(BaseTab):
             veredicto = claves[combo.current() - 1]
         buscador = self._widgets.get("buscador")
         solo_miperfil = bool(self._widgets["solo_miperfil"].get())
+        solo_requisitos = bool(self._widgets["solo_requisitos"].get())
         return filtrar(
             self.filas,
             texto=buscador.value() if buscador is not None else "",
             veredicto=veredicto,
             solo_mi_perfil=solo_miperfil,
             areas_perfil=self._areas_perfil,
+            solo_requisitos=solo_requisitos,
         )
 
     def _pintar_tabla(self) -> None:
@@ -458,6 +469,7 @@ class VacantesTab(BaseTab):
                     _pct(fila.skills_pct),
                     _pct(fila.experiencia_pct),
                     _pct(fila.idiomas_pct),
+                    str(fila.req_obligatorios),
                     fila.estado_paso5 or "—",
                 ),
             )

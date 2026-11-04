@@ -45,6 +45,7 @@ def write_job_search_csv(output: TextIO, jobs: Sequence[Mapping[str, Any]]) -> N
             "compatibilidad_perfil",
             "motivos_revision",
             "url_fuente",
+            "requisitos_obligatorios",
         )
     )
     for job in jobs:
@@ -70,6 +71,7 @@ def write_job_search_csv(output: TextIO, jobs: Sequence[Mapping[str, Any]]) -> N
                         str(reason) for reason in job.get("review_reasons", [])
                     ),
                     job.get("source_url", ""),
+                    job.get("req_obligatorios", 0),
                 )
             )
         )

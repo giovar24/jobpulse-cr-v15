@@ -914,6 +914,80 @@ class TestRepository(unittest.TestCase):
             {"job-match", "job-preferred"},
         )
 
+    def test_search_counts_mandatory_requirements_and_can_filter_by_them(self):
+        """O2.2: columna "Req." y filtro "solo con requisitos obligatorios".
+
+        Cuentan SOLO los requisitos `required` del analisis vigente: los
+        `preferred` no bloquean (misma regla dura del Paso 5) y los
+        requisitos de analisis viejos no cuentan.
+        """
+        self.add_job("job-required")
+        self.add_job("job-preferred")
+        self.add_job("job-no-analysis")
+        self.repository.save_analysis(
+            "job-required",
+            text_hash="required-hash",
+            extractor_version="rules-1",
+            analysis_status="complete",
+            field_statuses={"education": "found", "language": "found"},
+            requirements=[
+                self.bachelor_requirement(),
+                self.english_requirement(),
+            ],
+        )
+        self.repository.save_analysis(
+            "job-preferred",
+            text_hash="preferred-hash",
+            extractor_version="rules-1",
+            analysis_status="partial",
+            field_statuses={"language": "found"},
+            requirements=[
+                self.english_requirement(requirement_level="preferred")
+            ],
+        )
+
+        conteos = {
+            job["job_id"]: job["req_obligatorios"]
+            for job in self.repository.search_jobs()
+        }
+
+        self.assertEqual(conteos["job-required"], 2)
+        self.assertEqual(conteos["job-preferred"], 0)
+        self.assertEqual(conteos["job-no-analysis"], 0)
+
+        filtrados = self.repository.search_jobs(
+            solo_requisitos_obligatorios=True
+        )
+        self.assertEqual(
+            [job["job_id"] for job in filtrados], ["job-required"]
+        )
+
+    def test_search_mandatory_requirement_count_ignores_superseded_analysis(self):
+        self.add_job("job-reanalizado")
+        self.repository.save_analysis(
+            "job-reanalizado",
+            text_hash="viejo",
+            extractor_version="rules-1",
+            analysis_status="complete",
+            field_statuses={"education": "found"},
+            requirements=[self.bachelor_requirement()],
+        )
+        self.repository.save_analysis(
+            "job-reanalizado",
+            text_hash="nuevo",
+            extractor_version="rules-2",
+            analysis_status="partial",
+            field_statuses={"education": "not_mentioned"},
+            requirements=[],
+        )
+
+        jobs = self.repository.search_jobs()
+
+        self.assertEqual(jobs[0]["req_obligatorios"], 0)
+        self.assertEqual(
+            self.repository.search_jobs(solo_requisitos_obligatorios=True), []
+        )
+
     def test_search_review_queue_includes_unanalyzed_and_uncertain_jobs(self):
         self.add_job("job-no-analysis")
         self.add_job("job-partial")
@@ -1348,6 +1422,81 @@ class TestRepository(unittest.TestCase):
         self.assertTrue(site["enabled"])
         self.assertFalse(site["review_required"])
         self.assertEqual(site["health_status"], "zero_results")
+
+    def test_marking_a_site_reviewed_resets_the_zero_streak(self):
+        """La revision manual es el acuse de recibo: el rache vuelve a cero.
+
+        Sin este reset, un sitio con 12 ceros se volvia a marcar en la
+        siguiente corrida con 0 (y la revision manual no servia de nada).
+        """
+        for _ in range(3):
+            run_id = self.repository.start_run("full", "directos")
+            self.repository.record_site_result(
+                run_id,
+                "intel-cr",
+                jobs_found=0,
+                jobs_valid=0,
+                jobs_new=0,
+                jobs_duplicate=0,
+            )
+            self.repository.finish_run(run_id)
+        self.assertEqual(
+            self.repository.list_sites()[0]["consecutive_zero_runs"], 3
+        )
+
+        self.assertTrue(self.repository.mark_site_reviewed("intel-cr"))
+
+        site = self.repository.list_sites()[0]
+        self.assertEqual(site["consecutive_zero_runs"], 0)
+        self.assertFalse(site["review_required"])
+        # Con el rache en cero, el sitio solo vuelve a marcarse tras 3 ceros
+        # NUEVOS (no de inmediato).
+        run_id = self.repository.start_run("full", "directos")
+        self.repository.record_site_result(
+            run_id,
+            "intel-cr",
+            jobs_found=0,
+            jobs_valid=0,
+            jobs_new=0,
+            jobs_duplicate=0,
+        )
+        self.repository.finish_run(run_id)
+        site = self.repository.list_sites()[0]
+        self.assertEqual(site["consecutive_zero_runs"], 1)
+        self.assertFalse(site["review_required"])
+
+    def test_list_sites_can_filter_the_ones_pending_manual_review(self):
+        self.repository.register_site(
+            "other-site",
+            "workday",
+            "Other site",
+            "https://other.example.test/jobs",
+            run_groups=("directos",),
+        )
+        run_id = self.repository.start_run("full", "directos")
+        self.repository.record_site_result(
+            run_id,
+            "other-site",
+            jobs_found=0,
+            jobs_valid=0,
+            jobs_new=0,
+            jobs_duplicate=0,
+            error_message="HTTP 503",
+        )
+        self.repository.record_site_result(
+            run_id,
+            "intel-cr",
+            jobs_found=1,
+            jobs_valid=1,
+            jobs_new=1,
+            jobs_duplicate=0,
+        )
+        self.repository.finish_run(run_id)
+
+        pendientes = self.repository.list_sites(needs_review_only=True)
+
+        self.assertEqual([site["site_id"] for site in pendientes], ["other-site"])
+        self.assertTrue(pendientes[0]["review_required"])
 
     def test_existing_jobs_are_not_misclassified_as_zero_results(self):
         run_id = self.repository.start_run("full", "directos")
