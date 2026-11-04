@@ -421,6 +421,19 @@ py -3.11 -m venv .venv
 # === BÚSQUEDA ===
 .\.venv\Scripts\python.exe -m jobpulse_v15 search --text "soporte técnico" --country CR --work-mode hybrid --format csv --limit 50
 
+# === VIABILIDAD (ajuste técnico, NO probabilidad de contratar) ===
+.\.venv\Scripts\python.exe -X utf8 -m jobpulse_v15 viabilidad list --limit 0
+.\.venv\Scripts\python.exe -X utf8 -m jobpulse_v15 viabilidad top --limit 20
+.\.venv\Scripts\python.exe -X utf8 -m jobpulse_v15 viabilidad list --banda aplicar --format csv --output viab.csv
+
+# === POSTULACIONES (estado del proceso, NO de aptitud) ===
+.\.venv\Scripts\python.exe -X utf8 -m jobpulse_v15 postulaciones correo --dias 90 --apply
+.\.venv\Scripts\python.exe -X utf8 -m jobpulse_v15 postulaciones workday --apply
+.\.venv\Scripts\python.exe -X utf8 -m jobpulse_v15 postulaciones list
+
+# === CAPA B: código canónico del perfil ===
+.\.venv\Scripts\python.exe -X utf8 -m jobpulse_v15 enrich profile-canonico --apply
+
 # === UI ===
 .\.venv\Scripts\python.exe -m jobpulse_v15.ui
 
@@ -439,13 +452,15 @@ Pendientes vivos (handoff vigente `docs/HANDOFF_SESION_2026-10-30.md`):
    evalúa todo, que es lo que hoy ocurre). Después, la próxima corrida del
    Paso 5 deja las ofertas de otras áreas con estado `fuera_de_area` (o
    `run_paso5.py --evaluar-todo` para evaluating todas).
-2. **Capa B — extractor educativo** (aprobada por el usuario, parqueada):
-   migración **`017`** (filas `concepto`: master/MBA/associate/técnico
-   superior), arreglar `Repository.save_analysis` (no rellena
-   `codigo_canonico` → los requisitos re-analizados quedarían NULL y el Paso 5
-   los ignoraría) y `run_full_flow.py::run_analysis()` (llama
-   `IngestionService.analyze_job`, que **no existe**) → luego re-analizar las
-   447 vacantes y su propia corrida.
+2. **Capa B — extractor educativo** (aprobada por el usuario): migración
+   **`017`** (filas `concepto`: master/MBA/associate/técnico superior) —
+   **ESCRITA el 2026-11-04** (falta aplicarla a la BD real);
+   `Repository.save_analysis` ya rellena `codigo_canonico` al guardar y
+   `Repository.save_candidate_profile_facts` ya lo rellena para el perfil
+   (**CAPA B resuelta en código**: resolver al guardar + backfill idempotente
+   `enrich profile-canonico --apply` + fallback slug↔texto). **Pendiente**:
+   aplicar 017-019 + el backfill a la BD real (con backup) y re-analizar las
+   vacantes para que los requisitos novos nazcan con código.
 3. **Paso 5 — las 30 `revisar_a_mano / educacion_no_confirmada` siguen ABIERTAS**:
    las firma una **segunda persona** en `docs/PASO5_REVISION_PENDIENTES.md`
    (el autoveredicto del autor de la regla se descarta por sesgo) → después,
@@ -507,6 +522,28 @@ Pendientes vivos (handoff vigente `docs/HANDOFF_SESION_2026-10-30.md`):
 
 ## 7. DECISIONES DE DISEÑO TOMADAS
 
+- **Ajuste técnico ≠ resultado del proceso** (decisión del usuario,
+  2026-11-04): **ser rechazado NO significa que el perfil no califique** para
+  el puesto (el reclutador decide por presupuesto, timing, competencia,
+  sesgos y azar). Por eso el score de `viabilidad.py` (índice de ajuste
+  técnico, determinista y auditable) **nunca** se entrena con los rechazos:
+  los estados de postulación son señal operativa y contexto (no reprocesar lo
+  postulado, medir el funnel propio, revisar posibles falsos positivos del
+  ranking). El score NO es probabilidad de contratación y **no toca** los
+  umbrales congelados del Paso 5.
+- **Tope duro de banda**: si falta ≥1 requisito `required`, la banda máxima
+  es `revisar` (nunca `aplicar`), aunque el score sea 100 — es el
+  *knockout* explícito de los ATS modernos (HireVue/Paradox).
+- **Puntaje comparable = dos pasadas con imputación del corpus**: pesos fijos
+  + promedio del corpus para los componentes sin dato (misma regla que el
+  ranking ATS). Sin esto, una vacante con un solo requisito cubierto sacaba
+  100 y subía sola.
+- **Postulaciones: del correo/portal solo se guardan derivados MÍNIMOS**
+  (estado, fecha, remitente, asunto, referencia del aviso); **el cuerpo del
+  mensaje nunca se guarda**.
+- **La cola de conceptos del perfil solo recibe conceptos**: los hechos de
+  `experience` del CV son títulos de puesto → quedan sin código y **no**
+  ensucian `concepto_no_normalizado`.
 - **No migrar datos legacy**: v1_5 empieza limpio; `data/jobpulse_v15.db` independiente.
 - **No automerge dedupe**: v1_5 marca `dup_of` y deja review manual (evita pérdida de datos).
 - **Config declarativa only**: No credenciales en `site_config`; credenciales en almacén local aparte (`credenciales.py`).
@@ -572,6 +609,82 @@ Pendientes vivos (handoff vigente `docs/HANDOFF_SESION_2026-10-30.md`):
 ---
 
 ## 8. HISTORIAL DE CAMBIOS RECIENTES
+
+### 2026-11-04 — MOTOR DE VIABILIDAD (ajuste técnico) + POSTULACIONES + CAPA B
+
+**Decisión de negocio que ordena todo lo demás:**
+> **Ser rechazado de un trabajo NO significa que no se es apto para él.**
+
+El reclutador humano decide por presupuesto, timing, competencia, sesgos y
+azar. Por eso se separan DOS cosas que antes se mezclaban:
+
+| | Qué es | Módulo | Se usa para |
+|---|---|---|---|
+| **Ajuste técnico** | ¿el perfil cumple lo que pide el aviso? | `viabilidad.py` | priorizar a dónde postular |
+| **Estado del proceso** | ¿qué decidió el reclutador? | `postulaciones.py` | no reprocesar, medir el funnel, revisar falsos positivos |
+
+**El score NUNCA se entrena con rechazos** (serían etiquetas de aptitud
+ruidosas y sesgadas). Los rechazos son señal operativa y contexto.
+
+**1. Motor de viabilidad** (`viabilidad.py`, 12 tests):
+- Índice 0-100 + bandas: `aplicar` (≥85) · `revisar` (80-85) ·
+  `no_prioritario` (<80) · `sin_datos` · `veto`.
+- **Tope duro**: falta ≥1 requisito `required` → banda máxima `revisar`
+  (nunca `aplicar`). `preferred` no bloquea; `ambiguous`/`inferred` pesan
+  como incierto (1.0) y no activan el tope.
+- Pesos: skill 0.40 · education 0.25 · experience 0.15 · language 0.10 ·
+  license 0.10 · semántica 0.15. Peso interno: obligatorio 2.0 · incierto
+  1.0 · deseable 0.5.
+- **DOS PASADAS con imputación del corpus** (igual que el ranking ATS): sin
+  esto el score era degenerado (todo 100) porque casi todos los requisitos
+  carecen de `codigo_canonico`.
+- Vetos: `fuera_de_area` (reutiliza `areas.es_fuera_de_area`: `otros` nunca
+  se veta) y `titulo_universitario_requerido` (texto confirmado).
+- Reutiliza `matching.EvaluadorPaso5` (no duplica la regla del texto).
+- CLI `viabilidad list|top` + UI v2 (columnas "Ajuste"/"Banda", combo de
+  bandas, "Solo aplicar", tiles por banda, detalle + CSV ampliado).
+- **No toca** los umbrales congelados del Paso 5 ni los estados de
+  `job_match` (es un índice paralelo).
+
+**2. Postulaciones** (núcleo puro `postulaciones.py`, 21 tests):
+- Estados alineados con `applications.application_status`: `applied` ·
+  `recruiter_contact` · `interview` · `offer` · `rejected` · `withdrawn`.
+  **El avance nunca se degrada** (`estado_mas_avanzado`).
+- Migración `018`: `postulacion_senal` (bitácora) + `postulacion` (estado
+  actual por vacante). Se guarda SOLO lo mínimo (estado, fecha, remitente,
+  asunto, referencia del aviso): **el cuerpo del correo nunca se guarda**.
+- `correo_postulaciones.py`: lector IMAP (Gmail, `X-GM-RAW` + fallback
+  `SINCE`), credencial en el keyring (`credenciales.credencial("gmail")`).
+- `workday_postulaciones.py`: parsers puros (JSON + HTML) + fetch por CDP de
+  "Mis postulaciones" (reutiliza la sesión; el fetcher nunca crea navegador).
+- CLI `postulaciones correo|workday|list` (dry-run por omisión).
+
+**3. CAPA B — el perfil ya tiene `codigo_canonico`** (`tests/test_perfil_canonico.py`):
+- `save_candidate_profile_facts` / `import_candidate_profile_facts` resuelven
+  el código al guardar; backfill idempotente (`enrich profile-canonico
+  --apply`).
+- **Fallback slug ↔ texto** (`conceptos._variantes_alternas`): el importador
+  de CV produce slugs (`active-directory`) y la taxonomía está en texto
+  natural (`active directory`).
+- **La cola del perfil solo recibe CONCEPTOS** (skill/language/license/
+  education): los hechos de `experience` del CV son **títulos de puesto**, no
+  conceptos que falten → no se encolan (pero sí reciben código si SÍ son un
+  concepto, p. ej. `years_experience`).
+
+**4. Migraciones nuevas** (escritas, **NO aplicadas en la BD real**):
+- `017_educacion_granular.sql` — master/MBA → posgrado (4); associate degree /
+  two year college degree → ciclo corto (2); "bachiller" a secas →
+  **secundaria** (1) en CR.
+- `018_postulaciones.sql` — bitácora + estado por vacante.
+- `019_google_workspace.sql` — corrige un alias **erróneo**:
+  `google-workspace` estaba mapeado a `microsoft-365` (son productos
+  distintos). Solo se corrigen los que venían de esa variante: un
+  `microsoft-365` legítimo no se toca.
+
+**5. Documentación**: `docs/MOTOR_VIABILIDAD.md` (nuevo) + `AGENTS.md`
+(secciones nuevas, gotchas 34-39) + este historial.
+
+**Suite**: **846 tests verdes + 241 subtests** (antes 736 + 241).
 
 ### 2026-10-30 — O6.3 (mecánicas M1–M4) + O8.1/O10: FILTRO por ÁREA de empleo de punta a punta
 
