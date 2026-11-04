@@ -26,11 +26,14 @@ from jobpulse_v15.ui_v2 import configuracion
 from jobpulse_v15.ui_v2.data.paso5 import Paso5Store, ResumenPaso5
 from jobpulse_v15.ui_v2.data.vacantes import (
     AtsStore,
+    BANDAS_VIABILIDAD,
+    ETIQUETAS_BANDA,
     ETIQUETAS_VEREDICTO,
     VacanteAts,
     exportar_csv,
     filtrar,
     resumen,
+    resumen_bandas,
 )
 from jobpulse_v15.ui_v2.tabs.base import BaseTab
 from jobpulse_v15.ui_v2.widgets import (
@@ -49,6 +52,8 @@ from jobpulse_v15.ui_v2.i18n import t
 COLUMNAS = (
     "score",
     "veredicto",
+    "ajuste",
+    "banda",
     "titulo",
     "empresa",
     "area",
@@ -63,6 +68,8 @@ COLUMNAS = (
 TITULOS = {
     "score": "Score",
     "veredicto": "Veredicto",
+    "ajuste": "Ajuste",
+    "banda": "Banda",
     "titulo": "Puesto",
     "empresa": "Empresa",
     "area": "Área",
@@ -77,6 +84,8 @@ TITULOS = {
 ANCHOS = {
     "score": 70,
     "veredicto": 100,
+    "ajuste": 70,
+    "banda": 110,
     "titulo": 300,
     "empresa": 160,
     "area": 150,
@@ -125,7 +134,7 @@ class VacantesTab(BaseTab):
         marco = super().build(parent)
         theme = self.theme
         marco.columnconfigure(0, weight=1)
-        marco.rowconfigure(2, weight=1)
+        marco.rowconfigure(3, weight=1)
 
         self._build_toolbar(marco)
         self._build_resumen(marco)
@@ -159,37 +168,58 @@ class VacantesTab(BaseTab):
         combo.grid(row=0, column=1, sticky="e", padx=(10, 0))
         self._widgets["veredicto"] = combo
 
+        combo_banda = ttk.Combobox(
+            barra,
+            values=[t("Todas las bandas")] + [
+                ETIQUETAS_BANDA[clave] for clave in BANDAS_VIABILIDAD
+            ],
+            state="readonly",
+            width=18,
+            font=theme.font(9),
+        )
+        combo_banda.current(0)
+        combo_banda.bind("<<ComboboxSelected>>", lambda _e: self._pintar_tabla())
+        combo_banda.grid(row=0, column=2, sticky="e", padx=(10, 0))
+        self._widgets["banda"] = combo_banda
+
+        self._widgets["solo_aplicar"] = tk.BooleanVar(value=False)
+        ttk.Checkbutton(
+            barra, text=t("Solo aplicar"),
+            variable=self._widgets["solo_aplicar"],
+            command=self._pintar_tabla,
+        ).grid(row=0, column=3, padx=(12, 0))
+
         self._widgets["solo_miperfil"] = tk.BooleanVar(value=False)
         ttk.Checkbutton(
             barra, text=t("Solo áreas de mi perfil"),
             variable=self._widgets["solo_miperfil"],
             command=self._pintar_tabla,
-        ).grid(row=0, column=2, padx=(12, 0))
+        ).grid(row=0, column=4, padx=(12, 0))
 
         self._widgets["solo_requisitos"] = tk.BooleanVar(value=False)
         ttk.Checkbutton(
             barra, text=t("Solo con requisitos obligatorios"),
             variable=self._widgets["solo_requisitos"],
             command=self._pintar_tabla,
-        ).grid(row=0, column=3, padx=(12, 0))
+        ).grid(row=0, column=5, padx=(12, 0))
 
         self._widgets["evaluar_todo"] = tk.BooleanVar(value=False)
         ttk.Checkbutton(
             barra, text=t("Evaluar todo"),
             variable=self._widgets["evaluar_todo"],
-        ).grid(row=0, column=4, padx=(12, 0))
+        ).grid(row=0, column=6, padx=(12, 0))
 
         self._widgets["paso5"] = FlatButton(
             barra, theme, "Ejecutar Paso 5", command=self.ejecutar_paso5,
             variant="accent",
         )
-        self._widgets["paso5"].grid(row=0, column=5, padx=(12, 0))
+        self._widgets["paso5"].grid(row=0, column=7, padx=(12, 0))
 
         FlatButton(barra, theme, "Recalcular", command=self.recalcular, variant="flat").grid(
-            row=0, column=6, padx=(8, 0)
+            row=0, column=8, padx=(8, 0)
         )
         FlatButton(barra, theme, "Exportar CSV", command=self.exportar, variant="flat").grid(
-            row=0, column=7, padx=(8, 0)
+            row=0, column=9, padx=(8, 0)
         )
 
     def _build_resumen(self, parent: tk.Misc) -> None:
@@ -214,10 +244,24 @@ class VacantesTab(BaseTab):
             tile.pack(fill="both", expand=True)
             self._tiles[clave] = tile
 
+        # Franja del AJUSTE TECNICO (bandas del motor de viabilidad): es
+        # otro indice que el ranking ATS (este dice si el perfil cumple lo
+        # que el aviso pide).
+        franja_bandas = tk.Frame(parent, bg=theme.color("bg"))
+        franja_bandas.grid(row=2, column=0, sticky="ew", padx=theme.metrics.pad, pady=(0, 8))
+        self._tiles_banda = {}
+        for indice, banda in enumerate(BANDAS_VIABILIDAD):
+            franja_bandas.columnconfigure(indice, weight=1, uniform="bandas")
+            tarjeta = Card(franja_bandas, theme, padding=10)
+            tarjeta.grid(row=0, column=indice, sticky="nsew", padx=(0 if indice == 0 else 6, 6))
+            tile = StatTile(tarjeta.body, theme, ETIQUETAS_BANDA[banda])
+            tile.pack(fill="both", expand=True)
+            self._tiles_banda[banda] = tile
+
     def _build_cuerpo(self, parent: tk.Misc) -> None:
         theme = self.theme
         cuerpo = tk.Frame(parent, bg=theme.color("bg"))
-        cuerpo.grid(row=2, column=0, sticky="nsew", padx=theme.metrics.pad)
+        cuerpo.grid(row=3, column=0, sticky="nsew", padx=theme.metrics.pad)
         cuerpo.columnconfigure(0, weight=1)
         cuerpo.rowconfigure(0, weight=1)
 
@@ -295,6 +339,9 @@ class VacantesTab(BaseTab):
             ("area", "Área"),
             ("score", "Score ATS"),
             ("veredicto", "Veredicto"),
+            ("ajuste", "Ajuste técnico"),
+            ("banda", "Banda"),
+            ("faltantes", "Faltantes obligatorios"),
             ("paso5", "Estado Paso 5"),
             ("analisis", "Análisis"),
             ("idioma_aviso", "Idioma del aviso"),
@@ -329,7 +376,7 @@ class VacantesTab(BaseTab):
     def _build_estado(self, parent: tk.Misc) -> None:
         theme = self.theme
         marco = tk.Frame(parent, bg=theme.color("bg"))
-        marco.grid(row=3, column=0, sticky="ew", padx=theme.metrics.pad, pady=(8, 12))
+        marco.grid(row=4, column=0, sticky="ew", padx=theme.metrics.pad, pady=(8, 12))
         self._widgets["estado"] = tk.Label(
             marco, text="", bg=theme.color("bg"), fg=theme.color("text_muted"),
             font=theme.font(9), anchor="w",
@@ -440,13 +487,20 @@ class VacantesTab(BaseTab):
         if combo is not None and combo.current() > 0:
             claves = list(ETIQUETAS_VEREDICTO)
             veredicto = claves[combo.current() - 1]
+        combo_banda = self._widgets.get("banda")
+        banda = ""
+        if combo_banda is not None and combo_banda.current() > 0:
+            banda = list(BANDAS_VIABILIDAD)[combo_banda.current() - 1]
         buscador = self._widgets.get("buscador")
         solo_miperfil = bool(self._widgets["solo_miperfil"].get())
         solo_requisitos = bool(self._widgets["solo_requisitos"].get())
+        solo_aplicar = bool(self._widgets["solo_aplicar"].get())
         return filtrar(
             self.filas,
             texto=buscador.value() if buscador is not None else "",
             veredicto=veredicto,
+            banda=banda,
+            solo_aplicar=solo_aplicar,
             solo_mi_perfil=solo_miperfil,
             areas_perfil=self._areas_perfil,
             solo_requisitos=solo_requisitos,
@@ -462,6 +516,8 @@ class VacantesTab(BaseTab):
                 values=(
                     f"{fila.score:.0f}" if fila.score is not None else "n/d",
                     fila.veredicto_legible,
+                    f"{fila.ajuste:.0f}" if fila.ajuste is not None else "n/d",
+                    fila.banda_legible,
                     fila.title,
                     fila.company,
                     fila.area,
@@ -481,12 +537,16 @@ class VacantesTab(BaseTab):
         self._widgets["conteo"] = len(filas)
 
     def _pintar_resumen(self) -> None:
-        cifras = resumen(self._filas_visibles())
+        visibles = self._filas_visibles()
+        cifras = resumen(visibles)
         self._tiles["total"].update_values(str(cifras["total"]))
         self._tiles["fuerte"].update_values(str(cifras["fuerte"]))
         self._tiles["ajustable"].update_values(str(cifras["ajustable"]))
         self._tiles["debil"].update_values(str(cifras["debil"]))
         self._tiles["sin_datos"].update_values(str(cifras["sin_datos"]))
+        bandas = resumen_bandas(visibles)
+        for banda, tile in self._tiles_banda.items():
+            tile.update_values(str(bandas.get(banda, 0)))
 
     def _pintar_estado(self) -> None:
         total = len(self.filas)
@@ -533,6 +593,13 @@ class VacantesTab(BaseTab):
             "area": fila.area,
             "score": f"{fila.score:.1f} / 100" if fila.score is not None else "n/d",
             "veredicto": fila.veredicto_legible,
+            "ajuste": f"{fila.ajuste:.1f} / 100" if fila.ajuste is not None else "n/d",
+            "banda": fila.banda_legible,
+            "faltantes": (
+                "; ".join(fila.faltantes_obligatorios)
+                if fila.faltantes_obligatorios
+                else "—"
+            ),
             "paso5": fila.estado_paso5 or "sin correr",
             "analisis": fila.analysis_status or "not_analyzed",
             "idioma_aviso": fila.posting_language or "—",

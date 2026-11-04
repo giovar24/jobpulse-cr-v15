@@ -24,9 +24,33 @@ from typing import Any, Mapping, Sequence
 # Categorias que la tabla `concepto` puede cubrir (CHECK de la migracion 009).
 CATEGORIAS_CONCEPTO = ("skill", "language", "license", "education", "experience")
 
+#: Categorias cuyo `value_code` del perfil es un CONCEPTO (una skill, un
+#: idioma, una licencia, un nivel de estudio). Las demas (titulo de puesto,
+#: area, contacto) NO son conceptos: encolarlas ensuciaria la taxonomia.
+CATEGORIAS_PERFIL_CONCEPTO = ("skill", "language", "license", "education")
+
 
 def _variante(value_code: str | None) -> str:
     return (value_code or "").strip().lower()
+
+
+def _variantes_alternas(variante: str) -> tuple[str, ...]:
+    """Variantes equivalentes a la dada (para tolerar slugs).
+
+    El importador de CV produce SLUGS ('active-directory', 'excel-avanzado')
+    y la taxonomia esta escrita en texto natural ('active directory'). Son la
+    MISMA variante: se prueban las dos formas (y la de guiones bajos).
+    """
+    if not variante:
+        return ()
+    alternas: list[str] = []
+    con_espacios = variante.replace("-", " ").replace("_", " ").strip()
+    if con_espacios and con_espacios != variante:
+        alternas.append(con_espacios)
+    con_guiones = variante.replace(" ", "-").replace("_", "-").strip()
+    if con_guiones and con_guiones != variante:
+        alternas.append(con_guiones)
+    return tuple(alternas)
 
 
 def _mapa_conceptos(connection: sqlite3.Connection) -> dict[tuple[str, str], str]:
@@ -72,6 +96,13 @@ def resolver(
         codigo = None
         if category in CATEGORIAS_CONCEPTO and variante:
             codigo = mapa.get((category, variante))
+            if codigo is None:
+                # Slug del CV ('active-directory') vs texto de la taxonomia
+                # ('active directory'): son la misma variante.
+                for alterna in _variantes_alternas(variante):
+                    codigo = mapa.get((category, alterna))
+                    if codigo is not None:
+                        break
         copia["codigo_canonico"] = codigo
         resueltos.append(copia)
         if codigo is None and category in CATEGORIAS_CONCEPTO and variante:
@@ -85,15 +116,23 @@ def resolver(
 def encolar_sin_concepto(
     connection: sqlite3.Connection,
     sin_concepto: Sequence[tuple[str, str]],
+    *,
+    origen: str = "oferta",
 ) -> None:
-    """Suma las variantes sin concepto a la cola ``concepto_no_normalizado``."""
+    """Suma las variantes sin concepto a la cola ``concepto_no_normalizado``.
+
+    `origen`: 'oferta' (requisito del aviso), 'cv' (hecho del perfil) o
+    'ambos'. La cola usa la variante como texto.
+    """
+    if origen not in ("oferta", "cv", "ambos"):
+        raise ValueError("origen debe ser 'oferta', 'cv' o 'ambos'.")
     for category, variante in sin_concepto:
         connection.execute(
             """
             INSERT INTO concepto_no_normalizado (categoria, texto, origen, veces)
-            VALUES (?, ?, 'oferta', 1)
+            VALUES (?, ?, ?, 1)
             ON CONFLICT (categoria, texto, origen)
             DO UPDATE SET veces = veces + 1
             """,
-            (category, variante),
+            (category, variante, origen),
         )

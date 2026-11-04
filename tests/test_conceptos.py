@@ -19,6 +19,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
+from jobpulse_v15 import conceptos
 from jobpulse_v15 import matching
 from jobpulse_v15.db import Database
 from jobpulse_v15.repository import Repository
@@ -206,6 +207,66 @@ class TestConceptos(unittest.TestCase):
             resultado = matching.EvaluadorPaso5(connection).evaluar_job("job-1")
         self.assertEqual(resultado.total_req, 1)
         self.assertNotEqual(resultado.estado, matching.ESTADO_SIN_REQUISITOS)
+
+
+class TestResolver(unittest.TestCase):
+    """El resolver: mismo concepto aunque la variante venga como SLUG.
+
+    El importador de CV produce slugs ('active-directory') y la taxonomia
+    esta escrita en texto natural ('active directory'): son la MISMA
+    variante y deben resolver al mismo codigo canonico.
+    """
+
+    def setUp(self):
+        self.tmpdir = tempfile.TemporaryDirectory()
+        self.database = Database(Path(self.tmpdir.name) / "test.db")
+        self.database.initialize()
+
+    def tearDown(self):
+        self.tmpdir.cleanup()
+
+    def _resolver(self, categoria, value_code):
+        with closing(sqlite3.connect(self.database.path)) as connection:
+            connection.row_factory = sqlite3.Row
+            resueltos, sin_concepto = conceptos.resolver(
+                connection,
+                [{"category": categoria, "value_code": value_code}],
+            )
+        return resueltos[0]["codigo_canonico"], sin_concepto
+
+    def test_un_slug_resuelve_al_concepto_en_texto(self):
+        codigo, sin_concepto = self._resolver("skill", "active-directory")
+
+        self.assertEqual(codigo, "active-directory")
+        self.assertEqual(sin_concepto, [])
+
+    def test_el_texto_resuelve_al_concepto_con_guion(self):
+        codigo, _ = self._resolver("skill", "active directory")
+
+        self.assertEqual(codigo, "active-directory")
+
+    def test_el_slug_normaliza_las_mayusculas_y_los_espacios(self):
+        codigo, _ = self._resolver("skill", "  Active-Directory  ")
+
+        self.assertEqual(codigo, "active-directory")
+
+    def test_un_slug_sin_concepto_se_encola_como_variante_original(self):
+        codigo, sin_concepto = self._resolver("skill", "mi-tecnologia-exclusiva")
+
+        self.assertIsNone(codigo)
+        self.assertEqual(sin_concepto, [("skill", "mi-tecnologia-exclusiva")])
+
+    def test_una_categoria_sin_concepto_no_se_encola(self):
+        # 'area' no es una categoria de la taxonomia: no se encola.
+        codigo, sin_concepto = self._resolver("area", "informatica")
+
+        self.assertIsNone(codigo)
+        self.assertEqual(sin_concepto, [])
+
+    def test_el_experience_conceptual_si_resuelve(self):
+        codigo, _ = self._resolver("experience", "years_experience")
+
+        self.assertEqual(codigo, "experiencia-anos")
 
 
 if __name__ == "__main__":

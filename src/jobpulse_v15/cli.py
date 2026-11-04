@@ -169,6 +169,244 @@ def _cmd_init_sources(repository: Repository, args) -> None:
         registrar_directorio(repository)
 
 
+def _agregar_argumentos_viabilidad(parser: argparse.ArgumentParser) -> None:
+    """Argumentos comunes de `viabilidad list` y `viabilidad top`."""
+    parser.add_argument(
+        "--banda",
+        choices=(
+            "aplicar",
+            "revisar",
+            "no_prioritario",
+            "sin_datos",
+            "veto",
+        ),
+        help="Filtrar por banda de ajuste tecnico.",
+    )
+    parser.add_argument(
+        "--limit",
+        type=int,
+        default=50,
+        help="Maximo de vacantes a listar (0 = todas).",
+    )
+    parser.add_argument(
+        "--evaluar-todo",
+        action="store_true",
+        help="Ignorar el filtro por areas del perfil (igual que el Paso 5).",
+    )
+    parser.add_argument(
+        "--semantica",
+        action="store_true",
+        help=(
+            "Incluir el componente semantico (embeddings locales). Tarda mas "
+            "la primera vez (vectoriza el corpus) y es lo mismo que usa la UI."
+        ),
+    )
+    parser.add_argument(
+        "--format",
+        choices=("json", "csv"),
+        default="json",
+        help="Formato de salida. JSON es el predeterminado.",
+    )
+    parser.add_argument("--output", help="Escribir la salida en este archivo.")
+
+
+def _cmd_viabilidad(repository: Repository, args) -> None:
+    """Lista las vacantes por AJUSTE TECNICO (no por resultado del proceso)."""
+    from jobpulse_v15.viabilidad import (
+        a_fila,
+        calcular_viabilidades,
+        resumen_bandas,
+    )
+
+    avisos = repository.search_jobs(limit=100000)
+    if not avisos:
+        print("No hay vacantes guardadas.")
+        return
+    job_ids = [str(aviso.get("job_id") or "") for aviso in avisos]
+    semantica_por_job: dict[str, float] = {}
+    if args.semantica:
+        from jobpulse_v15.ats import percentiles_semanticas, perfil_ats_desde_facts
+        from jobpulse_v15.search_engine import SemanticSearchEngine
+
+        perfil = perfil_ats_desde_facts(repository.list_candidate_profile_facts())
+        try:
+            semantica_por_job = percentiles_semanticas(
+                SemanticSearchEngine(), avisos, perfil
+            )
+        except Exception as exc:  # pragma: no cover - depende del motor
+            print(f"[aviso] No se pudo calcular la semantica: {exc}")
+    viabilidades = calcular_viabilidades(
+        repository,
+        job_ids,
+        semantica_por_job=semantica_por_job,
+        evaluar_todo=args.evaluar_todo,
+    )
+    if args.banda:
+        viabilidades = [v for v in viabilidades if v.banda == args.banda]
+    conteo = resumen_bandas(viabilidades)
+    if args.limit and args.limit > 0:
+        viabilidades = viabilidades[: args.limit]
+
+    titulos = {str(aviso.get("job_id") or ""): aviso for aviso in avisos}
+    filas: list[dict[str, Any]] = []
+    for viabilidad in viabilidades:
+        aviso = titulos.get(viabilidad.job_id, {})
+        fila = a_fila(viabilidad)
+        fila["titulo"] = aviso.get("title") or ""
+        fila["empresa"] = aviso.get("company") or ""
+        filas.append(fila)
+
+    if args.format == "csv":
+        import csv as csv_mod
+
+        campos = [
+            "ajuste",
+            "banda",
+            "titulo",
+            "empresa",
+            "cobertura_obligatorios",
+            "faltantes_obligatorios",
+            "total_requisitos",
+            "veto",
+            "resumen",
+            "job_id",
+        ]
+        buffer = io.StringIO(newline="")
+        escritor = csv_mod.DictWriter(buffer, fieldnames=campos, extrasaction="ignore")
+        escritor.writeheader()
+        for fila in filas:
+            escritor.writerow(
+                {
+                    **fila,
+                    "faltantes_obligatorios": "; ".join(
+                        fila.get("faltantes_obligatorios") or []
+                    ),
+                }
+            )
+        contenido = buffer.getvalue()
+    else:
+        contenido = json.dumps(
+            {"bandas": conteo, "vacantes": filas}, ensure_ascii=False, indent=2
+        )
+    if args.output:
+        Path(args.output).write_text(contenido, encoding="utf-8")
+        print(f"Listado escrito en {args.output} ({len(filas)} vacantes).")
+        return
+    print(contenido)
+
+
+def _cmd_postulaciones_correo(repository: Repository, args) -> None:
+    """Lee las notificaciones de postulacion del buzon (IMAP) y las guarda."""
+    from jobpulse_v15.correo_postulaciones import (
+        ConfigCorreo,
+        ErrorCorreoPostulaciones,
+        recolectar_senales,
+    )
+
+    datos = credencial(args.cred)
+    if not datos or not datos.get("usuario") or not datos.get("password"):
+        print(
+            f"No hay credencial para {args.cred!r}. Guardala con:\n"
+            f"  jobpulse-v15 credenciales set {args.cred} --usuario <correo> "
+            f"--password <app-password>"
+        )
+        return
+    config = ConfigCorreo(
+        host=args.host,
+        puerto=args.puerto,
+        usuario=str(datos.get("usuario")),
+        carpeta=args.carpeta,
+        dias=args.dias,
+    )
+    try:
+        senales = recolectar_senales(
+            usuario=config.usuario,
+            password=str(datos.get("password")),
+            config=config,
+        )
+    except ErrorCorreoPostulaciones as exc:
+        print(f"No se pudo leer el correo: {exc}")
+        return
+    if not senales:
+        print("No se encontraron notificaciones de postulacion.")
+        return
+    if not args.apply:
+        print(f"[dry-run] {len(senales)} senales detectadas (no se guardaron):")
+        for senal in senales[:20]:
+            if isinstance(senal, dict):
+                fecha = senal.get("fecha", "")
+                estado = senal.get("estado", "")
+                titulo = senal.get("titulo", "")
+            else:
+                fecha = senal.fecha
+                estado = senal.estado
+                titulo = senal.titulo
+            print(f"  {fecha or '(sin fecha)'}  {estado:16} {titulo}")
+        if len(senales) > 20:
+            print(f"  ... y {len(senales) - 20} mas")
+        return
+    resultado = repository.registrar_senales_postulacion(senales)
+    print(
+        "Senales guardadas: {guardadas} (nuevas: {nuevas}, casadas: {casadas}).".format(
+            **resultado
+        )
+    )
+
+
+def _cmd_postulaciones_workday(repository: Repository, args) -> None:
+    """Lee 'Mis postulaciones' de Workday con la sesion del navegador."""
+    import asyncio
+
+    from jobpulse_v15.workday_postulaciones import (
+        ErrorWorkdayPostulaciones,
+        a_senales,
+        patrones_candidato,
+        recolectar_aplicaciones,
+    )
+
+    sitios = [
+        sitio
+        for sitio in repository.list_sites()
+        if sitio.get("platform_id") == "workday"
+        and (not args.site or sitio.get("site_id") in args.site)
+    ]
+    if not sitios:
+        print("No hay sitios Workday que leer.")
+        return
+    puerto = args.port or puerto_cdp_configurado()
+    senales = []
+    for sitio in sitios:
+        try:
+            aplicaciones = asyncio.run(
+                recolectar_aplicaciones(
+                    str(sitio.get("base_url") or ""),
+                    port=puerto,
+                    patrones=patrones_candidato(str(sitio.get("base_url") or "")),
+                )
+            )
+        except ErrorWorkdayPostulaciones as exc:
+            print(f"  {sitio.get('site_id')}: {exc}")
+            continue
+        except Exception as exc:  # pragma: no cover - depende del navegador
+            print(f"  {sitio.get('site_id')}: no se pudo leer ({exc})")
+            continue
+        if aplicaciones:
+            print(f"  {sitio.get('site_id')}: {len(aplicaciones)} postulaciones")
+            senales.extend(a_senales(aplicaciones))
+    if not senales:
+        print("No se encontraron postulaciones (revisa la sesion del portal).")
+        return
+    if not args.apply:
+        print(f"[dry-run] {len(senales)} senales detectadas (no se guardaron).")
+        return
+    resultado = repository.registrar_senales_postulacion(senales)
+    print(
+        "Senales guardadas: {guardadas} (nuevas: {nuevas}, casadas: {casadas}).".format(
+            **resultado
+        )
+    )
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(prog="jobpulse-v15")
     parser.add_argument(
@@ -816,6 +1054,126 @@ def main() -> int:
         action="store_true",
         help="Guardar cambios; sin esta opcion solo muestra una simulacion.",
     )
+    enrich_profile_canonico = enrich_commands.add_parser(
+        "profile-canonico",
+        help=(
+            "Rellenar el codigo canonico de los hechos del perfil (CAPA B). "
+            "Sin esto el perfil es INVISIBLE para el motor: el Paso 5 exige "
+            "codigo_canonico y descarta lo que no lo tiene."
+        ),
+    )
+    enrich_profile_canonico.add_argument(
+        "--apply",
+        action="store_true",
+        help="Guardar cambios; sin esta opcion solo muestra una simulacion.",
+    )
+
+    # --------------------------------------------------------------
+    # Viabilidad = AJUSTE TECNICO del perfil con el aviso (no es
+    # probabilidad de contratar: un rechazo humano no dice si el
+    # perfil califica).
+    # --------------------------------------------------------------
+    viabilidad = commands.add_parser(
+        "viabilidad",
+        help=(
+            "Ajuste tecnico del perfil con cada aviso (0-100) y su banda. "
+            "No predice la contratacion: dice si el perfil cumple lo que "
+            "el aviso pide."
+        ),
+    )
+    viabilidad_commands = viabilidad.add_subparsers(
+        dest="viabilidad_command", required=True
+    )
+    viabilidad_list = viabilidad_commands.add_parser(
+        "list", help="Listar las vacantes por ajuste tecnico."
+    )
+    _agregar_argumentos_viabilidad(viabilidad_list)
+    viabilidad_top = viabilidad_commands.add_parser(
+        "top", help="Las vacantes con mejor ajuste tecnico."
+    )
+    _agregar_argumentos_viabilidad(viabilidad_top)
+    viabilidad_top.set_defaults(limite=20)
+
+    # --------------------------------------------------------------
+    # Postulaciones = estado del PROCESO (no de aptitud)
+    # --------------------------------------------------------------
+    postulaciones = commands.add_parser(
+        "postulaciones",
+        help=(
+            "Señales del proceso de postulacion (correo y Workday). Un "
+            "rechazo NO significa que el perfil no califique."
+        ),
+    )
+    postulaciones_commands = postulaciones.add_subparsers(
+        dest="postulaciones_command", required=True
+    )
+    post_correo = postulaciones_commands.add_parser(
+        "correo",
+        help="Leer las notificaciones de postulacion del buzon (IMAP).",
+    )
+    post_correo.add_argument(
+        "--dias",
+        type=int,
+        default=90,
+        help="Cuanto correo revisar (por omision, 90 dias).",
+    )
+    post_correo.add_argument(
+        "--host", default="imap.gmail.com", help="Servidor IMAP."
+    )
+    post_correo.add_argument(
+        "--puerto", type=int, default=993, help="Puerto IMAP (SSL)."
+    )
+    post_correo.add_argument("--carpeta", default="INBOX", help="Carpeta IMAP.")
+    post_correo.add_argument(
+        "--cred",
+        default="gmail",
+        help="Nombre de la credencial en el almacen local (keyring).",
+    )
+    post_correo.add_argument(
+        "--apply",
+        action="store_true",
+        help="Guardar las señales; sin esta opcion solo muestra una simulacion.",
+    )
+    post_workday = postulaciones_commands.add_parser(
+        "workday",
+        help="Leer 'Mis postulaciones' de Workday (usa la sesion del navegador).",
+    )
+    post_workday.add_argument(
+        "--site",
+        action="append",
+        default=[],
+        help="Sitio Workday a leer (repetible; por omision, todos).",
+    )
+    post_workday.add_argument(
+        "--port",
+        type=int,
+        default=0,
+        help="Puerto CDP del navegador (0 = el configurado en .env).",
+    )
+    post_workday.add_argument(
+        "--apply",
+        action="store_true",
+        help="Guardar las señales; sin esta opcion solo muestra una simulacion.",
+    )
+    post_list = postulaciones_commands.add_parser(
+        "list", help="Ver el estado de postulacion por vacante."
+    )
+    post_list.add_argument(
+        "--estado",
+        choices=(
+            "applied",
+            "recruiter_contact",
+            "interview",
+            "offer",
+            "rejected",
+            "withdrawn",
+        ),
+        help="Filtrar por estado del proceso.",
+    )
+    post_list.add_argument(
+        "--format", choices=("json", "csv"), default="json"
+    )
+
     args = parser.parse_args()
 
     database = Database(args.db)
@@ -838,7 +1196,21 @@ def main() -> int:
         if not report["ok"]:
             command_exit_code = 1
     else:
+        # El proyecto migra el esquema al abrir la base (convención de la
+        # CLI, la UI y los scripts). Se AVISA cuando eso pasa: una migración
+        # nunca debe aplicarse en silencio sobre la base real.
+        try:
+            version_antes = database.schema_version()
+        except (OSError, sqlite3.Error):
+            version_antes = 0
         database.initialize()
+        version_despues = database.schema_version()
+        if version_despues != version_antes:
+            print(
+                f"[esquema] Se aplicaron las migraciones "
+                f"{version_antes + 1}-{version_despues} "
+                f"(base: {database.path})."
+            )
         if args.command == "schema-version":
             version = database.schema_version()
             print(f"Base: {database.path} (esquema {version})")
@@ -2582,6 +2954,66 @@ def main() -> int:
                             report["updated"] += 1
                     report["updates"].append(update)
                 print(json.dumps(report, ensure_ascii=False, indent=2))
+            elif args.command == "enrich" and args.enrich_command == "profile-canonico":
+                # CAPA B: los hechos del perfil necesitan codigo canonico
+                # (misma regla que los requisitos). Sin el, el motor ignora
+                # el perfil y las vacantes salen sin requisitos.
+                pendientes = repository.list_candidate_profile_facts()
+                sin_codigo = [
+                    hecho
+                    for hecho in pendientes
+                    if hecho.get("category")
+                    in ("skill", "language", "license", "education", "experience")
+                    and not hecho.get("codigo_canonico")
+                ]
+                report = {
+                    "mode": "apply" if args.apply else "dry_run",
+                    "facts_total": len(pendientes),
+                    "facts_sin_codigo": len(sin_codigo),
+                    "updated": 0,
+                    "pendientes": [
+                        {
+                            "category": hecho.get("category"),
+                            "value_code": hecho.get("value_code"),
+                        }
+                        for hecho in sin_codigo
+                    ],
+                }
+                if args.apply:
+                    report["updated"] = repository.backfill_candidate_profile_canonico()
+                print(json.dumps(report, ensure_ascii=False, indent=2))
+            # === viabilidad (ajuste tecnico) ===
+            elif args.command == "viabilidad":
+                _cmd_viabilidad(repository, args)
+            # === postulaciones (estado del proceso) ===
+            elif args.command == "postulaciones":
+                if args.postulaciones_command == "correo":
+                    _cmd_postulaciones_correo(repository, args)
+                elif args.postulaciones_command == "workday":
+                    _cmd_postulaciones_workday(repository, args)
+                elif args.postulaciones_command == "list":
+                    filas = repository.listar_postulaciones(estado=args.estado)
+                    if args.format == "csv":
+                        import csv as csv_mod
+
+                        campos = [
+                            "job_id",
+                            "estado",
+                            "portal",
+                            "ultima_fecha",
+                            "title",
+                            "company",
+                        ]
+                        buffer = io.StringIO(newline="")
+                        escritor = csv_mod.DictWriter(
+                            buffer, fieldnames=campos, extrasaction="ignore"
+                        )
+                        escritor.writeheader()
+                        for fila in filas:
+                            escritor.writerow(fila)
+                        print(buffer.getvalue(), end="")
+                    else:
+                        print(json.dumps(filas, ensure_ascii=False, indent=2))
             # === credenciales ===
             elif args.command == "credenciales":
                 if args.cred_command == "list":

@@ -24,29 +24,37 @@ from jobpulse_v15.ats import (
     VEREDICTO_SIN_DATOS,
     componentes_ats,
     percentiles,
+    percentiles_semanticas,
     perfil_ats_desde_facts,
     promedios_componentes,
     ranking_ats,
 )
 from jobpulse_v15.repository import Repository
 from jobpulse_v15.ui_v2.i18n import t
+from jobpulse_v15.viabilidad import calcular_viabilidades
 
 logger = logging.getLogger("jobpulse.vacantes")
 
 VEREDICTOS = ("fuerte", "ajustable", "debil", VEREDICTO_SIN_DATOS)
 
-# Mezcla de las dos senales semanticas (calibrada sobre el corpus real):
-# 65 % la familia de puesto (cargos del perfil vs TITULO del aviso) y 35 %
-# el contenido (cargos del perfil vs aviso completo). Con solo el titulo se
-# pierde precision; con solo el documento el ruido del texto domina.
-PESO_SEMANTICA_TITULO = 0.65
-PESO_SEMANTICA_DOCUMENTO = 0.35
+#: Bandas del AJUSTE TECNICO (motor de viabilidad). No es el ranking ATS:
+#: el ATS dice "cuanto encaja", la viabilidad dice "si el perfil cumple lo
+#: que el aviso pide" y por eso puede vetar un puesto.
+BANDAS_VIABILIDAD = ("aplicar", "revisar", "no_prioritario", "sin_datos", "veto")
 
 ETIQUETAS_VEREDICTO = {
     "fuerte": t("Fuerte"),
     "ajustable": t("Ajustable"),
     "debil": t("Débil"),
     VEREDICTO_SIN_DATOS: t("Sin datos"),
+}
+
+ETIQUETAS_BANDA = {
+    "aplicar": t("Aplicar"),
+    "revisar": t("Revisar"),
+    "no_prioritario": t("No prioritario"),
+    "sin_datos": t("Sin datos"),
+    "veto": t("Descartado"),
 }
 
 
@@ -75,6 +83,16 @@ class VacanteAts:
     # vigente). Los `preferred` no cuentan (misma regla dura del Paso 5).
     req_obligatorios: int = 0
     componentes: Mapping[str, str] = field(default_factory=dict)
+    # AJUSTE TECNICO (motor de viabilidad): 0-100 y su banda. NO es el
+    # ranking ATS: mide si el perfil cumple los requisitos del aviso.
+    ajuste: float | None = None
+    banda: str = "sin_datos"
+    veto: str = ""
+    faltantes_obligatorios: tuple[str, ...] = ()
+
+    @property
+    def banda_legible(self) -> str:
+        return ETIQUETAS_BANDA.get(self.banda, self.banda or "—")
 
     @property
     def veredicto_legible(self) -> str:
@@ -234,6 +252,22 @@ class AtsStore:
             )
         imputacion = promedios_componentes(desgloses.values())
 
+        # -- AJUSTE TECNICO (motor de viabilidad) --------------------------
+        # Es OTRO indice que el ranking ATS: mide si el perfil cumple los
+        # requisitos que declara el aviso (y puede vetar: titulo
+        # universitario obligatorio o area fuera del perfil). Reutiliza el
+        # percentil semantico ya calculado.
+        viabilidades: dict[str, Any] = {}
+        try:
+            for viabilidad in calcular_viabilidades(
+                self.repository,
+                [str(aviso.get("job_id") or "") for aviso in avisos],
+                semantica_por_job=percentil_sem,
+            ):
+                viabilidades[viabilidad.job_id] = viabilidad
+        except Exception as error:  # pragma: no cover - defensivo
+            logger.warning("No se pudo calcular el ajuste técnico: %s", error)
+
         # -- PASADA 2: el score final (pesos fijos + imputacion) ------------
         filas: list[VacanteAts] = []
         for aviso in avisos:
@@ -244,6 +278,7 @@ class AtsStore:
                 desglose=desgloses[job_id],
                 imputacion=imputacion,
             )
+            viabilidad = viabilidades.get(job_id)
             filas.append(
                 VacanteAts(
                     job_id=job_id,
@@ -268,6 +303,14 @@ class AtsStore:
                         clave: componente.detalle
                         for clave, componente in ranking.componentes.items()
                     },
+                    ajuste=viabilidad.ajuste if viabilidad else None,
+                    banda=viabilidad.banda if viabilidad else "sin_datos",
+                    veto=viabilidad.veto if viabilidad else "",
+                    faltantes_obligatorios=(
+                        tuple(viabilidad.faltantes_obligatorios)
+                        if viabilidad
+                        else ()
+                    ),
                 )
             )
         filas.sort(key=lambda fila: (-(fila.score if fila.score is not None else -1), fila.title))
@@ -282,44 +325,10 @@ class AtsStore:
     ) -> dict[str, float]:
         """PERCENTIL semantico de cada aviso dentro del corpus (0-100).
 
-        Formula (calibrada sobre el corpus real): la media de los cosenos
-        entre los CARGOS del perfil y (a) el titulo del aviso y (b) el aviso
-        completo, mezcladas 65/35. El percentil (no el coseno crudo) es lo
-        que se usa: los cosenos viven comprimidos y no distinguen nada.
+        La formula vive en `ats.percentiles_semanticas` (compartida con la
+        CLI y con el motor de viabilidad: un solo calculo, una sola respuesta).
         """
-        titulos = [str(t) for t in (perfil.get("titulos") or []) if str(t).strip()]
-        if not titulos:
-            return {}
-        jobs = [dict(aviso) for aviso in avisos]
-        engine.index_jobs(jobs)
-        engine.index_titulos(jobs)
-        if progreso:
-            progreso("Embeddings listos · calculando similitud…")
-        e_perfil = engine.embed_texts(titulos, tipo="query")
-        ids_doc, mat_doc = engine.vectors("doc")
-        ids_tit, mat_tit = engine.vectors("titulo")
-        if mat_doc is None or mat_tit is None or len(e_perfil) == 0:
-            return {}
-        indice_doc = {job_id: i for i, job_id in enumerate(ids_doc)}
-        indice_tit = {job_id: i for i, job_id in enumerate(ids_tit)}
-        claves: list[str] = []
-        crudos: list[float] = []
-        for aviso in avisos:
-            job_id = str(aviso.get("job_id") or "")
-            if job_id not in indice_doc or job_id not in indice_tit:
-                continue
-            vec_doc = mat_doc[indice_doc[job_id]]
-            vec_tit = mat_tit[indice_tit[job_id]]
-            titulo_score = float((e_perfil @ vec_tit).mean())
-            documento_score = float((e_perfil @ vec_doc).mean())
-            crudos.append(
-                PESO_SEMANTICA_TITULO * titulo_score
-                + PESO_SEMANTICA_DOCUMENTO * documento_score
-            )
-            claves.append(job_id)
-        if progreso:
-            progreso(f"Similitud calculada ({len(claves)} avisos).")
-        return dict(zip(claves, percentiles(crudos)))
+        return percentiles_semanticas(engine, avisos, perfil, progreso)
 
 
 # -- presentacion --
@@ -331,6 +340,8 @@ def filtrar(
     solo_mi_perfil: bool = False,
     areas_perfil: Sequence[str] = (),
     solo_requisitos: bool = False,
+    banda: str = "",
+    solo_aplicar: bool = False,
 ) -> list[VacanteAts]:
     """Filtra el ranking por texto, veredicto, areas del perfil y requisitos."""
     termino = (texto or "").casefold().strip()
@@ -338,6 +349,10 @@ def filtrar(
     resultado: list[VacanteAts] = []
     for fila in filas:
         if veredicto and fila.veredicto != veredicto:
+            continue
+        if banda and fila.banda != banda:
+            continue
+        if solo_aplicar and fila.banda != "aplicar":
             continue
         if solo_requisitos and fila.req_obligatorios < 1:
             continue
@@ -359,9 +374,19 @@ def resumen(filas: Sequence[VacanteAts]) -> dict[str, int]:
     return conteo
 
 
+def resumen_bandas(filas: Sequence[VacanteAts]) -> dict[str, int]:
+    """Cifras por BANDA de ajuste tecnico (no por veredicto ATS)."""
+    conteo = {banda: 0 for banda in BANDAS_VIABILIDAD}
+    for fila in filas:
+        conteo[fila.banda] = conteo.get(fila.banda, 0) + 1
+    return conteo
+
+
 CAMPOS_CSV: tuple[str, ...] = (
     "score",
     "veredicto",
+    "ajuste",
+    "banda",
     "semantica",
     "skills",
     "experiencia",
@@ -372,6 +397,7 @@ CAMPOS_CSV: tuple[str, ...] = (
     "area",
     "skills_cubiertas",
     "skills_faltantes",
+    "faltantes_obligatorios",
     "idioma_aviso",
     "analisis",
     "paso5",
@@ -392,6 +418,8 @@ def exportar_csv(filas: Sequence[VacanteAts], ruta: str | Path) -> int:
                 {
                     "score": fila.score if fila.score is not None else "",
                     "veredicto": fila.veredicto_legible,
+                    "ajuste": fila.ajuste if fila.ajuste is not None else "",
+                    "banda": fila.banda_legible,
                     "semantica": _pct(fila.semantica_pct),
                     "skills": _pct(fila.skills_pct),
                     "experiencia": _pct(fila.experiencia_pct),
@@ -402,6 +430,7 @@ def exportar_csv(filas: Sequence[VacanteAts], ruta: str | Path) -> int:
                     "area": fila.area,
                     "skills_cubiertas": "; ".join(fila.skills_cubiertas),
                     "skills_faltantes": "; ".join(fila.skills_faltantes),
+                    "faltantes_obligatorios": "; ".join(fila.faltantes_obligatorios),
                     "idioma_aviso": fila.posting_language,
                     "analisis": fila.analysis_status,
                     "paso5": fila.estado_paso5,

@@ -15,6 +15,7 @@ from jobpulse_v15 import ciclo_vida
 from jobpulse_v15 import conceptos
 from jobpulse_v15 import idiomas
 from jobpulse_v15.db import Database
+from jobpulse_v15.postulaciones import ESTADOS_POSTULACION, estado_mas_avanzado
 from jobpulse_v15.ubicaciones_cr import ciudad_es_valida, resolver_direccion
 
 
@@ -1394,6 +1395,250 @@ class Repository:
             ).fetchall()
         return [dict(row) for row in rows]
 
+    # ---------------------------------------------------------------
+    # Postulaciones: señales del PROCESO (no de aptitud)
+    # ---------------------------------------------------------------
+    def registrar_senales_postulacion(
+        self, senales: Sequence[Any]
+    ) -> dict[str, int]:
+        """Guarda señales de postulación y actualiza el estado por vacante.
+
+        `senales`: objetos `postulaciones.Senal` (o dicts con las mismas
+        claves). Se guarda SOLO lo mínimo (estado, fecha, remitente, asunto
+        y la referencia del aviso): nunca el cuerpo del correo.
+
+        El estado por vacante se deriva con `estado_mas_avanzado`: el avance
+        nunca se degrada (un 'interview' posterior no vuelve a 'rejected').
+
+        Devuelve {'guardadas': n, 'nuevas': n, 'casadas': n}.
+        """
+        if not isinstance(senales, Sequence) or isinstance(senales, (str, bytes)):
+            raise ValueError("senales debe ser una lista de señales.")
+        if not senales:
+            return {"guardadas": 0, "nuevas": 0, "casadas": 0}
+        guardadas = 0
+        nuevas = 0
+        casadas = 0
+        with self.database.connection() as connection:
+            for senal in senales:
+                datos = self._datos_senal_postulacion(senal)
+                job_id = self._casar_senal_postulacion(connection, datos)
+                if job_id:
+                    casadas += 1
+                cursor = connection.execute(
+                    """
+                    INSERT INTO postulacion_senal (
+                        job_id, portal, source_job_id, source_url, estado,
+                        fecha, remitente, asunto, titulo, empresa
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT (portal, source_job_id, estado, fecha,
+                                 remitente, asunto)
+                    DO UPDATE SET job_id = COALESCE(excluded.job_id, job_id)
+                    """,
+                    (
+                        job_id,
+                        datos["portal"],
+                        datos["source_job_id"],
+                        datos["source_url"],
+                        datos["estado"],
+                        datos["fecha"],
+                        datos["remitente"],
+                        datos["asunto"],
+                        datos["titulo"],
+                        datos["empresa"],
+                    ),
+                )
+                guardadas += 1
+                if cursor.rowcount > 0:
+                    nuevas += 1
+                if job_id:
+                    self._actualizar_estado_postulacion(connection, job_id, datos)
+        return {"guardadas": guardadas, "nuevas": nuevas, "casadas": casadas}
+
+    @staticmethod
+    def _datos_senal_postulacion(senal: Any) -> dict[str, str]:
+        """Normaliza una señal (objeto o dict) a los campos que se guardan."""
+        if isinstance(senal, Mapping):
+            get = senal.get
+        else:
+            get = lambda key, default="": getattr(senal, key, default)  # noqa: E731
+        estado = str(get("estado", "") or "").strip()
+        if estado not in ESTADOS_POSTULACION:
+            raise ValueError(f"Estado de postulación no válido: {estado!r}.")
+        return {
+            "portal": str(get("portal", "") or "otro").strip() or "otro",
+            "source_job_id": str(get("source_job_id", "") or "").strip(),
+            "source_url": str(get("url", "") or get("source_url", "") or "").strip(),
+            "estado": estado,
+            "fecha": str(get("fecha", "") or "").strip(),
+            "remitente": str(get("remitente", "") or "").strip(),
+            "asunto": str(get("asunto", "") or "").strip(),
+            "titulo": str(get("titulo", "") or "").strip(),
+            "empresa": str(get("empresa", "") or "").strip(),
+        }
+
+    def _casar_senal_postulacion(
+        self, connection: sqlite3.Connection, datos: Mapping[str, str]
+    ) -> str | None:
+        """Busca la vacante del corpus que corresponde a la señal.
+
+        1. por `source_job_id` (el REQID de Workday, el id numérico de
+           Greenhouse/LinkedIn): es la clave con la que el corpus guarda el
+           aviso;
+        2. por `source_url` (sin query ni fragmento, host en minúsculas).
+        """
+        source_job_id = datos.get("source_job_id") or ""
+        if source_job_id:
+            fila = connection.execute(
+                """
+                SELECT r.job_id
+                FROM job_source_records AS r
+                JOIN source_sites AS s ON s.site_id = r.site_id
+                WHERE r.source_job_id = ?
+                ORDER BY r.job_id
+                LIMIT 1
+                """,
+                (source_job_id,),
+            ).fetchone()
+            if fila:
+                return str(fila["job_id"])
+        url = datos.get("source_url") or ""
+        if url:
+            normal = self._normalizar_url_postulacion(url)
+            if normal:
+                filas = connection.execute(
+                    """
+                    SELECT r.job_id, r.source_url
+                    FROM job_source_records AS r
+                    WHERE r.source_url IS NOT NULL
+                    """
+                ).fetchall()
+                for fila in filas:
+                    if self._normalizar_url_postulacion(fila["source_url"]) == normal:
+                        return str(fila["job_id"])
+        return None
+
+    @staticmethod
+    def _normalizar_url_postulacion(url: str) -> str:
+        """URL comparable (host en minúsculas, sin query ni fragmento)."""
+        if not url:
+            return ""
+        base = str(url).split("?")[0].split("#")[0].strip().rstrip("/")
+        if not base:
+            return ""
+        return base.lower()
+
+    def _actualizar_estado_postulacion(
+        self, connection: sqlite3.Connection, job_id: str, datos: Mapping[str, str]
+    ) -> None:
+        """Deriva el estado actual de la vacante (el avance no se degrada)."""
+        filas = connection.execute(
+            "SELECT estado FROM postulacion_senal WHERE job_id = ?",
+            (job_id,),
+        ).fetchall()
+        estados = [str(fila["estado"]) for fila in filas]
+        estado = estado_mas_avanzado(estados) or datos["estado"]
+        actual = connection.execute(
+            """
+            SELECT estado, portal, ultima_fecha
+            FROM postulacion WHERE job_id = ?
+            """,
+            (job_id,),
+        ).fetchone()
+        if actual is None:
+            connection.execute(
+                """
+                INSERT INTO postulacion (
+                    job_id, estado, portal, ultima_fecha, actualizado_en
+                ) VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+                """,
+                (job_id, estado, datos["portal"], datos["fecha"]),
+            )
+            return
+        previo = str(actual["estado"])
+        # El avance gana siempre: un 'interview' no degrada a 'rejected'.
+        nuevo = estado_mas_avanzado([previo, estado]) or estado
+        portal = datos["portal"] or str(actual["portal"] or "")
+        fecha = max(datos["fecha"], str(actual["ultima_fecha"] or ""))
+        connection.execute(
+            """
+            UPDATE postulacion
+            SET estado = ?, portal = ?, ultima_fecha = ?,
+                actualizado_en = CURRENT_TIMESTAMP
+            WHERE job_id = ?
+            """,
+            (nuevo, portal, fecha, job_id),
+        )
+
+    def listar_senales_postulacion(
+        self,
+        *,
+        portal: str | None = None,
+        estado: str | None = None,
+        limite: int = 200,
+    ) -> list[dict[str, Any]]:
+        """Bitácora de señales (la más reciente primero)."""
+        limite = self._positive_int(limite, "limite")
+        condiciones: list[str] = []
+        parametros: list[Any] = []
+        if portal:
+            condiciones.append("s.portal = ?")
+            parametros.append(portal.strip())
+        if estado:
+            if estado not in ESTADOS_POSTULACION:
+                raise ValueError(f"Estado de postulación no válido: {estado!r}.")
+            condiciones.append("s.estado = ?")
+            parametros.append(estado)
+        where = f"WHERE {' AND '.join(condiciones)}" if condiciones else ""
+        parametros.append(limite)
+        with self.database.connection() as connection:
+            rows = connection.execute(
+                f"""
+                SELECT s.*, j.title AS job_title, j.company AS job_company
+                FROM postulacion_senal AS s
+                LEFT JOIN jobs AS j ON j.job_id = s.job_id
+                {where}
+                ORDER BY s.fecha DESC, s.senal_id DESC
+                LIMIT ?
+                """,
+                parametros,
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    def listar_postulaciones(
+        self, *, estado: str | None = None
+    ) -> list[dict[str, Any]]:
+        """Estado actual de postulación por vacante (con título y empresa)."""
+        condiciones: list[str] = []
+        parametros: list[Any] = []
+        if estado:
+            if estado not in ESTADOS_POSTULACION:
+                raise ValueError(f"Estado de postulación no válido: {estado!r}.")
+            condiciones.append("p.estado = ?")
+            parametros.append(estado)
+        where = f"WHERE {' AND '.join(condiciones)}" if condiciones else ""
+        with self.database.connection() as connection:
+            rows = connection.execute(
+                f"""
+                SELECT p.job_id, p.estado, p.portal, p.ultima_fecha,
+                       p.actualizado_en, j.title, j.company
+                FROM postulacion AS p
+                JOIN jobs AS j ON j.job_id = p.job_id
+                {where}
+                ORDER BY p.ultima_fecha DESC, p.job_id
+                """,
+                parametros,
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    def estado_postulacion_por_job(self) -> dict[str, str]:
+        """Mapa ``job_id -> estado actual`` (para cruzar con el ranking)."""
+        with self.database.connection() as connection:
+            rows = connection.execute(
+                "SELECT job_id, estado FROM postulacion"
+            ).fetchall()
+        return {str(row["job_id"]): str(row["estado"]) for row in rows}
+
     def list_workday_location_records(
         self, site_id: str | None = None
     ) -> list[dict[str, Any]]:
@@ -2400,7 +2645,14 @@ class Repository:
     def save_candidate_profile_facts(
         self, facts: Sequence[Mapping[str, Any]]
     ) -> None:
-        """Guarda un lote de hechos de perfil atomicamente."""
+        """Guarda un lote de hechos de perfil atomicamente.
+
+        CAPA B (2026-11-04): el hecho se guarda con su `codigo_canonico`
+        RESUELTO (misma regla que los requisitos: `concepto.variante =
+        LOWER(TRIM(value_code))`). Antes no se escribia y los hechos del
+        perfil eran INVISIBLES para el motor (el Paso 5 exige
+        `codigo_canonico IS NOT NULL`).
+        """
         if not isinstance(facts, Sequence) or isinstance(facts, (str, bytes)):
             raise ValueError("facts debe ser una lista de datos de perfil.")
         if not facts:
@@ -2409,12 +2661,17 @@ class Repository:
             self._validate_candidate_profile_fact(fact) for fact in facts
         ]
         with self.database.connection() as connection:
+            codigos = self._codigos_perfil(connection, normalized_facts)
+            filas = [
+                (*fact, codigos.get((fact[0], fact[1].casefold())))
+                for fact in normalized_facts
+            ]
             connection.executemany(
                 """
                 INSERT INTO candidate_profile_facts (
                     category, value_code, value_text, qualifier,
-                    education_status, numeric_value, unit, notes
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    education_status, numeric_value, unit, notes, codigo_canonico
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(category, value_code) DO UPDATE SET
                     value_text = excluded.value_text,
                     qualifier = excluded.qualifier,
@@ -2422,12 +2679,121 @@ class Repository:
                     numeric_value = excluded.numeric_value,
                     unit = excluded.unit,
                     notes = excluded.notes,
+                    codigo_canonico = COALESCE(
+                        excluded.codigo_canonico,
+                        candidate_profile_facts.codigo_canonico
+                    ),
                     origin = 'manual',
                     source_import_id = NULL,
                     updated_at = CURRENT_TIMESTAMP
                 """,
-                normalized_facts,
+                filas,
             )
+
+    @staticmethod
+    def _codigos_perfil(
+        connection: sqlite3.Connection,
+        facts: Sequence[Sequence[Any]],
+    ) -> dict[tuple[str, str], str | None]:
+        """(category, value_code) -> codigo_canonico de cada hecho del perfil.
+
+        Se usa la MISMA regla que los requisitos (`conceptos.resolver`): la
+        variante es `LOWER(TRIM(value_code))` de la categoria (con el
+        fallback slug <-> texto).
+
+        **La cola del perfil solo crece con CONCEPTOS** (skill/language/
+        license/education): los hechos de `experience` del CV son TITULOS DE
+        PUESTO ('Soporte Tecnico'), no conceptos que falten -> encolarlos
+        ensuciaria la taxonomia con basura. Pero si un hecho de experience
+        SI es un concepto ('years_experience'), igual recibe su codigo.
+        """
+        codigos: dict[tuple[str, str], str | None] = {}
+        con_concepto = [
+            fact for fact in facts if fact[0] in conceptos.CATEGORIAS_CONCEPTO
+        ]
+        if con_concepto:
+            resueltos, sin_concepto = conceptos.resolver(
+                connection,
+                [
+                    {"category": fact[0], "value_code": fact[1]}
+                    for fact in con_concepto
+                ],
+            )
+            conceptos.encolar_sin_concepto(
+                connection,
+                [
+                    (categoria, variante)
+                    for categoria, variante in sin_concepto
+                    if categoria in conceptos.CATEGORIAS_PERFIL_CONCEPTO
+                ],
+                origen="cv",
+            )
+            for hecho in resueltos:
+                clave = (
+                    str(hecho["category"]),
+                    str(hecho["value_code"]).casefold(),
+                )
+                codigos[clave] = hecho.get("codigo_canonico")
+        for fact in facts:
+            clave = (str(fact[0]), str(fact[1]).casefold())
+            codigos.setdefault(clave, None)
+        return codigos
+
+    def backfill_candidate_profile_canonico(self) -> int:
+        """Rellena el `codigo_canonico` de los hechos que lo tienen NULL.
+
+        Idempotente y NO destructivo: solo rellena los NULL (un codigo ya
+        escrito a mano, aunque no exista en la taxonomia, se respeta).
+        Devuelve cuantos hechos quedaron con codigo.
+
+        Se procesan las categorias que pueden ser CONCEPTO. Los hechos de
+        `experience` que son titulos de puesto quedan en NULL (no son
+        conceptos) y NO se encolan: la cola del perfil solo crece con
+        conceptos reales.
+        """
+        with self.database.connection() as connection:
+            filas = connection.execute(
+                """
+                SELECT profile_fact_id, category, value_code
+                FROM candidate_profile_facts
+                WHERE codigo_canonico IS NULL
+                  AND category IN ('skill', 'language', 'license', 'education',
+                                   'experience')
+                """
+            ).fetchall()
+            if not filas:
+                return 0
+            resueltos, sin_concepto = conceptos.resolver(
+                connection,
+                [
+                    {"category": row["category"], "value_code": row["value_code"]}
+                    for row in filas
+                ],
+            )
+            conceptos.encolar_sin_concepto(
+                connection,
+                [
+                    (categoria, variante)
+                    for categoria, variante in sin_concepto
+                    if categoria in conceptos.CATEGORIAS_PERFIL_CONCEPTO
+                ],
+                origen="cv",
+            )
+            actualizados = 0
+            for fila, hecho in zip(filas, resueltos):
+                codigo = hecho.get("codigo_canonico")
+                if not codigo:
+                    continue
+                cursor = connection.execute(
+                    """
+                    UPDATE candidate_profile_facts
+                    SET codigo_canonico = ?, updated_at = CURRENT_TIMESTAMP
+                    WHERE profile_fact_id = ? AND codigo_canonico IS NULL
+                    """,
+                    (codigo, fila["profile_fact_id"]),
+                )
+                actualizados += cursor.rowcount
+            return actualizados
 
     def import_candidate_profile_facts(
         self,
@@ -2487,13 +2853,18 @@ class Repository:
                         previous["source_import_id"] if previous else None,
                     ),
                 )
+            codigos = self._codigos_perfil(connection, normalized)
+            filas = [
+                (*fact, codigos.get((fact[0], fact[1].casefold())), import_id)
+                for fact in normalized
+            ]
             connection.executemany(
                 """
                 INSERT INTO candidate_profile_facts (
                     category, value_code, value_text, qualifier,
                     education_status, numeric_value, unit, notes,
-                    origin, source_import_id
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'imported', ?)
+                    codigo_canonico, origin, source_import_id
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'imported', ?)
                 ON CONFLICT(category, value_code) DO UPDATE SET
                     value_text = excluded.value_text,
                     qualifier = excluded.qualifier,
@@ -2501,11 +2872,15 @@ class Repository:
                     numeric_value = excluded.numeric_value,
                     unit = excluded.unit,
                     notes = excluded.notes,
+                    codigo_canonico = COALESCE(
+                        excluded.codigo_canonico,
+                        candidate_profile_facts.codigo_canonico
+                    ),
                     origin = 'imported',
                     source_import_id = excluded.source_import_id,
                     updated_at = CURRENT_TIMESTAMP
                 """,
-                [(*fact, import_id) for fact in normalized],
+                filas,
             )
         return import_id
 
