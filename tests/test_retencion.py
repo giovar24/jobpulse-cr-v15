@@ -13,7 +13,7 @@ import sys
 import tempfile
 import unittest
 import unittest.mock
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
@@ -88,7 +88,11 @@ class TestRetencionStore(unittest.TestCase):
     def test_el_corte_es_la_fecha_de_hoy_menos_los_meses(self):
         self.store.guardar_meses(6)
         retencion = self.store.retencion()
-        esperado = (date.today() - timedelta(days=30 * 6)).isoformat()
+        # Mismo reloj que `ciclo_vida.corte_de_retencion` (UTC): `date.today()`
+        # es la fecha LOCAL y por la noche ya es "mañana" en UTC, lo que
+        # desfasaba el corte en un día (flaky de tarde/noche en UTC-6).
+        hoy = datetime.now(timezone.utc).date()
+        esperado = (hoy - timedelta(days=30 * 6)).isoformat()
         self.assertEqual(retencion.corte, esperado)
 
 
