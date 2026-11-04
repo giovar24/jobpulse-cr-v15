@@ -12,6 +12,7 @@ from typing import Any, Sequence
 from jobpulse_v15.ui_v2.data.profile import etiqueta_categoria, fact_desde_sugerencia
 from jobpulse_v15.ui_v2.theme import Theme
 from jobpulse_v15.ui_v2.widgets import FlatButton, ScrollFrame
+from jobpulse_v15.ui_v2.i18n import t
 
 
 class RevisionImportacionDialog(tk.Toplevel):
@@ -31,7 +32,7 @@ class RevisionImportacionDialog(tk.Toplevel):
         self.resultado: list[dict[str, Any]] | None = None
         self._variables: list[tuple[tk.BooleanVar, Any]] = []
 
-        self.title("Revisar datos del CV")
+        self.title(t("Revisar datos del CV"))
         self.configure(bg=theme.color("surface"))
         self.geometry("720x620")
         self.minsize(560, 420)
@@ -57,7 +58,7 @@ class RevisionImportacionDialog(tk.Toplevel):
         cabecera = tk.Frame(self, bg=theme.color("surface"))
         cabecera.grid(row=0, column=0, sticky="ew", padx=20, pady=(18, 8))
         tk.Label(
-            cabecera, text="Datos detectados en el CV", bg=theme.color("surface"),
+            cabecera, text=t("Datos detectados en el CV"), bg=theme.color("surface"),
             fg=theme.color("text"), font=theme.font(14, "bold"), anchor="w",
         ).pack(anchor="w")
         tk.Label(
@@ -85,7 +86,7 @@ class RevisionImportacionDialog(tk.Toplevel):
         scroll.grid(row=2, column=0, sticky="nsew", padx=20)
         if not self.importacion.suggestions:
             tk.Label(
-                scroll.inner, text="No se detectaron datos compatibles.",
+                scroll.inner, text=t("No se detectaron datos compatibles."),
                 bg=theme.color("surface"), fg=theme.color("text_muted"),
                 font=theme.font(10),
             ).pack(pady=20)

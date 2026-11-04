@@ -27,6 +27,7 @@ from typing import Any
 from jobpulse_v15.ui_v2.data.cuentas import CuentasStore, SitioCuenta
 from jobpulse_v15.ui_v2.tabs.base import BaseTab
 from jobpulse_v15.ui_v2.widgets import Card, FlatButton, SectionTitle
+from jobpulse_v15.ui_v2.i18n import t
 
 SSO_OPCIONES = ("", "google")
 GRUPOS = ("directos", "boards", "estatales")
@@ -147,7 +148,7 @@ class CuentasTab(BaseTab):
         card.body.columnconfigure(0, weight=1)
 
         SectionTitle(card.body, theme, "Credencial",
-                     hint="la contraseña va al Administrador de Credenciales").grid(
+                     hint=t("la contraseña va al Administrador de Credenciales")).grid(
             row=0, column=0, sticky="ew")
 
         form = tk.Frame(card.body, bg=theme.color("surface"))
@@ -183,7 +184,7 @@ class CuentasTab(BaseTab):
         checks.grid(row=3, column=0, columnspan=4, sticky="w", pady=(8, 0))
         ttk.Checkbutton(checks, text="Auto-login", variable=self._widgets["auto_login"]).pack(
             side="left")
-        ttk.Checkbutton(checks, text="Obligatorio",
+        ttk.Checkbutton(checks, text=t("Obligatorio"),
                         variable=self._widgets["obligatorio"]).pack(
             side="left", padx=(16, 0))
 

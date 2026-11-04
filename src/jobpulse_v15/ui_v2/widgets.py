@@ -11,6 +11,7 @@ import tkinter as tk
 from tkinter import ttk
 from typing import Callable, Iterable, Sequence
 
+from jobpulse_v15.ui_v2.i18n import t
 from jobpulse_v15.ui_v2.theme import Theme
 
 
@@ -34,7 +35,11 @@ class Card(tk.Frame):
 
 
 class SectionTitle(tk.Frame):
-    """Rótulo de sección + textoSecondary opcional."""
+    """Rótulo de sección + textoSecondary opcional.
+
+    El texto es DISPLAY: se traduce aquí (frontera de i18n de los
+    componentes), así una pestaña nueva no necesita escribir `t()`.
+    """
 
     def __init__(self, parent: tk.Misc, theme: Theme, title: str,
                  hint: str | None = None, *, background: str | None = None) -> None:
@@ -42,7 +47,7 @@ class SectionTitle(tk.Frame):
         super().__init__(parent, bg=background or theme.color("surface"))
         tk.Label(
             self,
-            text=title.upper(),
+            text=t(title).upper(),
             bg=self.cget("bg"),
             fg=theme.color("text_faint"),
             font=theme.font(8, "bold"),
@@ -51,7 +56,7 @@ class SectionTitle(tk.Frame):
         if hint:
             tk.Label(
                 self,
-                text=hint,
+                text=t(hint),
                 bg=self.cget("bg"),
                 fg=theme.color("text_faint"),
                 font=theme.font(8),
@@ -72,11 +77,13 @@ class StatTile(tk.Frame):
         )
         self._value_label.pack(anchor="w")
         tk.Label(
-            self, text=label.upper(), bg=self.cget("bg"), fg=theme.color("text_muted"),
+            self, text=t(label).upper(), bg=self.cget("bg"),
+            fg=theme.color("text_muted"),
             font=theme.font(8, "bold"), anchor="w",
         ).pack(anchor="w", pady=(2, 0))
         self._hint_label = tk.Label(
-            self, text=hint or "", bg=self.cget("bg"), fg=theme.color("text_faint"),
+            self, text=t(hint) if hint else "", bg=self.cget("bg"),
+            fg=theme.color("text_faint"),
             font=theme.font(8), anchor="w",
         )
         if hint:
@@ -85,7 +92,7 @@ class StatTile(tk.Frame):
     def update_values(self, value: str, hint: str | None = None) -> None:
         self._value_label.configure(text=value)
         if hint is not None:
-            self._hint_label.configure(text=hint)
+            self._hint_label.configure(text=t(hint))
             if not self._hint_label.winfo_ismapped():
                 self._hint_label.pack(anchor="w", pady=(2, 0))
 
@@ -105,7 +112,7 @@ class Badge(tk.Label):
                  tone: str = "neutral") -> None:
         self.theme = theme
         self._tone = tone
-        super().__init__(parent, text=text, bg=theme.color("neutral_soft"),
+        super().__init__(parent, text=t(text), bg=theme.color("neutral_soft"),
                          fg=theme.color("text_muted"), font=theme.font(8, "bold"),
                          padx=8, pady=3, bd=0)
         self.set_tone(tone)
@@ -116,7 +123,7 @@ class Badge(tk.Label):
         self.configure(bg=self.theme.color(fondo), fg=self.theme.color(texto))
 
     def set_text(self, text: str) -> None:
-        self.configure(text=text)
+        self.configure(text=t(text))
 
 
 class SearchField(tk.Frame):
@@ -127,7 +134,7 @@ class SearchField(tk.Frame):
                  on_change: Callable[[str], None] | None = None) -> None:
         self.theme = theme
         self._on_change = on_change
-        self._placeholder = placeholder
+        self._placeholder = t(placeholder)
         super().__init__(parent, bg=theme.color("surface"))
         self._inner = tk.Frame(
             self, bg=theme.color("surface"),
@@ -199,7 +206,7 @@ class FlatButton(ttk.Button):
     def __init__(self, parent: tk.Misc, theme: Theme, text: str, command=None,
                  *, variant: str = "flat", width: int | None = None) -> None:
         estilos = {"flat": "Flat.TButton", "accent": "Accent.TButton", "ghost": "Ghost.TButton"}
-        super().__init__(parent, text=text, command=command,
+        super().__init__(parent, text=t(text), command=command,
                          style=estilos.get(variant, "Flat.TButton"), width=width)
 
 
@@ -211,12 +218,13 @@ class EmptyState(tk.Frame):
         self.theme = theme
         super().__init__(parent, bg=background or theme.color("surface"))
         tk.Label(
-            self, text=title, bg=self.cget("bg"), fg=theme.color("text"),
+            self, text=t(title), bg=self.cget("bg"), fg=theme.color("text"),
             font=theme.font(12, "bold"),
         ).pack(pady=(24, 6))
         if message:
             tk.Label(
-                self, text=message, bg=self.cget("bg"), fg=theme.color("text_muted"),
+                self, text=t(message), bg=self.cget("bg"),
+                fg=theme.color("text_muted"),
                 font=theme.font(9), wraplength=420, justify="center",
             ).pack(pady=(0, 24))
 
@@ -294,7 +302,7 @@ class KeyValue(tk.Frame):
         self._bg = background or theme.color("surface")
         super().__init__(parent, bg=self._bg)
         tk.Label(
-            self, text=label, bg=self._bg, fg=theme.color("text_faint"),
+            self, text=t(label), bg=self._bg, fg=theme.color("text_faint"),
             font=theme.font(8, "bold"), width=18, anchor="w",
         ).pack(side="left", fill="x")
         self.value_label = tk.Label(

@@ -41,6 +41,7 @@ from jobpulse_v15.ui_v2.widgets import (
     SectionTitle,
     StatTile,
 )
+from jobpulse_v15.ui_v2.i18n import t
 
 COLUMNAS = ("categoria", "codigo", "valor", "nivel", "origen", "canonico")
 TITULOS = {
@@ -156,7 +157,7 @@ class PerfilTab(BaseTab):
         filtros.grid(row=0, column=0, sticky="ew", pady=(0, 10))
         filtros.columnconfigure(0, weight=1)
         self._widgets["buscador"] = SearchField(
-            filtros, theme, placeholder="Buscar por valor o código…",
+            filtros, theme, placeholder=t("Buscar por valor o código…"),
             on_change=lambda _t: self.refresh(),
         )
         self._widgets["buscador"].grid(row=0, column=0, sticky="ew")
@@ -216,7 +217,7 @@ class PerfilTab(BaseTab):
         encabezado = tk.Frame(form, bg=theme.color("surface"))
         encabezado.pack(fill="x", pady=(4, 8))
         self._widgets["form_titulo"] = tk.Label(
-            encabezado, text="Nuevo dato de perfil", bg=theme.color("surface"),
+            encabezado, text=t("Nuevo dato de perfil"), bg=theme.color("surface"),
             fg=theme.color("text"), font=theme.font(12, "bold"), anchor="w",
         )
         self._widgets["form_titulo"].pack(anchor="w")
@@ -390,10 +391,10 @@ class PerfilTab(BaseTab):
         )
         badge = self._widgets["badge"]
         if total:
-            badge.set_text("Con perfil")
+            badge.set_text(t("Con perfil"))
             badge.set_tone("success")
         else:
-            badge.set_text("Sin datos")
+            badge.set_text(t("Sin datos"))
             badge.set_tone("warning")
         self._widgets["revertir"].configure(
             state="normal" if importaciones else "disabled"
@@ -412,7 +413,7 @@ class PerfilTab(BaseTab):
 
     def _cargar_en_formulario(self, hecho: ProfileFact) -> None:
         self._editando_id = hecho.fact_id
-        self._widgets["form_titulo"].configure(text="Editar dato de perfil")
+        self._widgets["form_titulo"].configure(text=t("Editar dato de perfil"))
         combo = self._widgets["categoria"]
         combo.current(CATEGORIAS.index(hecho.category) if hecho.category in CATEGORIAS else 0)
         self._set_entry("codigo", hecho.value_code)
@@ -455,7 +456,7 @@ class PerfilTab(BaseTab):
 
     def limpiar_formulario(self) -> None:
         self._editando_id = None
-        self._widgets["form_titulo"].configure(text="Nuevo dato de perfil")
+        self._widgets["form_titulo"].configure(text=t("Nuevo dato de perfil"))
         self._widgets["categoria"].current(0)
         for clave in ("codigo", "valor", "qualifier", "numerico", "unidad"):
             self._set_entry(clave, "")
@@ -473,8 +474,8 @@ class PerfilTab(BaseTab):
         valor = self._get_entry("valor")
         if not codigo or not valor:
             messagebox.showinfo(
-                "Dato de perfil",
-                "El código y el valor son obligatorios.",
+                t("Dato de perfil"),
+                t("El código y el valor son obligatorios."),
                 parent=self._toplevel(),
             )
             return
@@ -497,23 +498,23 @@ class PerfilTab(BaseTab):
                 fact_id_viejo=self._editando_id,
             )
         except ValueError as error:
-            messagebox.showerror("Dato de perfil", str(error), parent=self._toplevel())
+            messagebox.showerror(t("Dato de perfil"), str(error), parent=self._toplevel())
             return
         self.refresh()
         self.limpiar_formulario()
-        messagebox.showinfo("Dato de perfil", "Dato guardado.",
+        messagebox.showinfo(t("Dato de perfil"), t("Dato guardado."),
                             parent=self._toplevel())
 
     def eliminar(self) -> None:
         if self._editando_id is None:
-            messagebox.showinfo("Dato de perfil",
-                                "Selecciona un dato de la lista para eliminarlo.",
+            messagebox.showinfo(t("Dato de perfil"),
+                                t("Selecciona un dato de la lista para eliminarlo."),
                                 parent=self._toplevel())
             return
         hecho = next((h for h in self.hechos if h.fact_id == self._editando_id), None)
         etiqueta = f"{hecho.categoria_legible} · {hecho.value_text}" if hecho else "el dato"
         if not messagebox.askyesno(
-            "Eliminar dato", f"¿Eliminar {etiqueta}?", parent=self._toplevel()
+            t("Eliminar dato"), f"¿Eliminar {etiqueta}?", parent=self._toplevel()
         ):
             return
         if self.store.delete(self._editando_id):
@@ -523,7 +524,7 @@ class PerfilTab(BaseTab):
     # -- importación --
     def importar_cv(self) -> None:
         ruta = filedialog.askopenfilename(
-            title="Seleccionar CV",
+            title=t("Seleccionar CV"),
             filetypes=[("CV (PDF, DOCX, TXT)", "*.pdf *.docx *.txt"),
                        ("Todos los archivos", "*.*")],
             parent=self._toplevel(),
@@ -536,8 +537,8 @@ class PerfilTab(BaseTab):
             messagebox.showerror("Importar CV", str(error), parent=self._toplevel())
             return
         except Exception as error:  # pragma: no cover - dependencia de archivo
-            messagebox.showerror("Importar CV",
-                                 f"No se pudo procesar el CV:\n{error}",
+            messagebox.showerror(t("Importar CV"),
+                                 t("No se pudo procesar el CV:\n{}").format(error),
                                  parent=self._toplevel())
             return
 
@@ -547,13 +548,13 @@ class PerfilTab(BaseTab):
         try:
             total = self.store.import_facts(importacion.source_name, seleccionados)
         except ValueError as error:
-            messagebox.showerror("Importar CV", str(error), parent=self._toplevel())
+            messagebox.showerror(t("Importar CV"), str(error), parent=self._toplevel())
             return
         self.refresh()
         messagebox.showinfo(
-            "Importar CV",
-            f"Se importaron {total} dato(s) desde {importacion.source_name}.\n"
-            "Puedes revertir la importación con el botón del mismo nombre.",
+            t("Importar CV"),
+            t("Se importaron {} dato(s) desde {}.\nPuedes revertir la importación con el botón del mismo nombre.").format(
+                total, importacion.source_name),
             parent=self._toplevel(),
         )
 
@@ -563,9 +564,9 @@ class PerfilTab(BaseTab):
             return
         ultima = importaciones[0]
         if not messagebox.askyesno(
-            "Revertir importación",
-            f"¿Revertir la importación de {ultima['source_name']} "
-            f"({ultima['imported_at']})? Se conservan tus ediciones manuales.",
+            t("Revertir importación"),
+            t("¿Revertir la importación de {} ({})? Se conservan tus ediciones manuales.").format(
+                ultima['source_name'], ultima['imported_at']),
             parent=self._toplevel(),
         ):
             return
@@ -573,16 +574,15 @@ class PerfilTab(BaseTab):
         self.refresh()
         if resultado:
             messagebox.showinfo(
-                "Revertir importación",
-                f"Restaurados: {resultado['restored']} · "
-                f"Eliminados: {resultado['removed']} · "
-                f"Manuales conservados: {resultado['preserved_manual']}",
+                t("Revertir importación"),
+                t("Restaurados: {} · Eliminados: {} · Manuales conservados: {}").format(
+                    resultado['restored'], resultado['removed'], resultado['preserved_manual']),
                 parent=self._toplevel(),
             )
 
     def exportar(self) -> None:
         if not self.hechos:
-            messagebox.showinfo("Exportar perfil", "No hay datos en la vista.",
+            messagebox.showinfo(t("Exportar perfil"), t("No hay datos en la vista."),
                                 parent=self._toplevel())
             return
         dir_csv = configuracion.directorio_csv()
@@ -598,11 +598,11 @@ class PerfilTab(BaseTab):
         try:
             total = exportar_csv(self.hechos, ruta)
         except OSError as error:
-            messagebox.showerror("Exportar perfil",
-                                 f"No se pudo escribir el archivo:\n{error}",
+            messagebox.showerror(t("Exportar perfil"),
+                                 t("No se pudo escribir el archivo:\n{}").format(error),
                                  parent=self._toplevel())
             return
-        messagebox.showinfo("Exportar perfil", f"Se exportaron {total} dato(s).",
+        messagebox.showinfo(t("Exportar perfil"), t("Se exportaron {} dato(s).").format(total),
                             parent=self._toplevel())
 
     def _toplevel(self) -> tk.Misc:

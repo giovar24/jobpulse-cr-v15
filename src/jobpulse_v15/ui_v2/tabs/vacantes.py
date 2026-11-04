@@ -44,6 +44,8 @@ from jobpulse_v15.ui_v2.widgets import (
     SectionTitle,
     StatTile,
 )
+from jobpulse_v15.ui_v2.i18n import t
+from jobpulse_v15.ui_v2.i18n import t
 
 COLUMNAS = (
     "score",
@@ -136,14 +138,14 @@ class VacantesTab(BaseTab):
         barra.columnconfigure(1, weight=1)
 
         self._widgets["buscador"] = SearchField(
-            barra, theme, placeholder="Buscar por puesto o empresa…",
+            barra, theme, placeholder=t("Buscar por puesto o empresa…"),
             on_change=lambda _t: self._pintar_tabla(),
         )
         self._widgets["buscador"].grid(row=0, column=0, sticky="ew")
 
         combo = ttk.Combobox(
             barra,
-            values=["Todos los veredictos"] + [
+            values=[t("Todos los veredictos")] + [
                 ETIQUETAS_VEREDICTO[clave] for clave in ETIQUETAS_VEREDICTO
             ],
             state="readonly",
@@ -157,14 +159,14 @@ class VacantesTab(BaseTab):
 
         self._widgets["solo_miperfil"] = tk.BooleanVar(value=False)
         ttk.Checkbutton(
-            barra, text="Solo áreas de mi perfil",
+            barra, text=t("Solo áreas de mi perfil"),
             variable=self._widgets["solo_miperfil"],
             command=self._pintar_tabla,
         ).grid(row=0, column=2, padx=(12, 0))
 
         self._widgets["evaluar_todo"] = tk.BooleanVar(value=False)
         ttk.Checkbutton(
-            barra, text="Evaluar todo",
+            barra, text=t("Evaluar todo"),
             variable=self._widgets["evaluar_todo"],
         ).grid(row=0, column=3, padx=(12, 0))
 
@@ -225,7 +227,7 @@ class VacantesTab(BaseTab):
             style="Flat.Treeview",
         )
         for columna in COLUMNAS:
-            self._widgets["tabla"].heading(columna, text=TITULOS[columna])
+            self._widgets["tabla"].heading(columna, text=t(TITULOS[columna]))
             self._widgets["tabla"].column(
                 columna, width=ANCHOS[columna], anchor="w", stretch=(columna == "titulo")
             )
@@ -349,7 +351,7 @@ class VacantesTab(BaseTab):
             return
         if not self.store.avisos(limite=1):
             self.filas = []
-            self._widgets["estado"].configure(text="No hay avisos guardados para rankear.")
+            self._widgets["estado"].configure(text=t("No hay avisos guardados para rankear."))
             self._widgets["badge"].set_text("Vacío")
             self._widgets["badge"].set_tone("neutral")
             self._pintar_tabla()
@@ -362,7 +364,7 @@ class VacantesTab(BaseTab):
             self._calcular_en_linea()
             return
         self._calculando = True
-        self._widgets["estado"].configure(text="Calculando el ranking ATS…")
+        self._widgets["estado"].configure(text=t("Calculando el ranking ATS…"))
         self._widgets["badge"].set_text("Calculando")
         self._widgets["badge"].set_tone("warning")
 
@@ -411,10 +413,10 @@ class VacantesTab(BaseTab):
 
     def _error_calculo(self, mensaje: str) -> None:
         self._calculando = False
-        self._widgets["estado"].configure(text=f"Error al calcular: {mensaje}")
-        self._widgets["badge"].set_text("Error")
+        self._widgets["estado"].configure(text=t("Error al calcular: {}").format(mensaje))
+        self._widgets["badge"].set_text(t("Error"))
         self._widgets["badge"].set_tone("danger")
-        messagebox.showerror("Ranking ATS", f"No se pudo calcular el score:\n{mensaje}")
+        messagebox.showerror(t("Ranking ATS"), t("No se pudo calcular el score:\n{}").format(mensaje))
 
     @staticmethod
     def _crear_engine() -> Any:
@@ -483,14 +485,14 @@ class VacantesTab(BaseTab):
             )
         else:
             self._widgets["estado"].configure(
-                text="No hay avisos guardados para rankear."
+                text=t("No hay avisos guardados para rankear.")
             )
         badge = self._widgets["badge"]
         if total:
-            badge.set_text("Listo")
+            badge.set_text(t("Listo"))
             badge.set_tone("success")
         else:
-            badge.set_text("Vacío")
+            badge.set_text(t("Vacío"))
             badge.set_tone("neutral")
 
     # -- detalle --
@@ -593,10 +595,10 @@ class VacantesTab(BaseTab):
         boton = self._widgets.get("paso5")
         if boton is not None:
             boton.configure(state="normal")
-        self._widgets["estado"].configure(text=f"Error en el Paso 5: {mensaje}")
-        self._widgets["badge"].set_text("Error")
+        self._widgets["estado"].configure(text=t("Error en el Paso 5: {}").format(mensaje))
+        self._widgets["badge"].set_text(t("Error"))
         self._widgets["badge"].set_tone("danger")
-        messagebox.showerror("Paso 5", f"No se pudo correr el matching:\n{mensaje}")
+        messagebox.showerror(t("Paso 5"), t("No se pudo correr el matching:\n{}").format(mensaje))
 
     def _fin_paso5(self, resumen: ResumenPaso5) -> None:
         self._corriendo_paso5 = False
@@ -612,15 +614,14 @@ class VacantesTab(BaseTab):
         detalle = " · ".join(f"{estado}: {n}" for estado, n in
                              sorted(por_estado.items())) or "sin evaluables"
         self._widgets["estado"].configure(
-            text=f"Paso 5 · corrida {resumen.corrida_id} · {resumen.evaluadas} "
-                 f"evaluada(s) · {detalle}")
-        self._widgets["badge"].set_text("Paso 5 listo")
+            text=t("Paso 5 · corrida {} · {} evaluada(s) · {}").format(
+                resumen.corrida_id, resumen.evaluadas, detalle))
+        self._widgets["badge"].set_text(t("Paso 5 listo"))
         self._widgets["badge"].set_tone("success")
         messagebox.showinfo(
-            "Paso 5",
-            f"Corrida {resumen.corrida_id} guardada.\n"
-            f"{resumen.evaluadas} vacante(s) evaluada(s).\n\n"
-            f"{resumen.texto()}",
+            t("Paso 5"),
+            t("Corrida {} guardada.\n{} vacante(s) evaluada(s).\n\n{}").format(
+                resumen.corrida_id, resumen.evaluadas, resumen.texto()),
         )
 
     def _actualizar_estados_paso5(self) -> None:
@@ -642,7 +643,7 @@ class VacantesTab(BaseTab):
     def exportar(self) -> None:
         filas = self._filas_visibles()
         if not filas:
-            messagebox.showinfo("Exportar CSV", "No hay vacantes en la vista para exportar.")
+            messagebox.showinfo(t("Exportar CSV"), t("No hay vacantes en la vista para exportar."))
             return
         dir_csv = configuracion.directorio_csv()
         ruta = filedialog.asksaveasfilename(
@@ -656,9 +657,9 @@ class VacantesTab(BaseTab):
         try:
             total = exportar_csv(filas, ruta)
         except OSError as error:
-            messagebox.showerror("Exportar CSV", f"No se pudo escribir el archivo:\n{error}")
+            messagebox.showerror(t("Exportar CSV"), t("No se pudo escribir el archivo:\n{}").format(error))
             return
-        messagebox.showinfo("Exportar CSV", f"Se exportaron {total} vacante(s).")
+        messagebox.showinfo(t("Exportar CSV"), t("Se exportaron {} vacante(s).").format(total))
 
 
 def _pct(valor: float | None) -> str:

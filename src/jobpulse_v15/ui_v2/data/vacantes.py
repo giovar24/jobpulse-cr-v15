@@ -29,6 +29,7 @@ from jobpulse_v15.ats import (
     ranking_ats,
 )
 from jobpulse_v15.repository import Repository
+from jobpulse_v15.ui_v2.i18n import t
 
 logger = logging.getLogger("jobpulse.vacantes")
 
@@ -42,10 +43,10 @@ PESO_SEMANTICA_TITULO = 0.65
 PESO_SEMANTICA_DOCUMENTO = 0.35
 
 ETIQUETAS_VEREDICTO = {
-    "fuerte": "Fuerte",
-    "ajustable": "Ajustable",
-    "debil": "Débil",
-    VEREDICTO_SIN_DATOS: "Sin datos",
+    "fuerte": t("Fuerte"),
+    "ajustable": t("Ajustable"),
+    "debil": t("Débil"),
+    VEREDICTO_SIN_DATOS: t("Sin datos"),
 }
 
 

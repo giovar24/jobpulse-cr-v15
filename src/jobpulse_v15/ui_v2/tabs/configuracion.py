@@ -57,6 +57,7 @@ from jobpulse_v15.ui_v2.theme import (
     paleta_por_nombre,
 )
 from jobpulse_v15.ui_v2.widgets import Card, FlatButton, ScrollFrame, SectionTitle
+from jobpulse_v15.ui_v2.i18n import t
 
 TODAS_LAS_PLATAFORMAS = "Todas las plataformas"
 
@@ -131,11 +132,11 @@ class ConfiguracionTab(BaseTab):
         card.body.columnconfigure(0, weight=1)
 
         SectionTitle(card.body, theme, "IA local (servidor llama.cpp)",
-                     hint="bajo demanda · O7.3").grid(
+                     hint=t("bajo demanda · O7.3")).grid(
             row=0, column=0, sticky="ew")
 
         self._widgets["ia_estado"] = tk.Label(
-            card.body, text="Estado: comprobando…", bg=theme.color("surface"),
+            card.body, text=t("Estado: comprobando…"), bg=theme.color("surface"),
             fg=theme.color("text"), font=theme.font(10, "bold"), anchor="w",
         )
         self._widgets["ia_estado"].grid(row=1, column=0, sticky="ew",
@@ -170,8 +171,8 @@ class ConfiguracionTab(BaseTab):
 
         tk.Label(
             card.body,
-            text=("La UI apaga solo lo que ella arranca; el servidor que ya "
-                  "corría no se toca. Log: data/ia_server.log."),
+            text=(t("La UI apaga solo lo que ella arranca; el servidor que ya "
+                  "corría no se toca. Log: data/ia_server.log.")),
             bg=theme.color("surface"), fg=theme.color("text_faint"),
             font=theme.font(8), anchor="w",
         ).grid(row=4, column=0, sticky="ew", pady=(8, 0))
@@ -184,7 +185,7 @@ class ConfiguracionTab(BaseTab):
         card.body.columnconfigure(0, weight=1)
 
         SectionTitle(card.body, theme, "IA externa (LLM)",
-                     hint=".env del proyecto").grid(
+                     hint=t(".env del proyecto")).grid(
             row=0, column=0, sticky="ew")
 
         form = tk.Frame(card.body, bg=theme.color("surface"))
@@ -213,10 +214,10 @@ class ConfiguracionTab(BaseTab):
 
         self._widgets["ia_max"] = self._fila_form(
             form, 4, "Máx. llamadas:", ttk.Entry(form, width=12),
-            hint="IA_MAX_LLAMADAS · vacío = sin tope (opt-in)")
+            hint=t("IA_MAX_LLAMADAS · vacío = sin tope (opt-in)"))
         self._widgets["ia_rpm"] = self._fila_form(
             form, 5, "RPM:", ttk.Entry(form, width=12),
-            hint="IA_RPM · vacío = sin rate limit (opt-in)")
+            hint=t("IA_RPM · vacío = sin rate limit (opt-in)"))
 
         botones = tk.Frame(card.body, bg=theme.color("surface"))
         botones.grid(row=2, column=0, sticky="w", pady=(10, 0))
@@ -230,9 +231,9 @@ class ConfiguracionTab(BaseTab):
 
         tk.Label(
             card.body,
-            text=("Variables equivalentes: IA_PROVEEDOR, IA_BASE_URL, "
+            text=(t("Variables equivalentes: IA_PROVEEDOR, IA_BASE_URL, "
                   "IA_MODEL, IA_API_KEY. Custom (llama.cpp u otro) se "
-                  "configura a mano en Base URL y Modelo."),
+                  "configura a mano en Base URL y Modelo.")),
             bg=theme.color("surface"), fg=theme.color("text_faint"),
             font=theme.font(8), anchor="w",
         ).grid(row=3, column=0, sticky="ew", pady=(8, 0))
@@ -265,14 +266,14 @@ class ConfiguracionTab(BaseTab):
         )
         self._widgets["brave_perfil"] = self._fila_form(
             form, 1, "Perfil:", combo_perfil,
-            hint="BRAVE_PERFIL · el que tiene la sesión iniciada")
+            hint=t("BRAVE_PERFIL · el que tiene la sesión iniciada"))
 
         self._widgets["brave_puerto"] = self._fila_form(
             form, 2, "Puerto CDP:", ttk.Entry(form, width=12, font=theme.font(9)),
-            hint="BRAVE_CDP_PORT · 1024-65535 (por defecto 9222)")
+            hint=t("BRAVE_CDP_PORT · 1024-65535 (por defecto 9222)"))
 
         self._widgets["brave_estado"] = tk.Label(
-            card.body, text="Estado: sin comprobar", bg=theme.color("surface"),
+            card.body, text=t("Estado: sin comprobar"), bg=theme.color("surface"),
             fg=theme.color("text_muted"), font=theme.font(9), anchor="w",
         )
         self._widgets["brave_estado"].grid(row=2, column=0, sticky="ew",
@@ -297,11 +298,11 @@ class ConfiguracionTab(BaseTab):
 
         tk.Label(
             card.body,
-            text=("«Abrir Brave» guarda la configuración en el .env y abre "
+            text=(t("«Abrir Brave» guarda la configuración en el .env y abre "
                   "el navegador con CDP. La UI solo detiene el navegador "
                   "que ella abrió: el que ya estaba vivo no se toca. "
                   "El puerto es el que usan el CLI, los scripts y la "
-                  "pestaña de Scraping."),
+                  "pestaña de Scraping.")),
             bg=theme.color("surface"), fg=theme.color("text_faint"),
             font=theme.font(8), anchor="w", wraplength=760, justify="left",
         ).grid(row=4, column=0, sticky="ew", pady=(8, 0))
@@ -377,7 +378,7 @@ class ConfiguracionTab(BaseTab):
 
         aviso = tk.Label(
             card.body,
-            text="⚠ Ningún sitio activo: ninguna corrida podrá ejecutarse.",
+            text=t("⚠ Ningún sitio activo: ninguna corrida podrá ejecutarse."),
             bg=theme.color("surface"), fg=theme.color("danger"),
             font=theme.font(9, "bold"), anchor="w",
         )
@@ -394,12 +395,12 @@ class ConfiguracionTab(BaseTab):
         card.body.columnconfigure(0, weight=1)
 
         SectionTitle(card.body, theme, "Apariencia",
-                     hint="ui_config.json · claves «paleta» y «densidad»").grid(
+                     hint=t("ui_config.json · claves «paleta» y «densidad»")).grid(
             row=0, column=0, sticky="ew")
 
         fila = tk.Frame(card.body, bg=theme.color("surface"))
         fila.grid(row=1, column=0, sticky="w", pady=(8, 0))
-        tk.Label(fila, text="Esquema:", bg=theme.color("surface"),
+        tk.Label(fila, text=t("Esquema:"), bg=theme.color("surface"),
                  fg=theme.color("text_muted"), font=theme.font(9)).pack(
             side="left")
         combo = ttk.Combobox(
@@ -412,7 +413,7 @@ class ConfiguracionTab(BaseTab):
 
         fila_d = tk.Frame(card.body, bg=theme.color("surface"))
         fila_d.grid(row=2, column=0, sticky="w", pady=(6, 0))
-        tk.Label(fila_d, text="Densidad:", bg=theme.color("surface"),
+        tk.Label(fila_d, text=t("Densidad:"), bg=theme.color("surface"),
                  fg=theme.color("text_muted"), font=theme.font(9)).pack(
             side="left")
         combo_d = ttk.Combobox(
@@ -434,7 +435,7 @@ class ConfiguracionTab(BaseTab):
             muestrario.pack_propagate(False)
             self._widgets[f"muestra_{nombre}"] = muestrario
         muestra_texto = tk.Label(
-            preview, text="  Texto de muestra  ", bg=theme.color("surface"),
+            preview, text=t("  Texto de muestra  "), bg=theme.color("surface"),
             fg=theme.color("text"), font=theme.font(9),
             highlightthickness=1, highlightbackground=theme.color("border"),
         )
@@ -449,9 +450,9 @@ class ConfiguracionTab(BaseTab):
 
         tk.Label(
             card.body,
-            text=("Se guarda en ~/.jobpulse_v15/ui_config.json y la "
+            text=(t("Se guarda en ~/.jobpulse_v15/ui_config.json y la "
                   "interfaz se reconstruye con el nuevo esquema y la nueva "
-                  "densidad (o se aplicarán al reiniciar)."),
+                  "densidad (o se aplicarán al reiniciar).")),
             bg=theme.color("surface"), fg=theme.color("text_faint"),
             font=theme.font(8), anchor="w",
         ).grid(row=5, column=0, sticky="ew", pady=(8, 0))
@@ -464,7 +465,7 @@ class ConfiguracionTab(BaseTab):
         card.body.columnconfigure(0, weight=1)
 
         SectionTitle(card.body, theme, "Cachés",
-                     hint="data/usuario/ · qué ocupa y qué se puede borrar"
+                     hint=t("data/usuario/ · qué ocupa y qué se puede borrar")
                      ).grid(row=0, column=0, sticky="ew")
 
         # Una fila por caché: nombre, estado y botón de limpieza.
@@ -482,11 +483,11 @@ class ConfiguracionTab(BaseTab):
 
         tk.Label(
             card.body,
-            text=("Borrar la caché de la IA hace que el enriquecimiento "
+            text=(t("Borrar la caché de la IA hace que el enriquecimiento "
                   "vuelva a llamar al modelo (con IA externa, cuesta dinero). "
                   "Borrar la de embeddings solo obliga a re-vectorizar los "
                   "avisos la próxima vez. Los archivos ajenos al sistema no "
-                  "se tocan."),
+                  "se tocan.")),
             bg=theme.color("surface"), fg=theme.color("text_faint"),
             font=theme.font(8), anchor="w", wraplength=760, justify="left",
         ).grid(row=4, column=0, sticky="ew", pady=(8, 0))
@@ -595,7 +596,7 @@ class ConfiguracionTab(BaseTab):
         card.body.columnconfigure(0, weight=1)
 
         SectionTitle(card.body, theme, "Retención y vigencia",
-                     hint="O8/O10 · ocultar, nunca borrar").grid(
+                     hint=t("O8/O10 · ocultar, nunca borrar")).grid(
             row=0, column=0, sticky="ew")
 
         form = tk.Frame(card.body, bg=theme.color("surface"))
@@ -603,7 +604,7 @@ class ConfiguracionTab(BaseTab):
         form.columnconfigure(1, weight=1)
 
         tk.Label(
-            form, text="Retención:", bg=theme.color("surface"),
+            form, text=t("Retención:"), bg=theme.color("surface"),
             fg=theme.color("text_muted"), font=theme.font(9), anchor="w",
         ).grid(row=0, column=0, sticky="w", pady=3, padx=(0, 10))
         combo = ttk.Combobox(
@@ -613,14 +614,14 @@ class ConfiguracionTab(BaseTab):
         self._widgets["retencion_meses"] = combo
         combo.grid(row=0, column=1, sticky="w", pady=3)
         tk.Label(
-            form, text="meses (un aviso más viejo deja de mostrarse)",
+            form, text=t("meses (un aviso más viejo deja de mostrarse)"),
             bg=theme.color("surface"), fg=theme.color("text_faint"),
             font=theme.font(8), anchor="w",
         ).grid(row=0, column=2, sticky="w", padx=(10, 0))
 
         self._widgets["retencion_solo_vigentes"] = tk.BooleanVar(value=True)
         ttk.Checkbutton(
-            form, text="Solo vacantes vigentes",
+            form, text=t("Solo vacantes vigentes"),
             variable=self._widgets["retencion_solo_vigentes"],
         ).grid(row=1, column=0, columnspan=3, sticky="w", pady=(8, 0))
 
@@ -638,9 +639,9 @@ class ConfiguracionTab(BaseTab):
 
         tk.Label(
             card.body,
-            text=("La retención solo OCULTA los avisos vencidos o "
+            text=(t("La retención solo OCULTA los avisos vencidos o "
                   "publicados fuera de la ventana: no borra nada de la base. "
-                  "Afecta a las pestañas «Datos crudos» y «Vacantes»."),
+                  "Afecta a las pestañas «Datos crudos» y «Vacantes».")),
             bg=theme.color("surface"), fg=theme.color("text_faint"),
             font=theme.font(8), anchor="w", wraplength=760, justify="left",
         ).grid(row=4, column=0, sticky="ew", pady=(8, 0))
@@ -688,7 +689,7 @@ class ConfiguracionTab(BaseTab):
         card.body.columnconfigure(0, weight=1)
 
         SectionTitle(card.body, theme, "Diagnóstico",
-                     hint="integridad · calidad · huecos").grid(
+                     hint=t("integridad · calidad · huecos")).grid(
             row=0, column=0, sticky="ew")
 
         barra = tk.Frame(card.body, bg=theme.color("surface"))
@@ -725,7 +726,7 @@ class ConfiguracionTab(BaseTab):
             boton.configure(state="disabled")
         estado = self._widgets.get("diagnostico_estado")
         if estado is not None:
-            estado.configure(text="Diagnosticando…")
+            estado.configure(text=t("Diagnosticando…"))
 
         def tarea() -> None:
             from jobpulse_v15 import diagnostico as modulo
@@ -767,7 +768,7 @@ class ConfiguracionTab(BaseTab):
         card.body.columnconfigure(0, weight=1)
 
         SectionTitle(card.body, theme, "Exportaciones CSV",
-                     hint="ui_config.json · clave «csv_dir»").grid(
+                     hint=t("ui_config.json · clave «csv_dir»")).grid(
             row=0, column=0, sticky="ew")
 
         fila = tk.Frame(card.body, bg=theme.color("surface"))
@@ -787,9 +788,9 @@ class ConfiguracionTab(BaseTab):
 
         tk.Label(
             card.body,
-            text=("Directorio inicial de los diálogos «Exportar CSV» "
+            text=(t("Directorio inicial de los diálogos «Exportar CSV» "
                   "(Datos crudos, Perfil y Vacantes). Vacío = última "
-                  "carpeta que usó Tk."),
+                  "carpeta que usó Tk.")),
             bg=theme.color("surface"), fg=theme.color("text_faint"),
             font=theme.font(8), anchor="w",
         ).grid(row=2, column=0, sticky="ew", pady=(8, 0))
@@ -818,7 +819,7 @@ class ConfiguracionTab(BaseTab):
         if estado is None:
             return
         try:
-            estado.configure(text="Estado: comprobando…")
+            estado.configure(text=t("Estado: comprobando…"))
         except tk.TclError:
             return
 
@@ -916,7 +917,7 @@ class ConfiguracionTab(BaseTab):
             estado = self._widgets.get("ia_estado")
             if estado is not None:
                 try:
-                    estado.configure(text="Estado: apagado",
+                    estado.configure(text=t("Estado: apagado"),
                                      fg=self.theme.color("text_muted"))
                 except tk.TclError:
                     pass
@@ -1128,7 +1129,7 @@ class ConfiguracionTab(BaseTab):
                     text=f"Estado: Brave detectado en {detectada}")
             else:
                 self._widgets["brave_estado"].configure(
-                    text="Estado: no se encontró Brave (indica la ruta)")
+                    text=t("Estado: no se encontró Brave (indica la ruta)"))
 
     def _puerto_brave(self) -> int | None:
         """Puerto del formulario (None si no es válido)."""
@@ -1159,7 +1160,7 @@ class ConfiguracionTab(BaseTab):
         if inicial and Path(inicial).exists():
             kwargs["initialdir"] = str(Path(inicial).parent)
         ruta = filedialog.askopenfilename(
-            title="Ejecutable de Brave", parent=self._raiz(),
+            title=t("Ejecutable de Brave"), parent=self._raiz(),
             filetypes=[("Ejecutables", "*.exe"), ("Todos", "*.*")], **kwargs,
         )
         if ruta:
@@ -1453,7 +1454,7 @@ class ConfiguracionTab(BaseTab):
         if actual and Path(actual).is_dir():
             kwargs["initialdir"] = actual
         ruta = filedialog.askdirectory(
-            title="Carpeta para exportar CSV", parent=self.frame, **kwargs)
+            title=t("Carpeta para exportar CSV"), parent=self.frame, **kwargs)
         if not ruta:
             return
         self._csv_var.set(ruta)

@@ -37,6 +37,7 @@ from jobpulse_v15.ui_v2.widgets import (
     SectionTitle,
     StatTile,
 )
+from jobpulse_v15.ui_v2.i18n import t
 
 COLUMNAS = (
     "fecha",
@@ -111,7 +112,7 @@ class DatosCrudosTab(BaseTab):
         barra.columnconfigure(1, weight=1)
 
         self._widgets["buscador"] = SearchField(
-            barra, theme, placeholder="Buscar por título, empresa o texto…",
+            barra, theme, placeholder=t("Buscar por título, empresa o texto…"),
             on_change=lambda _t: self.refresh(),
         )
         self._widgets["buscador"].grid(row=0, column=0, sticky="ew")
@@ -130,7 +131,7 @@ class DatosCrudosTab(BaseTab):
         self._widgets["plataforma"] = combo
 
         solo_desc = ttk.Checkbutton(
-            barra, text="Solo con descripción completa", variable=self._var_solo_desc(),
+            barra, text=t("Solo con descripción completa"), variable=self._var_solo_desc(),
             command=self.refresh,
         )
         solo_desc.grid(row=0, column=2, padx=(12, 0))
@@ -422,10 +423,10 @@ class DatosCrudosTab(BaseTab):
         )
         badge = self._widgets["badge"]
         if total:
-            badge.set_text("Con datos")
+            badge.set_text(t("Con datos"))
             badge.set_tone("success")
         else:
-            badge.set_text("Vacío")
+            badge.set_text(t("Vacío"))
             badge.set_tone("neutral")
 
     # -- detalle --
@@ -490,7 +491,7 @@ class DatosCrudosTab(BaseTab):
                 fila_fuente.pack(fill="x", pady=2)
         else:
             tk.Label(
-                self._widgets["fuentes"], text="Sin registros de fuente",
+                self._widgets["fuentes"], text=t("Sin registros de fuente"),
                 bg=self.theme.color("surface"), fg=self.theme.color("text_faint"),
                 font=self.theme.font(9),
             ).pack(anchor="w")
@@ -510,7 +511,7 @@ class DatosCrudosTab(BaseTab):
 
     def exportar(self) -> None:
         if not self.filas:
-            messagebox.showinfo("Exportar CSV", "No hay avisos en la vista para exportar.")
+            messagebox.showinfo(t("Exportar CSV"), t("No hay avisos en la vista para exportar."))
             return
         dir_csv = configuracion.directorio_csv()
         ruta = filedialog.asksaveasfilename(
@@ -524,9 +525,9 @@ class DatosCrudosTab(BaseTab):
         try:
             total = exportar_csv(self.filas, ruta)
         except OSError as error:
-            messagebox.showerror("Exportar CSV", f"No se pudo escribir el archivo:\n{error}")
+            messagebox.showerror(t("Exportar CSV"), t("No se pudo escribir el archivo:\n{}").format(error))
             return
-        messagebox.showinfo("Exportar CSV", f"Se exportaron {total} aviso(s).")
+        messagebox.showinfo(t("Exportar CSV"), t("Se exportaron {} aviso(s).").format(total))
 
 
 def _porcentaje(parte: int, total: int) -> str:

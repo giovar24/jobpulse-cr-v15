@@ -26,6 +26,7 @@ from jobpulse_v15.ui_v2 import configuracion
 from jobpulse_v15.ui_v2.data.scraping import TODOS, ScrapingStore
 from jobpulse_v15.ui_v2.tabs.base import BaseTab
 from jobpulse_v15.ui_v2.widgets import Card, FlatButton, SectionTitle
+from jobpulse_v15.ui_v2.i18n import t
 
 MAX_PAGINAS = 10
 # El puerto CDP sale de la configuración (BRAVE_CDP_PORT en el .env), que es
@@ -74,7 +75,7 @@ class ScrapingTab(BaseTab):
         fila = tk.Frame(card.body, bg=theme.color("surface"))
         fila.pack(fill="x")
 
-        tk.Label(fila, text="Grupo:", bg=theme.color("surface"),
+        tk.Label(fila, text=t("Grupo:"), bg=theme.color("surface"),
                  fg=theme.color("text_muted"), font=theme.font(9)).pack(side="left")
         combo = ttk.Combobox(
             fila, values=[TODOS] + self.store.grupos(), state="readonly",
@@ -85,7 +86,7 @@ class ScrapingTab(BaseTab):
         combo.pack(side="left", padx=(6, 0))
         self._widgets["grupo"] = combo
 
-        tk.Label(fila, text="Páginas:", bg=theme.color("surface"),
+        tk.Label(fila, text=t("Páginas:"), bg=theme.color("surface"),
                  fg=theme.color("text_muted"), font=theme.font(9)).pack(
             side="left", padx=(16, 0))
         self._widgets["paginas"] = tk.IntVar(value=2)
@@ -94,7 +95,7 @@ class ScrapingTab(BaseTab):
                            font=theme.font(9))
         spin.pack(side="left", padx=(6, 0))
 
-        tk.Label(fila, text="Puerto CDP:", bg=theme.color("surface"),
+        tk.Label(fila, text=t("Puerto CDP:"), bg=theme.color("surface"),
                  fg=theme.color("text_muted"), font=theme.font(9)).pack(
             side="left", padx=(16, 0))
         self._widgets["puerto"] = tk.StringVar(
@@ -117,10 +118,10 @@ class ScrapingTab(BaseTab):
 
         tk.Label(
             card.body,
-            text=("Solo se barren los sitios activos. «Páginas» es el valor "
+            text=(t("Solo se barren los sitios activos. «Páginas» es el valor "
                   "por defecto: cada sitio usa el suyo de site_config si lo "
                   "tiene. El puerto CDP solo afecta a ANE, Indeed, "
-                  "LinkedIn y Elempleo."),
+                  "LinkedIn y Elempleo.")),
             bg=theme.color("surface"), fg=theme.color("text_faint"),
             font=theme.font(8), anchor="w",
         ).pack(fill="x", pady=(6, 0))
@@ -147,7 +148,7 @@ class ScrapingTab(BaseTab):
                      fg=theme.color("text_faint"), font=theme.font(8)).pack(anchor="w")
             self._widgets[f"resumen_{clave}"] = valor
         self._widgets["estado"] = tk.Label(
-            fila, text="Listo.", bg=theme.color("surface"),
+            fila, text=t("Listo."), bg=theme.color("surface"),
             fg=theme.color("text_muted"), font=theme.font(9), anchor="e")
         self._widgets["estado"].pack(side="right")
 
@@ -161,7 +162,7 @@ class ScrapingTab(BaseTab):
         card.body.rowconfigure(1, weight=1)
 
         SectionTitle(card.body, theme, "Fuentes",
-                     hint="seleccioná las que quieras barrer").grid(
+                     hint=t("seleccioná las que quieras barrer")).grid(
             row=0, column=0, sticky="ew")
 
         marco_tabla = tk.Frame(card.body, bg=theme.color("surface"))
