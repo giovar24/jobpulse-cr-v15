@@ -230,7 +230,12 @@ class AppShell:
         conserva la activa y los stores del contexto). El handle del
         servidor IA vive en `tabs.configuracion` (módulo) y por eso
         sobrevive a este rebuild.
+
+        La densidad y el idioma se leen de ui_config.json (que ya se
+        guardó antes de llamar a este método).
         """
+        from jobpulse_v15.ui_v2.i18n import establecer_idioma
+        establecer_idioma(configuracion.idioma_actual())
         theme = apply_theme(
             self.root,
             paleta_por_nombre(nombre),

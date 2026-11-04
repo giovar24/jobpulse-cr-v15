@@ -56,6 +56,11 @@ from jobpulse_v15.ui_v2.theme import (
     PALETA_DEFECTO,
     paleta_por_nombre,
 )
+from jobpulse_v15.ui_v2.i18n import (
+    IDIOMA_DEFECTO,
+    IDIOMAS,
+    t,
+)
 from jobpulse_v15.ui_v2.widgets import Card, FlatButton, ScrollFrame, SectionTitle
 from jobpulse_v15.ui_v2.i18n import t
 
@@ -423,8 +428,20 @@ class ConfiguracionTab(BaseTab):
         combo_d.pack(side="left", padx=(8, 0))
         self._widgets["densidad"] = combo_d
 
+        fila_i = tk.Frame(card.body, bg=theme.color("surface"))
+        fila_i.grid(row=3, column=0, sticky="w", pady=(6, 0))
+        tk.Label(fila_i, text=t("Idioma:"), bg=theme.color("surface"),
+                 fg=theme.color("text_muted"), font=theme.font(9)).pack(
+            side="left")
+        combo_i = ttk.Combobox(
+            fila_i, values=list(IDIOMAS.values()), state="readonly",
+            width=22, font=theme.font(9),
+        )
+        combo_i.pack(side="left", padx=(8, 0))
+        self._widgets["idioma"] = combo_i
+
         preview = tk.Frame(card.body, bg=theme.color("surface"))
-        preview.grid(row=3, column=0, sticky="w", pady=(10, 0))
+        preview.grid(row=4, column=0, sticky="w", pady=(10, 0))
         for nombre in ("bg", "surface", "accent", "sidebar_bg"):
             muestrario = tk.Frame(
                 preview, width=52, height=24, bg=theme.color(nombre),
@@ -1403,6 +1420,10 @@ class ConfiguracionTab(BaseTab):
         if densidad not in NOMBRES_DENSIDAD:
             densidad = DENSIDAD_DEFECTO
         self._widgets["densidad"].set(NOMBRES_DENSIDAD[densidad])
+        idioma = configuracion.idioma_actual() or IDIOMA_DEFECTO
+        if idioma not in IDIOMAS:
+            idioma = IDIOMA_DEFECTO
+        self._widgets["idioma"].set(IDIOMAS[idioma])
         self._preview_paleta()
 
     def _clave_paleta_elegida(self) -> str:
@@ -1419,6 +1440,13 @@ class ConfiguracionTab(BaseTab):
             DENSIDAD_DEFECTO,
         )
 
+    def _clave_idioma_elegida(self) -> str:
+        visible = self._widgets["idioma"].get()
+        return next(
+            (k for k, v in IDIOMAS.items() if v == visible),
+            IDIOMA_DEFECTO,
+        )
+
     def _preview_paleta(self) -> None:
         paleta = paleta_por_nombre(self._clave_paleta_elegida())
         for nombre in ("bg", "surface", "accent", "sidebar_bg"):
@@ -1428,10 +1456,11 @@ class ConfiguracionTab(BaseTab):
         texto.configure(bg=paleta.surface, fg=paleta.text)
 
     def aplicar_paleta(self) -> None:
-        """Guarda esquema + densidad y reconstruye la app en caliente."""
+        """Guarda esquema + densidad + idioma y reconstruye la app en caliente."""
         claves = {
             configuracion.CLAVE_PALETA: self._clave_paleta_elegida(),
             configuracion.CLAVE_DENSIDAD: self._clave_densidad_elegida(),
+            configuracion.CLAVE_IDIOMA: self._clave_idioma_elegida(),
         }
         configuracion.guardar(claves)
         servicio = self.context.services.get("reconstruir_ui")

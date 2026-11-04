@@ -259,6 +259,7 @@ _EN: dict[str, str] = {
     "Empresa": "Company",
     "Ubicación (cruda)": "Location (raw)",
     "Idioma": "Language",
+    "Idioma:": "Language:",
     "Salario": "Salary",
     "Fuente": "Source",
     "Desc.": "Desc.",
