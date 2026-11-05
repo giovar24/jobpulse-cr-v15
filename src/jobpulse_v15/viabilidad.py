@@ -272,10 +272,19 @@ def _evaluar_requisito(
             estado = ESTADO_FALTA
             motivo = "experiencia_no_cumple"
     elif categoria == "license":
-        # No hay comparacion de licencias: NO penaliza (el Paso 5 lo manda a
-        # revision manual; aqui solo queda pendiente).
-        estado = ESTADO_NO_VERIFICABLE
-        motivo = "licencia_no_comparable"
+        # Licencia: misma regla que los idiomas. Si el perfil no registra
+        # ninguna licencia, NO se puede afirmar que no la tenga -> queda
+        # pendiente (no penaliza). Si registra otras, y no esa -> falta de
+        # verdad.
+        resultado = evaluador.cumple_license(requisito.codigo_canonico)
+        if resultado is True:
+            estado = ESTADO_CUMPLE
+        elif resultado == "no_verificable":
+            estado = ESTADO_NO_VERIFICABLE
+            motivo = "licencia_no_comparable"
+        else:
+            estado = ESTADO_FALTA
+            motivo = "licencia_no_cumple"
 
     return DesgloseRequisito(
         category=categoria,

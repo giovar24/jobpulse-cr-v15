@@ -79,7 +79,14 @@ _LICENSE = re.compile(
 )
 _LICENSE_CODE = re.compile(
     r"\b(?:class|type|clase|tipo)\s*([A-D]\s?\d?)\b|"
-    r"\blicencia\s+([A-D]\d?)\b",
+    # "licencia B1" / "licencia de conducir B1" / "licencia para conducir D3":
+    # en CR la clase va DESPUES de "de conducir", y antes no se detectaba
+    # (la licencia quedaba sin clase -> sin codigo canonico -> el motor la
+    # ignoraba en silencio).
+    r"\blicencia\s+(?:(?:de|para)\s+conducir\s+)?([A-D]\d?)\b|"
+    # CR: "Licencia de conducir para equipo especial D3" -> la clase puede
+    # venir varias palabras despues de la mencion.
+    r"\blicencia\s+(?:de|para)\s+conducir[^.;\n]{0,40}?\b([A-D]\d?)\b",
     re.IGNORECASE,
 )
 _LICENSE_CONTEXT = re.compile(
@@ -426,35 +433,26 @@ class RuleBasedExtractor:
         ]
 
     @classmethod
-    def _extract_license(cls, sentence: str) -> list[dict[str, Any]]:
-        match = _LICENSE.search(sentence)
-        if match is None:
-            if _LICENSE_CONTEXT.search(sentence):
-                code_match = _LICENSE_CODE.search(sentence)
-                license_code = None
-                if code_match:
-                    license_code = code_match.group(1) or code_match.group(2)
-                if license_code:
-                    license_code = re.sub(r"\s+", "", license_code).upper()
-                value_text = "Driver's license"
-                if license_code:
-                    value_text = f"Driver's license {license_code}"
-                return [
-                    cls._requirement(
-                        "license",
-                        license_code,
-                        value_text,
-                        sentence,
-                        cls._requirement_level(sentence),
-                    )
-                ]
-            return []
+    def _clase_licencia(cls, sentence: str) -> str | None:
+        """Clase de la licencia que dice el texto ('B1', 'D3'); None si no dice.
+
+        En CR la clase va DESPUES de la mencion ("Licencia de conducir B1",
+        "licencia para equipo especial D3"), y antes se perdia: la licencia
+        quedaba sin codigo canonico y el motor la ignoraba en silencio.
+        """
         code_match = _LICENSE_CODE.search(sentence)
-        license_code = None
-        if code_match:
-            license_code = code_match.group(1) or code_match.group(2)
-        if license_code:
-            license_code = re.sub(r"\s+", "", license_code).upper()
+        if not code_match:
+            return None
+        for grupo in code_match.groups():
+            if grupo:
+                return re.sub(r"\s+", "", grupo).upper()
+        return None
+
+    @classmethod
+    def _extract_license(cls, sentence: str) -> list[dict[str, Any]]:
+        if _LICENSE.search(sentence) is None and _LICENSE_CONTEXT.search(sentence) is None:
+            return []
+        license_code = cls._clase_licencia(sentence)
         value_text = "Driver's license"
         if license_code:
             value_text = f"Driver's license {license_code}"

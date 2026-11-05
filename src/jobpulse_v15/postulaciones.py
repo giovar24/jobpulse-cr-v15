@@ -1,27 +1,42 @@
 # -*- coding: utf-8 -*-
-"""Postulaciones del usuario: senales de proceso, NO de aptitud.
+"""REGISTRO de postulaciones del usuario: bitacora, NO aptitud.
 
 REGLA DE DISENO (acordada 2026-11-04): **ser rechazado NO significa que el
 perfil no califique para el puesto**. El reclutador humano rechaza por
 presupuesto, timing, competencia, sesgos o azar: es el veredicto de una
 persona sobre un contexto, NO una medida de aptitud tecnica.
 
+Ademas, los criterios por los que un equipo de RH aprueba o rechaza varian
+**de empresa a empresa y de persona a persona** (decision del usuario,
+2026-11-04): por eso el resultado de la postulacion **no es comparable ni
+verificable** y NO se puede usar para calibrar, validar ni reentrenar nada
+del motor de ajuste. Es **inviable** como senal de aptitud.
+
 Por eso este modulo NO calcula ni entrena el score de ajuste (eso vive en
 `viabilidad.py` y se deriva de los REQUISITOS DEL AVISO contra los HECHOS DEL
-PERFIL). Aqui solo se modela el **proceso de postulacion**:
+PERFIL). Aqui solo se modela el **REGISTRO** del proceso de postulacion:
 
 * leer notificaciones (correo) y "Mis postulaciones" (Workday),
 * clasificar cada aviso como `applied` / `recruiter_contact` / `interview` /
   `offer` / `rejected` / `withdrawn`,
 * casar cada aviso con el corpus (`job_id`) por su referencia en la URL.
 
-Usos legitimos de estos datos:
-1. no reprocesar lo ya postulado;
-2. medir el funnel propio (con la advertencia de ruido humano);
-3. detectar posibles falsos positivos del ranking -> revision manual.
+Usos legitimos de estos datos (TODOS de bookkeeping):
+1. **REGISTRO**: saber a que vacantes se postulo (incluidas las rechazadas)
+   y conservar el historial del proceso.
+2. no reprocesar lo ya postulado;
+3. conteo del propio funnel (cuantas postulaciones, cuantas rechazadas
+   explicitamente, cuantas siguen sin respuesta).
 
-NO se usan para reentrenar pesos: un rechazo no es una etiqueta de "no
-apto".
+LO QUE NO SE HACE (regla dura):
+- NO se calibran pesos ni bandas contra el resultado de la postulacion.
+- NO se reentrenan pesos con los rechazos.
+- NO se usa el rechazo como etiqueta de "no apto".
+- **El silencio de RH NO es un rechazo**: muchos sistemas de RRHH nunca
+  responden. La ausencia de aviso deja el estado en `applied` (postulada, sin
+  cierre registrado) y NO se infiere `rejected` por ausencia de senal. El
+  rechazo solo se registra cuando el portal o el correo lo dicen
+  explicitamente.
 
 Este modulo es PURO (sin red): recibe remitente/asunto/cuerpo y devuelve
 senales. La lectura de IMAP vive en `correo_postulaciones.py` y la del
@@ -56,6 +71,20 @@ ESTADOS_POSTULACION: tuple[str, ...] = (
 ESTADOS_AVANCE: tuple[str, ...] = (ESTADO_RECRUITER, ESTADO_INTERVIEW, ESTADO_OFFER)
 #: Estados que terminan el proceso sin avance.
 ESTADOS_CIERRE: tuple[str, ...] = (ESTADO_REJECTED, ESTADO_WITHDRAWN)
+
+#: Etiquetas legibles del REGISTRO (no son evaluacion del puesto).
+#:
+#: `applied` NO es "pendiente de juicio": muchos sistemas de RRHH nunca
+#: responden, y ese silencio **no** es un rechazo. El registro lo dice asi:
+#: "postulada, sin respuesta o en proceso".
+ETIQUETA_ESTADO: dict[str, str] = {
+    ESTADO_APPLIED: "Postulada (sin respuesta o en proceso)",
+    ESTADO_RECRUITER: "Contacto del reclutador",
+    ESTADO_INTERVIEW: "Entrevista",
+    ESTADO_OFFER: "Oferta",
+    ESTADO_REJECTED: "Rechazada",
+    ESTADO_WITHDRAWN: "Retirada",
+}
 
 # --------------------------------------------------------------- portales ---
 PORTAL_WORKDAY = "workday"
@@ -280,6 +309,10 @@ def estado_mas_avanzado(estados: Sequence[str]) -> str:
 
     El avance gana siempre: un `interview` posterior NO se degrada a
     `rejected` (pasa a `withdrawn` solo si el usuario la retiro).
+
+    Si no hay ningun cierre registrado, el estado queda en `applied`: es la
+    postulacion **sin respuesta del portal** (o en proceso). El silencio de
+    RH **no** se convierte en `rejected`.
     """
     if not estados:
         return ""
@@ -294,6 +327,21 @@ def estado_mas_avanzado(estados: Sequence[str]) -> str:
     if ESTADO_WITHDRAWN in estados:
         return ESTADO_WITHDRAWN
     return ESTADO_APPLIED
+
+
+def etiqueta_estado(estado: str) -> str:
+    """Etiqueta legible del estado (para el registro, no para evaluar)."""
+    return ETIQUETA_ESTADO.get(estado, estado or "")
+
+
+def sin_respuesta(estado: str) -> bool:
+    """True si la postulacion quedo sin respuesta explicita del portal.
+
+    O sea: se postulo y el sistema de RRHH **no dijo nada** (o sigue en
+    proceso). Esto **NO** es un rechazo: muchos portales de empleo nunca
+    contestan.
+    """
+    return estado == ESTADO_APPLIED
 
 
 def formatear_fecha(fecha: datetime) -> str:

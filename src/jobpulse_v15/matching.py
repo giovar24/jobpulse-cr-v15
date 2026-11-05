@@ -85,7 +85,12 @@ from jobpulse_v15 import idiomas
 UMBRAL_COBERTURA = 0.60
 UMBRAL_PUNTAJE = 0.80
 
-IDIOMA_ORDEN = {"A1": 1, "A2": 2, "B1": 3, "B2": 4, "C1": 5, "C2": 6}
+#: Escala de niveles de idioma (A1..C2). La fuente de verdad es
+#: ``idiomas.ORDEN_NIVEL`` (agrega "nativo" y normaliza "B2+", "C1-C2",
+#: "fluent"...). Antes esta tabla vivia aqui con las claves EN MAYUSCULAS y
+#: los requisitos traen el nivel en minusculas ("b2"): la comparacion caia en
+#: "no_verificable" y el gap de idioma se escondia en silencio.
+IDIOMA_ORDEN = dict(idiomas.ORDEN_NIVEL)
 
 # REGLA DE IDIOMA (acordada 2026-10-31): el requisito de idioma de un aviso
 # es **el idioma en que esta escrito**, salvo que el aviso pida uno o varios
@@ -1039,13 +1044,18 @@ class EvaluadorPaso5:
 
     # -- carga ------------------------------------------------------------
     def _cargar_facts(self) -> dict[str, list[dict]]:
-        facts: dict[str, list[dict]] = {"skill": [], "language": [], "education": []}
+        facts: dict[str, list[dict]] = {
+            "skill": [],
+            "language": [],
+            "education": [],
+            "license": [],
+        }
         for row in self.connection.execute(
             """
             SELECT category, value_code, codigo_canonico, qualifier, education_status
             FROM candidate_profile_facts
             WHERE codigo_canonico IS NOT NULL
-              AND category IN ('skill', 'language', 'education')
+              AND category IN ('skill', 'language', 'education', 'license')
             """
         ):
             facts[row["category"]].append(
@@ -1189,13 +1199,21 @@ class EvaluadorPaso5:
         return any(f["codigo_canonico"] == codigo for f in self.facts["skill"])
 
     def cumple_language(self, codigo: str, qualifier: str | None):
+        """Compara el idioma con su NIVEL (no solo con el nombre).
+
+        El nivel se NORMALIZA antes de comparar (``idiomas.normalizar_nivel``):
+        el aviso puede pedir "B2", "b2", "B2+", "C1-C2", "fluent" o
+        "intermedio" y el perfil puede registrar "B2" o "Nativo". Sin
+        normalizar, los niveles no comparables caian en "no_verificable" y el
+        gap de idioma NO se veia (fallo silencioso de alineacion).
+        """
         for fact in self.facts["language"]:
             if fact["codigo_canonico"] != codigo:
                 continue
             if qualifier is None:
                 return True
-            nivel_fact = IDIOMA_ORDEN.get(fact["qualifier"])
-            nivel_req = IDIOMA_ORDEN.get(qualifier)
+            nivel_fact = idiomas.orden_nivel(fact["qualifier"])
+            nivel_req = idiomas.orden_nivel(qualifier)
             if nivel_fact is None or nivel_req is None:
                 return "no_verificable"
             return nivel_fact >= nivel_req
@@ -1213,6 +1231,22 @@ class EvaluadorPaso5:
         if not self.facts["language"]:
             return "no_verificable"
         return any(f["codigo_canonico"] == codigo for f in self.facts["language"])
+
+    def cumple_license(self, codigo: str):
+        """Cumple un requisito de licencia: 'cumple' | 'no_cumple' | 'no_verificable'.
+
+        MISMA regla dura que los IDIOMAS (`cumple_idioma_del_aviso`):
+
+        * el perfil NO registra ninguna licencia -> ``"no_verificable"``: no se
+          puede afirmar que no la tenga. **Nunca se descarta por falta de
+          informacion** (si no, todos los avisos con "licencia de conducir"
+          quedarian fuera por un dato que el CV no menciona).
+        * el perfil registra licencias -> cumple si alguna tiene ese codigo
+          canonico; si no, ``False`` (falta de verdad).
+        """
+        if not self.facts["license"]:
+            return "no_verificable"
+        return any(f["codigo_canonico"] == codigo for f in self.facts["license"])
 
     def codigo_idioma_del_aviso(self, job_id: str) -> str | None:
         """Codigo canonico del idioma del aviso (``None`` si no se sabe)."""
@@ -1483,7 +1517,10 @@ class EvaluadorPaso5:
             elif categoria == "experience":
                 ok = self.cumple_experience(req.minimum)
             elif categoria == "license":
-                ok = False
+                # Licencia: si el perfil no registra ninguna, NO se puede
+                # afirmar que no la tenga -> 'no_verificable' (misma regla
+                # dura que los idiomas: nunca se descarta por falta de dato).
+                ok = self.cumple_license(req.codigo_canonico)
             else:
                 ok = False
 

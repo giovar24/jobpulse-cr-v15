@@ -53,8 +53,12 @@ def _variantes_alternas(variante: str) -> tuple[str, ...]:
     return tuple(alternas)
 
 
-def _mapa_conceptos(connection: sqlite3.Connection) -> dict[tuple[str, str], str]:
-    """Carga ``(categoria, variante) -> codigo_canonico`` de los conceptos activos."""
+def mapa_conceptos(connection: sqlite3.Connection) -> dict[tuple[str, str], str]:
+    """Carga ``(categoria, variante) -> codigo_canonico`` de los conceptos activos.
+
+    Publica: la usan tambien ``skills_fuente`` (para clasificar las skills que
+    trae la fuente) y los backfills, que necesitan el mismo mapa.
+    """
     try:
         rows = connection.execute(
             """
@@ -71,6 +75,10 @@ def _mapa_conceptos(connection: sqlite3.Connection) -> dict[tuple[str, str], str
         (row[0], row[1]): row[2]
         for row in rows
     }
+
+
+#: Alias interno (compatibilidad con las llamadas previas).
+_mapa_conceptos = mapa_conceptos
 
 
 def resolver(
@@ -92,7 +100,13 @@ def resolver(
     for requirement in requirements:
         copia = dict(requirement)
         category = copia.get("category")
-        variante = _variante(copia.get("value_code"))
+        # La variante es el `value_code`; si el requisito no trae (las
+        # licencias que el extractor guardaba como "Driver's license" sin
+        # clase), se usa su `value_text`: sin este fallback el requisito
+        # queda SIN codigo y el motor lo IGNORA en silencio.
+        variante = _variante(copia.get("value_code")) or _variante(
+            copia.get("value_text")
+        )
         codigo = None
         if category in CATEGORIAS_CONCEPTO and variante:
             codigo = mapa.get((category, variante))

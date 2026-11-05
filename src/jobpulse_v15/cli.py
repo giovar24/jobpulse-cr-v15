@@ -169,6 +169,108 @@ def _cmd_init_sources(repository: Repository, args) -> None:
         registrar_directorio(repository)
 
 
+def _cmd_enrich_requirements_source(repository: Repository, args) -> None:
+    """Re-analiza las vacantes integrando los CAMPOS ESTRUCTURADOS del aviso.
+
+    El extractor por reglas solo lee el TEXTO, pero los avisos reales traen
+    sus competencias en ``jobs.skills`` y los idiomas que PIDE en
+    ``jobs.languages``. Sin usar esos campos, 135 de 535 avisos quedan SIN
+    ningun requisito comparable (banda ``sin_datos`` del motor: no se puede
+    decir si el perfil califica porque no hay nada que comparar).
+
+    Simula por omision (dry-run). Con ``--apply`` re-analiza y guarda: cada
+    aviso queda con un analisis NUEVO (la revision anterior se conserva como
+    historial; ``job_analysis.is_current`` pasa a la nueva).
+    """
+    from jobpulse_v15.analysis_flow import extract_job_analysis, preparar_analisis
+
+    records = repository.list_analisis_records(args.platform)
+    if args.limit and args.limit > 0:
+        records = records[: args.limit]
+    # Un aviso puede venir de varios sitios: se analiza una sola vez.
+    vistos: set[str] = set()
+    unicos: list[dict[str, Any]] = []
+    for record in records:
+        job_id = str(record["job_id"])
+        if job_id in vistos:
+            continue
+        vistos.add(job_id)
+        unicos.append(record)
+
+    report: dict[str, Any] = {
+        "mode": "apply" if args.apply else "dry_run",
+        "avisos": len(unicos),
+        "analizados": 0,
+        "avisos_con_requisitos_fuente": 0,
+        "avisos_sin_requisitos_fuente": 0,
+        "requisitos_fuente": 0,
+        "errores": [],
+        "muestra": [],
+    }
+    cola: dict[str, int] = {}
+
+    if args.apply:
+        for record in unicos:
+            job_id = str(record["job_id"])
+            try:
+                resultado = extract_job_analysis(repository, job_id)
+            except Exception as exc:  # pragma: no cover - diagnostico
+                report["errores"].append({"job_id": job_id, "error": str(exc)})
+                continue
+            n = int(resultado["requisitos_fuente"])
+            report["analizados"] += 1
+            report["requisitos_fuente"] += n
+            if n:
+                report["avisos_con_requisitos_fuente"] += 1
+            else:
+                report["avisos_sin_requisitos_fuente"] += 1
+            for etiqueta in resultado["sin_concepto"]:
+                cola[etiqueta] = cola.get(etiqueta, 0) + 1
+            if len(report["muestra"]) < 20 and n:
+                report["muestra"].append(
+                    {
+                        "job_id": job_id,
+                        "title": record.get("title"),
+                        "requisitos_fuente": n,
+                    }
+                )
+    else:
+        with repository.database.connection() as connection:
+            for record in unicos:
+                try:
+                    preparado = preparar_analisis(record, connection)
+                except ValueError as exc:
+                    report["errores"].append(
+                        {"job_id": record["job_id"], "error": str(exc)}
+                    )
+                    continue
+                n = len(preparado["requisitos_fuente"])
+                report["analizados"] += 1
+                report["requisitos_fuente"] += n
+                if n:
+                    report["avisos_con_requisitos_fuente"] += 1
+                else:
+                    report["avisos_sin_requisitos_fuente"] += 1
+                for categoria, variante in preparado["sin_concepto"]:
+                    etiqueta = f"{categoria}:{variante}"
+                    cola[etiqueta] = cola.get(etiqueta, 0) + 1
+                if len(report["muestra"]) < 20 and n:
+                    report["muestra"].append(
+                        {
+                            "job_id": record["job_id"],
+                            "title": record.get("title"),
+                            "requisitos_fuente": n,
+                        }
+                    )
+
+    report["sin_concepto"] = [
+        {"variante": etiqueta, "n": n}
+        for etiqueta, n in sorted(cola.items(), key=lambda par: -par[1])[:50]
+    ]
+    report["sin_concepto_total"] = sum(cola.values())
+    print(json.dumps(report, ensure_ascii=False, indent=2))
+
+
 def _agregar_argumentos_viabilidad(parser: argparse.ArgumentParser) -> None:
     """Argumentos comunes de `viabilidad list` y `viabilidad top`."""
     parser.add_argument(
@@ -1067,6 +1169,43 @@ def main() -> int:
         action="store_true",
         help="Guardar cambios; sin esta opcion solo muestra una simulacion.",
     )
+    enrich_requirements_canonico = enrich_commands.add_parser(
+        "requirements-canonico",
+        help=(
+            "Rellenar el codigo canonico de los REQUISITOS ya guardados. La "
+            "taxonomia crece con cada migracion: sin este backfill, los "
+            "requisitos viejos se quedan sin codigo y el motor los ignora "
+            "en silencio (no se comparan con el perfil)."
+        ),
+    )
+    enrich_requirements_canonico.add_argument(
+        "--apply",
+        action="store_true",
+        help="Guardar cambios; sin esta opcion solo muestra una simulacion.",
+    )
+    enrich_requirements_source = enrich_commands.add_parser(
+        "requirements-source",
+        help=(
+            "Re-analizar las vacantes integrando sus CAMPOS ESTRUCTURADOS "
+            "(jobs.skills y jobs.languages): el extractor por reglas solo lee "
+            "el texto, y sin estos campos muchos avisos quedan sin NINGUN "
+            "requisito comparable (banda 'sin_datos'). Simula por omision."
+        ),
+    )
+    enrich_requirements_source.add_argument(
+        "--platform", help="Limitar a una plataforma (workday, harvie, ...)."
+    )
+    enrich_requirements_source.add_argument(
+        "--limit",
+        type=int,
+        default=0,
+        help="Maximo de vacantes a re-analizar (0 = todas).",
+    )
+    enrich_requirements_source.add_argument(
+        "--apply",
+        action="store_true",
+        help="Guardar el re-analisis; sin esta opcion solo muestra una simulacion.",
+    )
 
     # --------------------------------------------------------------
     # Viabilidad = AJUSTE TECNICO del perfil con el aviso (no es
@@ -1095,13 +1234,14 @@ def main() -> int:
     viabilidad_top.set_defaults(limite=20)
 
     # --------------------------------------------------------------
-    # Postulaciones = estado del PROCESO (no de aptitud)
+    # Postulaciones = REGISTRO del proceso (no de aptitud)
     # --------------------------------------------------------------
     postulaciones = commands.add_parser(
         "postulaciones",
         help=(
-            "Señales del proceso de postulacion (correo y Workday). Un "
-            "rechazo NO significa que el perfil no califique."
+            "REGISTRO de candidaturas (correo y Workday). Un rechazo NO "
+            "significa que el perfil no califique, y el silencio de RRHH no "
+            "es un rechazo."
         ),
     )
     postulaciones_commands = postulaciones.add_subparsers(
@@ -1156,7 +1296,7 @@ def main() -> int:
         help="Guardar las señales; sin esta opcion solo muestra una simulacion.",
     )
     post_list = postulaciones_commands.add_parser(
-        "list", help="Ver el estado de postulacion por vacante."
+        "list", help="Ver el REGISTRO de postulaciones por vacante."
     )
     post_list.add_argument(
         "--estado",
@@ -1168,7 +1308,10 @@ def main() -> int:
             "rejected",
             "withdrawn",
         ),
-        help="Filtrar por estado del proceso.",
+        help=(
+            "Filtrar por estado del proceso. 'applied' = postulada y sin "
+            "respuesta explicita del portal (o en proceso): NO es un rechazo."
+        ),
     )
     post_list.add_argument(
         "--format", choices=("json", "csv"), default="json"
@@ -2982,6 +3125,53 @@ def main() -> int:
                 if args.apply:
                     report["updated"] = repository.backfill_candidate_profile_canonico()
                 print(json.dumps(report, ensure_ascii=False, indent=2))
+            elif (
+                args.command == "enrich"
+                and args.enrich_command == "requirements-canonico"
+            ):
+                # La taxonomia CRECE (migraciones 017/019/020): los
+                # requisitos ya guardados se quedan con el codigo viejo (o sin
+                # codigo) y el motor los IGNORA en silencio. Este backfill
+                # (idempotente, solo NULL) los vuelve comparables.
+                with repository.database.connection() as connection:
+                    pendientes = connection.execute(
+                        """
+                        SELECT r.category, r.value_code, COUNT(*) n
+                        FROM job_requirements AS r
+                        WHERE r.codigo_canonico IS NULL
+                        GROUP BY r.category, r.value_code
+                        ORDER BY n DESC
+                        """
+                    ).fetchall()
+                report = {
+                    "mode": "apply" if args.apply else "dry_run",
+                    "requisitos_sin_codigo": sum(fila["n"] for fila in pendientes),
+                    "combinaciones": len(pendientes),
+                    "updated": 0,
+                    "pendientes": [
+                        {
+                            "category": fila["category"],
+                            "value_code": fila["value_code"],
+                            "n": fila["n"],
+                        }
+                        for fila in pendientes
+                    ],
+                }
+                if args.apply:
+                    resultado = repository.backfill_requirements_canonico()
+                    report["updated"] = resultado["actualizados"]
+                    report["revisados"] = resultado["revisados"]
+                    report["sin_concepto"] = resultado["sin_concepto"]
+                print(json.dumps(report, ensure_ascii=False, indent=2))
+            elif (
+                args.command == "enrich"
+                and args.enrich_command == "requirements-source"
+            ):
+                # El texto del aviso no lo dice todo: las competencias y los
+                # idiomas que PIDE vienen en `jobs.skills` / `jobs.languages`.
+                # Sin integrarlos, muchos avisos no tienen NINGUN requisito
+                # comparable con el perfil (banda `sin_datos`).
+                _cmd_enrich_requirements_source(repository, args)
             # === viabilidad (ajuste tecnico) ===
             elif args.command == "viabilidad":
                 _cmd_viabilidad(repository, args)
@@ -2999,6 +3189,8 @@ def main() -> int:
                         campos = [
                             "job_id",
                             "estado",
+                            "estado_texto",
+                            "sin_respuesta",
                             "portal",
                             "ultima_fecha",
                             "title",

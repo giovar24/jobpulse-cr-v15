@@ -15,7 +15,12 @@ from jobpulse_v15 import ciclo_vida
 from jobpulse_v15 import conceptos
 from jobpulse_v15 import idiomas
 from jobpulse_v15.db import Database
-from jobpulse_v15.postulaciones import ESTADOS_POSTULACION, estado_mas_avanzado
+from jobpulse_v15.postulaciones import (
+    ESTADOS_POSTULACION,
+    estado_mas_avanzado,
+    etiqueta_estado,
+    sin_respuesta,
+)
 from jobpulse_v15.ubicaciones_cr import ciudad_es_valida, resolver_direccion
 
 
@@ -1608,7 +1613,13 @@ class Repository:
     def listar_postulaciones(
         self, *, estado: str | None = None
     ) -> list[dict[str, Any]]:
-        """Estado actual de postulación por vacante (con título y empresa)."""
+        """REGISTRO de postulaciones: estado actual por vacante.
+
+        Incluye `estado_texto` (etiqueta legible) para que se distinga de
+        entrada una postulacion **sin respuesta del portal** (que NO es un
+        rechazo: muchos sistemas de RRHH nunca contestan) de un rechazo
+        explicito.
+        """
         condiciones: list[str] = []
         parametros: list[Any] = []
         if estado:
@@ -1629,7 +1640,14 @@ class Repository:
                 """,
                 parametros,
             ).fetchall()
-        return [dict(row) for row in rows]
+        return [
+            {
+                **dict(row),
+                "estado_texto": etiqueta_estado(str(row["estado"])),
+                "sin_respuesta": sin_respuesta(str(row["estado"])),
+            }
+            for row in rows
+        ]
 
     def estado_postulacion_por_job(self) -> dict[str, str]:
         """Mapa ``job_id -> estado actual`` (para cruzar con el ranking)."""
@@ -1745,6 +1763,35 @@ class Repository:
         if platform_id is not None:
             self._required_text(platform_id, "platform_id")
             query += " AND s.platform_id = ?"
+            parameters = (platform_id.strip(),)
+        query += " ORDER BY j.job_id, s.site_id"
+
+        with self.database.connection() as connection:
+            rows = connection.execute(query, parameters).fetchall()
+        return [dict(row) for row in rows]
+
+    def list_analisis_records(
+        self, platform_id: str | None = None
+    ) -> list[dict[str, Any]]:
+        """Vacantes para (re)analizar, con los CAMPOS ESTRUCTURADOS incluidos.
+
+        El analisis ya no lee solo el texto: integra ``jobs.skills`` y
+        ``jobs.languages`` (ver ``skills_fuente``). Esta consulta devuelve lo
+        que el comando ``enrich requirements-source`` necesita para simular y
+        para guardar, sin volver a raspar ni a llamar a la IA.
+        """
+        query = """
+            SELECT j.job_id, j.title, j.company, j.posting_language,
+                j.description_raw, j.requirements_raw, j.skills, j.languages,
+                s.platform_id, s.site_id
+            FROM jobs AS j
+            JOIN job_source_records AS r ON r.job_id = j.job_id
+            JOIN source_sites AS s ON s.site_id = r.site_id
+        """
+        parameters: tuple[str, ...] = ()
+        if platform_id is not None:
+            self._required_text(platform_id, "platform_id")
+            query += " WHERE s.platform_id = ?"
             parameters = (platform_id.strip(),)
         query += " ORDER BY j.job_id, s.site_id"
 
@@ -2794,6 +2841,73 @@ class Repository:
                 )
                 actualizados += cursor.rowcount
             return actualizados
+
+    def backfill_requirements_canonico(self) -> dict[str, Any]:
+        """Rellena el `codigo_canonico` de los REQUISITOS que lo tienen NULL.
+
+        Por que existe: el codigo canonico se resuelve AL GUARDAR
+        (`save_analysis`), pero la taxonomia CRECE (cada migracion agrega
+        conceptos). Los requisitos ya guardados se quedan con el codigo viejo
+        (o sin codigo) y el motor los IGNORA en silencio
+        (`AND codigo_canonico IS NOT NULL`). Sin este backfill, un concepto
+        nuevo solo sirve para los requisitos que se analicen DESPUES.
+
+        Es el equivalente del backfill one-time de la migracion 010, pero
+        repetible y con la taxonomia actual.
+
+        Idempotente y NO destructivo: solo rellena los NULL (un codigo ya
+        escrito, aunque no exista en la taxonomia, se respeta).
+
+        Si el requisito no tiene `value_code` (p. ej. las licencias que el
+        extractor guardaba como "Driver's license" sin clase), se intenta
+        resolver por su `value_text`.
+
+        Devuelve ``{"revisados": n, "actualizados": n, "sin_concepto": n}``.
+        """
+        with self.database.connection() as connection:
+            filas = connection.execute(
+                """
+                SELECT requirement_id, category, value_code, value_text
+                FROM job_requirements
+                WHERE codigo_canonico IS NULL
+                """
+            ).fetchall()
+            if not filas:
+                return {"revisados": 0, "actualizados": 0, "sin_concepto": 0}
+            resueltos, _sin_concepto = conceptos.resolver(
+                connection,
+                [
+                    {
+                        "category": row["category"],
+                        "value_code": row["value_code"] or row["value_text"],
+                    }
+                    for row in filas
+                ],
+            )
+            # La cola `concepto_no_normalizado` la mantiene el extractor al
+            # guardar el analisis: aqui NO se encola (contar otra vez
+            # inflaria el contador 'veces').
+            actualizados = 0
+            sin_concepto = 0
+            for fila, resuelto in zip(filas, resueltos):
+                codigo = resuelto.get("codigo_canonico")
+                if not codigo:
+                    sin_concepto += 1
+                    continue
+                cursor = connection.execute(
+                    """
+                    UPDATE job_requirements
+                    SET codigo_canonico = ?
+                    WHERE requirement_id = ? AND codigo_canonico IS NULL
+                    """,
+                    (codigo, fila["requirement_id"]),
+                )
+                actualizados += cursor.rowcount
+        return {
+            "revisados": len(filas),
+            "actualizados": actualizados,
+            "sin_concepto": sin_concepto,
+        }
 
     def import_candidate_profile_facts(
         self,
