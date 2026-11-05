@@ -454,13 +454,14 @@ Pendientes vivos (handoff vigente `docs/HANDOFF_SESION_2026-10-30.md`):
    `run_paso5.py --evaluar-todo` para evaluating todas).
 2. **Capa B — extractor educativo** (aprobada por el usuario): migración
    **`017`** (filas `concepto`: master/MBA/associate/técnico superior) —
-   **ESCRITA el 2026-11-04** (falta aplicarla a la BD real);
-   `Repository.save_analysis` ya rellena `codigo_canonico` al guardar y
-   `Repository.save_candidate_profile_facts` ya lo rellena para el perfil
-   (**CAPA B resuelta en código**: resolver al guardar + backfill idempotente
-   `enrich profile-canonico --apply` + fallback slug↔texto). **Pendiente**:
-   aplicar 017-019 + el backfill a la BD real (con backup) y re-analizar las
-   vacantes para que los requisitos novos nazcan con código.
+   **ESCRITA y APLICADA** el 2026-11-04 (esquema 19 en la BD real);
+   `Repository.save_analysis` rellena `codigo_canonico` al guardar y
+   `Repository.save_candidate_profile_facts` lo rellena para el perfil
+   (**CAPA B resuelta y EFECTIVA**: resolver al guardar + backfill idempotente
+   `enrich profile-canonico --apply` + fallback slug↔texto). El backfill en
+   la BD real es un **no-op** (los hechos sin código son títulos de
+   puesto) → no hace falta correrlo. **Pendiente**: re-analizar las vacantes
+   para que los requisitos nuevos nazcan con código.
 3. **Paso 5 — las 30 `revisar_a_mano / educacion_no_confirmada` siguen ABIERTAS**:
    las firma una **segunda persona** en `docs/PASO5_REVISION_PENDIENTES.md`
    (el autoveredicto del autor de la regla se descarta por sesgo) → después,
@@ -671,7 +672,9 @@ ruidosas y sesgadas). Los rechazos son señal operativa y contexto.
   conceptos que falten → no se encolan (pero sí reciben código si SÍ son un
   concepto, p. ej. `years_experience`).
 
-**4. Migraciones nuevas** (escritas, **NO aplicadas en la BD real**):
+**4. Migraciones nuevas** (escritas y **APLICADAS en la BD real** el
+2026-11-04: esquema 16 → 19, solo aditivas — auditoría en
+`docs/HANDOFF_SESION_2026-11-04.md` §2.7):
 - `017_educacion_granular.sql` — master/MBA → posgrado (4); associate degree /
   two year college degree → ciclo corto (2); "bachiller" a secas →
   **secundaria** (1) en CR.

@@ -5,7 +5,9 @@ bandas), el módulo de **POSTULACIONES** (estado del proceso: correo IMAP +
 "Mis postulaciones" de Workday) y la **CAPA B** (el perfil ya lleva
 `codigo_canonico`). Migraciones `017`–`019` aplicadas en la BD real
 (esquema 16 → 19, **solo aditivas**). Suite: **846 tests verdes + 241
-subtests**. Commits locales **sin push**.
+subtests**. Commits **pusheados** a `origin/main` (con confirmación del
+usuario). El backfill de la capa B en la BD real es un **no-op**: no se
+corrió.
 
 > ⚠️ **La BD real sí cambió** (ver §2.7): al correr `postulaciones list` el
 > CLI aplicó las migraciones pendientes (es su comportamiento habitual:
@@ -187,8 +189,14 @@ vacías y la corrección de un alias que estaba mal.
 (`[esquema] Se aplicaron las migraciones N-M`) → una migración ya no se
 aplica en silencio. Test en `tests/test_cli_viabilidad.py`.
 
-**Pendiente**: el backfill de la CAPA B (`enrich profile-canonico --apply`)
-**NO** se corrió en la BD real (espera confirmación del usuario).
+**Pendiente**: NINGUNO. El backfill de la CAPA B (`enrich profile-canonico
+--apply`) sería un **NO-OP** y **no se corrió** (decisión del usuario,
+2026-11-04): la BD real ya tiene el perfil codificado donde corresponde
+(skill 23/23 · language 2/2 · education 2/2 · `experience/total` = 16 años
+leído por `numeric_value`) y los 9 hechos sin código son **títulos de
+puesto** de `experience`, que por diseño quedan en NULL y **no** se
+encolan. Verificado con el motor: ve 23 skills, 2 idiomas, 2 niveles
+educativos, 16 años; `cumple excel/sql/ingles` = True.
 
 ---
 
@@ -219,8 +227,8 @@ aplica en silencio. Test en `tests/test_cli_viabilidad.py`.
 | O8/O10 (retención + diagnóstico) | Hecho | — |
 | O2.2 (Req. + filtro) | **Hecho** (2026-11-04) | — |
 | O3 (salud de sitios) | **Hecho** (2026-11-04) | — |
-| **Capa B (`codigo_canonico` del perfil)** | **Hecho en código** | Falta el backfill en la BD real |
-| **Migración 017** | **Hecha** | Falta aplicar a la BD real |
+| **Capa B (`codigo_canonico` del perfil)** | **Hecho y efectivo en la BD real** | El backfill sería un no-op (decisión del usuario) |
+| **Migración 017** | **Hecha y aplicada** (esquema 19) | — |
 | **Motor de viabilidad (ajuste técnico)** | **Hecho** | Pesos = priors; falta ground truth propio |
 | **Postulaciones (correo + Workday)** | **Hecho en código** | Falta validación en vivo (CDP + app-password) |
 | `educacion_no_confirmada` | **ABIERTO** | Requiere firma de una 2ª persona |
@@ -301,14 +309,14 @@ Copy-Item data\jobpulse_v15.db "$env:TEMP\opencode\viabilidad_test.db" -Force
 - **BD real `data/jobpulse_v15.db`**: 535 avisos, **esquema 19** (migraciones
   017-019 aplicadas el 2026-11-04, ver §2.7), corrida Paso 5 vigente
   `20261103_155215` (calificada 173 · revisar 107 · sin_requisitos 129 ·
-  descartada 87 · datos_insuf 39). 62 sitios resueltos. **La capa B (backfill
-  del perfil) sigue sin aplicar.**
-- **Perfil real**: 23 skills (uno mal mapeado: `google-workspace` →
-  `microsoft-365`; lo corrige la 019), 2 idiomas (espanol nativo, ingles B2),
-  2 educación (`bachiller-en-educacion-media` → educacion-secundaria,
-  `diplomado-en-electronica` → educacion-tecnica), 9 experience (value_code =
-  **títulos de puesto**, no conceptos), 4 certificaciones, contactos y
-  summary. **Sin título universitario** → causa las 87 descartadas.
+  descartada 87 · datos_insuf 39). 62 sitios resueltos. **La capa B ya es
+  efectiva en la BD real** (el backfill sería un no-op).
+- **Perfil real**: 23 skills (el `google-workspace` ya corregido por la 019),
+  2 idiomas (espanol nativo, ingles B2), 2 educación (`bachiller-en-educacion-media`
+  → educacion-secundaria, `diplomado-en-electronica` → educacion-tecnica),
+  9 experience (value_code = **títulos de puesto**, no conceptos; sin código
+  por diseño), 4 certificaciones, contactos y summary. **Sin título
+  universitario** → causa las 87 descartadas.
 - **Requisitos vigentes**: skill ambiguous 307 / required 10 / preferred 10;
   experience ambiguous 185 / required 42; language ambiguous 146 / required
   13; education inferred 80 / required 61 / ambiguous 75; license inferred
@@ -316,8 +324,9 @@ Copy-Item data\jobpulse_v15.db "$env:TEMP\opencode\viabilidad_test.db" -Force
   señal por requisito (motivo del score degenerado sin imputación).
 - **"Req." = 0 no significa "sin requisitos"**: 122 de las 173 calificadas lo
   tienen (el Paso 5 decide por el texto).
-- **Commits**: `8d5db3b` (O2.2+O3) commitado y **sin push**; todo lo de esta
-  sesión se commitea **sin push** (ver §9).
+- **Commits**: `8d5db3b` (O2.2+O3) · `5395c2b` (viabilidad + postulaciones +
+  capa B) · `8936d0a` (docs) — **pusheados** a `origin/main` con la
+  confirmación del usuario (2026-11-04).
 - **CDP**: Brave debe correr con `--remote-debugging-port=9222` y el perfil
   real (raíz `User Data`, nunca `User Data\Default`).
 - **Tests**: `python -m pytest tests/ -q` (python del SISTEMA); app/CLI con
@@ -327,28 +336,33 @@ Copy-Item data\jobpulse_v15.db "$env:TEMP\opencode\viabilidad_test.db" -Force
 
 ## 8. Pendiente inmediato
 
-1. **Preguntar al usuario** si se puede correr el **backfill de la capa B**
-   sobre la BD real (las migraciones 017-019 ya se aplicaron, ver §2.7):
-   - `enrich profile-canonico` (simulación: muestra cuántos hechos quedarían
-     sin código) → `--apply` solo si el usuario confirma;
-   - verificar después con `db check` + `viabilidad list`.
-2. **Validación en vivo** de los colectores (necesita al usuario):
-   - `postulaciones workday` → requiere Brave con CDP abierto.
+1. **Validación en vivo** de los colectores (necesita al usuario):
+   - `postulaciones workday` → requiere Brave con CDP abierto:
+     `.\.venv\Scripts\python.exe -X utf8 -m jobpulse_v15 postulaciones workday --apply`
    - `postulaciones correo` → requiere la app-password de Gmail en el
-     keyring (credencial `gmail`).
-3. **Firma de 2ª persona** de las `educacion_no_confirmada`
+     keyring (credencial `gmail`):
+     `.\.venv\Scripts\python.exe -X utf8 -m jobpulse_v15 postulaciones correo --dias 90 --apply`
+2. **Firma de 2ª persona** de las `educacion_no_confirmada`
    (`docs/PASO5_REVISION_PENDIENTES.md`) — sigue ABIERTO.
+3. **Calibración del motor** cuando haya postulaciones reales: comparar
+   banda vs. resultado del proceso (el score **no** se reentrena con los
+   rechazos; solo se ajustan los priors documentados).
+
+> El backfill de la capa B **ya no es pendiente**: es un no-op (ver §2.7).
 
 ---
 
 ## 9. Commits de esta sesión
 
-- `8d5db3b` — O2.2 + O3 (sesión previa, ya commitado).
-- *(este commit)* — motor de viabilidad + postulaciones + capa B +
-  migraciones 017-019 + CLI + UI v2 + tests + documentación.
+- `8d5db3b` — O2.2 + O3 (sesión previa).
+- `5395c2b` — motor de viabilidad + postulaciones + capa B +
+  migraciones 017-019 + CLI + UI v2 + tests.
+- `8936d0a` — documentación (`docs/MOTOR_VIABILIDAD.md`, este handoff,
+  `AGENTS.md`, `DESARROLLO_v15.md`).
 
-**SIN PUSH** (pendiente de confirmación del usuario).
+**PUSHEADOS** a `origin/main` (`7f50596..8936d0a`) con la confirmación
+explícita del usuario (2026-11-04).
 
 ---
 
-*Sesión cerrada: 2026-11-04 mediodía. Commits locales listos, sin push.*
+*Sesión cerrada: 2026-11-04 mediodía. Commits pusheados a `origin/main`.*

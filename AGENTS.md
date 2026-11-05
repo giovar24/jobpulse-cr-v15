@@ -753,8 +753,13 @@ desmarca (pestaña **“Áreas de empleo”** en `ui_perfil.py` → hechos
   (migraciones 017-019 aplicadas el 2026-11-04: solo fueron **aditivas** —
   25 filas de `concepto`, 2 tablas vacías de postulación y 1 corrección del
   alias `google-workspace`; ningún dato borrado, `integrity_check` ok y 0
-  violaciones FK). **Falta** el backfill de la capa B
-  (`enrich profile-canonico --apply`). Censos vivos: `tools/estado_bd.py`,
+  violaciones FK). **La capa B ya es EFECTIVA en la BD real** (skill 23/23,
+  language 2/2, education 2/2; `experience/total` = 16 años se lee por
+  `numeric_value`): el backfill `enrich profile-canonico --apply` sería un
+  **NO-OP** (los 9 hechos sin código son títulos de puesto de `experience`,
+  que por diseño quedan sin código y **no** se encolan). Decisión del
+  usuario (2026-11-04): no hace falta escribir. Censos vivos:
+  `tools/estado_bd.py`,
   `tools/progreso_enriquecimiento.py`, `ia_estado.snapshot_enriquecimiento` —
   no confiar en números transcritos de ningún doc.
 - **El Paso 5 SÍ se persiste desde la UI v2**: el botón "Ejecutar Paso 5"
@@ -792,19 +797,22 @@ desmarca (pestaña **“Áreas de empleo”** en `ui_perfil.py` → hechos
   `enrich work-mode` e `enrich posting-language` (idempotentes, dry-run por
   defecto, sin IA). `save_job` valida la ciudad con `ciudad_es_valida`
   (planta/sede/país/empresa no son ciudad).
-- **Capa B del PERFIL RESUELTA en código (2026-11-04)**: `save_candidate_profile_facts`
-  **sí** escribe `codigo_canonico` (reutiliza `conceptos.resolver`, con
-  fallback slug↔texto) y el backfill idempotente es
-  `enrich profile-canonico --apply`. **Falta aplicarlo a la BD real**
-  (migraciones 017-019 + backfill) → hasta entonces los facts del perfil
-  siguen invisibles para el motor. La UI v2 lo muestra en la columna
-  "Canónico" para no ocultarlo.
+- **Capa B del PERFIL RESUELTA y EFECTIVA (2026-11-04)**:
+  `save_candidate_profile_facts` **sí** escribe `codigo_canonico` (reutiliza
+  `conceptos.resolver`, con fallback slug↔texto) y el backfill idempotente
+  es `enrich profile-canonico --apply`. **La BD real ya la tiene**: las
+  migraciones 017-019 están aplicadas (esquema 19) y el perfil real ya es
+  visible para el motor (skill 23/23 · language 2/2 · education 2/2 ·
+  `experience/total` = 16 años). El backfill es un **no-op** (los 9 hechos
+  sin código son títulos de puesto de `experience`, que por diseño quedan
+  sin código y no se encolan) → **no hace falta correrlo**. La UI v2 lo
+  muestra en la columna "Canónico" para no ocultarlo.
 - **Punto 7 completado**: densidad (3 niveles, `font_scale` + métricas) + i18n
   (es/en, ~130 textos, componentes traducen solos, selector en Configuración
   → Apariencia, reconstrucción en caliente).
-- Pendientes: ver "Pendiente inmediato" del handoff más reciente (aplicar
-  migraciones 017-019 + `enrich profile-canonico --apply` a la BD real, la
-  `educacion_no_confirmada`
+- Pendientes: ver "Pendiente inmediato" del handoff más reciente (validación
+  en vivo de `postulaciones workday` (CDP) y `postulaciones correo`
+  (app-password de Gmail), la `educacion_no_confirmada`
   sin firma de segunda persona, O5.3 re-barrido de descripciones basura, O6.4
   dedupe de slugs ES/EN al importar CV, sucursal de Harvie en el título,
   Paso 7, O8.2/O8.4, O4 (sin objeto: el gate ya no existe → proponer cerrarlo
