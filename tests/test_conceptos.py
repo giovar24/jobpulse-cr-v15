@@ -106,6 +106,8 @@ class TestConceptos(unittest.TestCase):
         self.assertEqual(codigos["excel"], "excel")
 
     def test_variante_sin_concepto_queda_null_y_se_encola(self):
+        # 'autocad' ya tiene concepto (migracion 020): se usa una variante
+        # que sigue sin estar en la taxonomia.
         self.repository.save_analysis(
             "job-1",
             text_hash="hash-1",
@@ -118,14 +120,15 @@ class TestConceptos(unittest.TestCase):
                 "experience": "not_mentioned",
                 "skill": "ambiguous",
             },
-            requirements=[_requisito("skill", "autocad")],
+            requirements=[_requisito("skill", "tecnologia-futura")],
         )
-        self.assertIsNone(self._codigos()["autocad"])
+        self.assertIsNone(self._codigos()["tecnologia-futura"])
         with closing(sqlite3.connect(self.database.path)) as connection:
             cola = connection.execute(
                 """
                 SELECT veces FROM concepto_no_normalizado
-                WHERE categoria = 'skill' AND texto = 'autocad' AND origen = 'oferta'
+                WHERE categoria = 'skill' AND texto = 'tecnologia-futura'
+                  AND origen = 'oferta'
                 """
             ).fetchone()
         self.assertIsNotNone(cola)
@@ -145,13 +148,14 @@ class TestConceptos(unittest.TestCase):
                     "experience": "not_mentioned",
                     "skill": "ambiguous",
                 },
-                requirements=[_requisito("skill", "autocad")],
+                requirements=[_requisito("skill", "tecnologia-futura")],
             )
         with closing(sqlite3.connect(self.database.path)) as connection:
             veces = connection.execute(
                 """
                 SELECT veces FROM concepto_no_normalizado
-                WHERE categoria = 'skill' AND texto = 'autocad' AND origen = 'oferta'
+                WHERE categoria = 'skill' AND texto = 'tecnologia-futura'
+                  AND origen = 'oferta'
                 """
             ).fetchone()[0]
         self.assertEqual(veces, 2)

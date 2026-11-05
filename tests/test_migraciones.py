@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Tests de las migraciones nuevas: 017, 018 y 019.
+"""Tests de las migraciones nuevas: 017, 018, 019, 020 y 021.
 
 Las migraciones son el UNICO mecanismo de cambio de esquema (AGENTS.md):
 cambio de BD = archivo nuevo `NNN_*.sql`, nunca `ALTER` manual ni editar
@@ -8,7 +8,9 @@ una migracion ya aplicada. Estos tests:
   * comprueban que la version del esquema avanza bien;
   * comprueban que cada migracion hace LO QUE DICE (y es idempotente);
   * comprueban que la 019 corrige el alias erroneo 'google-workspace' ->
-    'microsoft-365' (Google Workspace NO es Microsoft 365).
+    'microsoft-365' (Google Workspace NO es Microsoft 365);
+  * comprueban que la 020/021 Amplian la taxonomia con lo que los avisos
+    reales piden (idiomas que faltaban, alias y conceptos nuevos).
 
 Para la 019 se reproduce el estado PREMIGRACION a mano y se ejecuta el
 archivo .sql: asi se verifica el SQL real, no una copia.
@@ -44,15 +46,15 @@ class TestVersionDelEsquema(unittest.TestCase):
     def test_la_base_nueva_llega_a_la_ultima_migracion(self):
         version = self.database.initialize()
 
-        self.assertEqual(version, 19)
+        self.assertEqual(version, 21)
         with self.database.connection() as connection:
             actual = connection.execute("PRAGMA user_version").fetchone()[0]
-        self.assertEqual(actual, 19)
+        self.assertEqual(actual, 21)
 
     def test_inicializar_de_nuevo_no_cambia_nada(self):
         self.database.initialize()
 
-        self.assertEqual(self.database.initialize(), 19)
+        self.assertEqual(self.database.initialize(), 21)
 
 
 class TestMigracion017(unittest.TestCase):
@@ -319,6 +321,173 @@ class TestMigracion019(unittest.TestCase):
             ).fetchone()
         self.assertIsNotNone(fila)
         self.assertEqual(fila["codigo_canonico"], "active-directory")
+
+
+class TestMigracion020(unittest.TestCase):
+    """020: conceptos para ALINEAR (skills y licencias que faltaban)."""
+
+    def setUp(self):
+        self.temp_dir = tempfile.TemporaryDirectory()
+        self.database = Database(Path(self.temp_dir.name) / "test.db")
+        self.database.initialize()
+
+    def tearDown(self):
+        self.temp_dir.cleanup()
+
+    def _codigo(self, categoria: str, variante: str) -> str | None:
+        with self.database.connection() as connection:
+            fila = connection.execute(
+                "SELECT codigo_canonico FROM concepto "
+                "WHERE categoria=? AND variante=?",
+                (categoria, variante),
+            ).fetchone()
+        return fila["codigo_canonico"] if fila else None
+
+    def test_la_base_nueva_llega_a_la_ultima_migracion(self):
+        with self.database.connection() as connection:
+            version = connection.execute("PRAGMA user_version").fetchone()[0]
+        self.assertEqual(version, 21)
+
+    def test_las_skills_que_pedia_el_corpus(self):
+        for variante in (
+            "java",
+            "tableau",
+            "six_sigma",
+            "c++",
+            "c#",
+            "typescript",
+            "autocad",
+            "solidworks",
+        ):
+            self.assertEqual(self._codigo("skill", variante), variante)
+
+    def test_las_clases_de_licencia_de_cr(self):
+        for variante in ("a2", "b3", "c2", "d1", "d2", "d3", "e1", "f1"):
+            self.assertEqual(
+                self._codigo("license", variante), "licencia-conducir"
+            )
+
+    def test_la_licencia_generica_sin_clase(self):
+        self.assertEqual(
+            self._codigo("license", "driver's license"), "licencia-conducir"
+        )
+
+    def test_la_migracion_es_idempotente(self):
+        with self.database.connection() as connection:
+            antes = connection.execute(
+                "SELECT COUNT(*) FROM concepto"
+            ).fetchone()[0]
+            _aplicar(connection, "020_conceptos_alineacion.sql")
+            _aplicar(connection, "020_conceptos_alineacion.sql")
+            despues = connection.execute(
+                "SELECT COUNT(*) FROM concepto"
+            ).fetchone()[0]
+        self.assertEqual(antes, despues)
+
+    def test_no_toca_los_conceptos_que_ya_existian(self):
+        # 'excel' ya venia de la 009: la 020 no lo duplica ni lo cambia.
+        self.assertEqual(self._codigo("skill", "excel"), "excel")
+        self.assertEqual(self._codigo("skill", "microsoft excel"), "excel")
+        self.assertEqual(self._codigo("license", "b1"), "licencia-conducir")
+
+
+class TestMigracion021(unittest.TestCase):
+    """021: taxonomia que crece con los CAMPOS ESTRUCTURADOS del aviso.
+
+    El corpus real (2026-11-04) traia 2438 menciones de skills de la fuente
+    y solo 45 resolvian: el 98% NO era comparable con el perfil. Esta
+    migracion anade los idiomas que faltaban, los alias de lo que ya existia
+    y los conceptos nuevos (retail, manufactura, calidad, contabilidad,
+    finanzas, IT/soporte, RRHH).
+    """
+
+    def setUp(self):
+        self.temp_dir = tempfile.TemporaryDirectory()
+        self.database = Database(Path(self.temp_dir.name) / "test.db")
+        self.database.initialize()
+
+    def tearDown(self):
+        self.temp_dir.cleanup()
+
+    def _codigo(self, categoria: str, variante: str) -> str | None:
+        with self.database.connection() as connection:
+            fila = connection.execute(
+                "SELECT codigo_canonico FROM concepto "
+                "WHERE categoria=? AND variante=?",
+                (categoria, variante),
+            ).fetchone()
+        return fila["codigo_canonico"] if fila else None
+
+    def test_los_idiomas_que_faltaban_existen(self):
+        for variante, codigo in (
+            ("aleman", "aleman"),
+            ("german", "aleman"),
+            ("italiano", "italiano"),
+            ("chino", "chino"),
+            ("simplified chinese", "chino"),
+            ("japones", "japones"),
+            ("coreano", "coreano"),
+            ("arabe", "arabe"),
+            ("neerlandes", "neerlandes"),
+        ):
+            self.assertEqual(self._codigo("language", variante), codigo)
+
+    def test_los_alias_de_lo_que_ya_existia(self):
+        # El aviso nombra la misma competencia de otra forma: tiene que
+        # resolver al MISMO codigo canonico.
+        self.assertEqual(self._codigo("skill", "consultas sql"), "sql")
+        self.assertEqual(self._codigo("skill", "service now"), "servicenow")
+        self.assertEqual(self._codigo("skill", "azure active directory"), "active-directory")
+        self.assertEqual(self._codigo("skill", "microsoft office"), "microsoft-365")
+        self.assertEqual(self._codigo("skill", "ci cd pipelines"), "ci-cd")
+
+    def test_los_conceptos_nuevos_que_pedia_el_corpus(self):
+        for variante, codigo in (
+            ("apertura de caja", "apertura-caja"),
+            ("frenteos", "frenteos"),
+            ("transacciones de cobro", "transacciones-cobro"),
+            ("manejo de inventarios", "inventarios"),
+            ("quality control", "control-calidad"),
+            ("journal entries", "asientos-contables"),
+            ("incident response", "incident-response"),
+            ("metodologias agiles", "metodologias-agiles"),
+            ("kubernetes", "kubernetes"),
+            ("troubleshooting", "troubleshooting"),
+        ):
+            self.assertEqual(self._codigo("skill", variante), codigo)
+
+    def test_no_entran_las_etiquetas_genericas(self):
+        # Funcion, sector o palabra vacia: no son competencias (contarlas
+        # penaliza a todos los avisos por igual y esconde los gaps reales).
+        for variante in ("ventas", "construccion", "analysis", "planning"):
+            self.assertIsNone(self._codigo("skill", variante), variante)
+
+    def test_la_migracion_es_idempotente(self):
+        with self.database.connection() as connection:
+            antes = connection.execute("SELECT COUNT(*) FROM concepto").fetchone()[0]
+            _aplicar(connection, "021_taxonomia_fuente.sql")
+            _aplicar(connection, "021_taxonomia_fuente.sql")
+            despues = connection.execute("SELECT COUNT(*) FROM concepto").fetchone()[0]
+        self.assertEqual(antes, despues)
+
+    def test_no_toca_los_conceptos_que_ya_existian(self):
+        self.assertEqual(self._codigo("skill", "excel"), "excel")
+        self.assertEqual(self._codigo("skill", "python"), "python")
+        self.assertEqual(self._codigo("language", "en"), "ingles")
+        self.assertEqual(self._codigo("skill", "active-directory"), "active-directory")
+
+    def test_todas_las_variantes_nuevas_estan_normalizadas(self):
+        # El resolver busca `LOWER(TRIM(value_code))` y el modulo
+        # `skills_fuente` normaliza igual: minusculas, sin acentos.
+        with self.database.connection() as connection:
+            filas = connection.execute(
+                "SELECT variante FROM concepto "
+                "WHERE categoria IN ('skill','language','license')"
+            ).fetchall()
+        for fila in filas:
+            variante = fila["variante"]
+            self.assertEqual(variante, variante.lower(), variante)
+            self.assertNotIn("  ", variante, variante)
 
 
 if __name__ == "__main__":

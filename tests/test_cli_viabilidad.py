@@ -207,6 +207,201 @@ class TestCliProfileCanonico(unittest.TestCase):
         self.assertEqual(datos["facts_sin_codigo"], 0)
 
 
+class TestCliRequirementsCanonico(unittest.TestCase):
+    """`enrich requirements-canonico`: los requisitos viejos con la taxonomia actual."""
+
+    def setUp(self):
+        self.temp_dir = tempfile.TemporaryDirectory()
+        self.database = Database(Path(self.temp_dir.name) / "test.db")
+        self.database.initialize()
+        self.repository = Repository(self.database)
+
+    def tearDown(self):
+        self.temp_dir.cleanup()
+
+    def _cli(self, *argumentos: str) -> str:
+        salida = io.StringIO()
+        with patch(
+            "sys.argv",
+            ["jobpulse-v15", "--db", str(self.database.path), *argumentos],
+        ), redirect_stdout(salida):
+            self.assertEqual(main(), 0)
+        return salida.getvalue()
+
+    def _requisito_sin_codigo(self):
+        self.repository.register_platform("workday", "Workday", "api")
+        self.repository.register_site(
+            "workday-test", "workday", "Test", "https://example.test/jobs"
+        )
+        self.repository.save_job(
+            {
+                "job_id": "job-1",
+                "title": "Puesto",
+                "company": "Example",
+                "country": "CR",
+                "posting_language": "en",
+                "description_raw": "Descripcion.",
+            },
+            site_id="workday-test",
+            source_job_id="job-1",
+        )
+        with self.database.connection() as connection:
+            connection.execute(
+                """
+                INSERT INTO job_analysis (
+                    job_id, text_hash, extractor_version, analysis_status
+                ) VALUES ('job-1', 'hash', 'rules-1', 'complete')
+                """
+            )
+            analysis_id = connection.execute(
+                "SELECT analysis_id FROM job_analysis WHERE job_id='job-1'"
+            ).fetchone()["analysis_id"]
+            connection.execute(
+                """
+                INSERT INTO job_requirements (
+                    analysis_id, category, value_code, value_text,
+                    requirement_level, evidence, origin, confidence
+                ) VALUES (?, 'skill', 'java', 'Java', 'required',
+                          'Required: Java.', 'rule', 0.9)
+                """,
+                (analysis_id,),
+            )
+
+    def test_dry_run_no_toca_la_base(self):
+        self._requisito_sin_codigo()
+
+        datos = json.loads(self._cli("enrich", "requirements-canonico"))
+
+        self.assertEqual(datos["mode"], "dry_run")
+        self.assertEqual(datos["requisitos_sin_codigo"], 1)
+        self.assertEqual(datos["updated"], 0)
+        self.assertEqual(datos["pendientes"][0]["value_code"], "java")
+
+    def test_apply_rellena_el_codigo(self):
+        self._requisito_sin_codigo()
+
+        datos = json.loads(self._cli("enrich", "requirements-canonico", "--apply"))
+
+        self.assertEqual(datos["mode"], "apply")
+        self.assertEqual(datos["updated"], 1)
+        with self.database.connection() as connection:
+            codigo = connection.execute(
+                "SELECT codigo_canonico FROM job_requirements "
+                "WHERE value_code='java'"
+            ).fetchone()["codigo_canonico"]
+        self.assertEqual(codigo, "java")
+
+    def test_es_idempotente(self):
+        self._requisito_sin_codigo()
+        self._cli("enrich", "requirements-canonico", "--apply")
+
+        datos = json.loads(self._cli("enrich", "requirements-canonico", "--apply"))
+
+        self.assertEqual(datos["updated"], 0)
+
+
+class TestCliRequirementsSource(unittest.TestCase):
+    """`enrich requirements-source`: re-analisis con los CAMPOS ESTRUCTURADOS.
+
+    El texto del aviso no lo dice todo: las competencias y los idiomas que
+    PIDE vienen en `jobs.skills` / `jobs.languages`. Sin integrarlos, muchos
+    avisos no tienen NINGUN requisito comparable con el perfil (banda
+    `sin_datos`). El comando simula por omision.
+    """
+
+    def setUp(self):
+        self.temp_dir = tempfile.TemporaryDirectory()
+        self.database = Database(Path(self.temp_dir.name) / "test.db")
+        self.database.initialize()
+        self.repository = Repository(self.database)
+        self.repository.register_platform("workday", "Workday", "api")
+        self.repository.register_site(
+            "workday-test", "workday", "Test", "https://example.test/jobs"
+        )
+        self.repository.save_job(
+            {
+                "job_id": "job-1",
+                "title": "Puesto",
+                "company": "Example",
+                "country": "CR",
+                "posting_language": "en",
+                "description_raw": "Descripcion.",
+            },
+            site_id="workday-test",
+            source_job_id="job-1",
+        )
+        with self.database.connection() as connection:
+            connection.execute(
+                "UPDATE jobs SET skills = ? WHERE job_id = 'job-1'",
+                (json.dumps(["Python", "soporte a equipos Dell"]),),
+            )
+
+    def tearDown(self):
+        self.temp_dir.cleanup()
+
+    def _cli(self, *argumentos: str) -> str:
+        salida = io.StringIO()
+        with patch(
+            "sys.argv",
+            ["jobpulse-v15", "--db", str(self.database.path), *argumentos],
+        ), redirect_stdout(salida):
+            self.assertEqual(main(), 0)
+        return salida.getvalue()
+
+    def _requisitos(self):
+        with self.database.connection() as connection:
+            return connection.execute(
+                "SELECT COUNT(*) FROM job_requirements"
+            ).fetchone()[0]
+
+    def test_dry_run_no_toca_la_base(self):
+        datos = json.loads(self._cli("enrich", "requirements-source"))
+
+        self.assertEqual(datos["mode"], "dry_run")
+        self.assertEqual(datos["avisos"], 1)
+        # "soporte a equipos Dell" es una frase de tarea: no es competencia.
+        self.assertEqual(datos["requisitos_fuente"], 1)
+        self.assertEqual(self._requisitos(), 0)
+
+    def test_apply_guards_los_requisitos_de_la_fuente(self):
+        datos = json.loads(self._cli("enrich", "requirements-source", "--apply"))
+
+        self.assertEqual(datos["mode"], "apply")
+        self.assertEqual(datos["analizados"], 1)
+        self.assertEqual(datos["requisitos_fuente"], 1)
+        self.assertEqual(self._requisitos(), 1)
+        with self.database.connection() as connection:
+            fila = connection.execute(
+                "SELECT value_code, codigo_canonico, origin FROM job_requirements"
+            ).fetchone()
+        self.assertEqual(fila["value_code"], "python")
+        self.assertEqual(fila["codigo_canonico"], "python")
+        self.assertEqual(fila["origin"], "source_field")
+
+    def test_apply_es_idempotente(self):
+        self._cli("enrich", "requirements-source", "--apply")
+
+        datos = json.loads(self._cli("enrich", "requirements-source", "--apply"))
+
+        self.assertEqual(datos["requisitos_fuente"], 1)
+        self.assertEqual(self._requisitos(), 1)
+
+    def test_lo_que_no_resuelve_va_a_la_cola_de_la_taxonomia(self):
+        with self.database.connection() as connection:
+            connection.execute(
+                "UPDATE jobs SET skills = ? WHERE job_id = 'job-1'",
+                (json.dumps(["Zabbix"]),),
+            )
+
+        self._cli("enrich", "requirements-source", "--apply")
+
+        with self.database.connection() as connection:
+            fila = connection.execute(
+                "SELECT veces FROM concepto_no_normalizado WHERE texto='zabbix'"
+            ).fetchone()
+        self.assertIsNotNone(fila)
+
+
 class TestCliPostulaciones(unittest.TestCase):
     def setUp(self):
         self.temp_dir = tempfile.TemporaryDirectory()

@@ -20,9 +20,11 @@ from jobpulse_v15.postulaciones import (  # noqa: E402
     clasificar,
     clasificar_mensajes,
     estado_mas_avanzado,
+    etiqueta_estado,
     formatear_fecha,
     portal_del_remitente,
     referencia_de_url,
+    sin_respuesta,
 )
 
 WORKDAY = "no-reply@myworkdayjobs.com"
@@ -193,6 +195,42 @@ class TestEstadoFinal(unittest.TestCase):
     def test_solo_aplicada(self):
         self.assertEqual(estado_mas_avanzado([ESTADO_APPLIED]), ESTADO_APPLIED)
         self.assertEqual(estado_mas_avanzado([]), "")
+
+
+class TestRegistroYCerteza(unittest.TestCase):
+    """El registro distingue "sin respuesta" de "rechazada".
+
+    Muchos sistemas de RRHH **nunca contestan**: el silencio NO es un
+    rechazo. El registro lo deja explicito para que nadie lo lea al reves.
+    """
+
+    def test_el_silencio_no_se_convierte_en_rechazo(self):
+        # Sin ningun evento de cierre, el estado queda en 'applied'.
+        self.assertEqual(
+            estado_mas_avanzado([ESTADO_APPLIED, ESTADO_RECRUITER]),
+            ESTADO_RECRUITER,
+        )
+        self.assertEqual(estado_mas_avanzado([ESTADO_APPLIED]), ESTADO_APPLIED)
+
+    def test_solo_aplicada_es_una_postulacion_sin_respuesta(self):
+        self.assertTrue(sin_respuesta(ESTADO_APPLIED))
+
+    def test_un_rechazo_explicito_no_es_sin_respuesta(self):
+        self.assertFalse(sin_respuesta(ESTADO_REJECTED))
+        self.assertFalse(sin_respuesta(ESTADO_WITHDRAWN))
+        self.assertFalse(sin_respuesta(ESTADO_INTERVIEW))
+        self.assertFalse(sin_respuesta(ESTADO_OFFER))
+
+    def test_la_etiqueta_de_applied_avisa_del_silencio(self):
+        etiqueta = etiqueta_estado(ESTADO_APPLIED)
+
+        self.assertIn("sin respuesta", etiqueta.lower())
+
+    def test_la_etiqueta_de_rejected_dice_rechazada(self):
+        self.assertEqual(etiqueta_estado(ESTADO_REJECTED), "Rechazada")
+
+    def test_un_estado_desconocido_devuelve_el_mismo_texto(self):
+        self.assertEqual(etiqueta_estado("raro"), "raro")
 
 
 class TestLote(unittest.TestCase):
