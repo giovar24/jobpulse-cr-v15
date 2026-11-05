@@ -46,6 +46,32 @@ Reutiliza `matching.EvaluadorPaso5` (no duplica la regla dura del texto):
 - La obligatoriedad la decide el **TEXTO** del aviso, no el
   `requirement_level` del extractor (misma regla que el Paso 5).
 
+#### De dónde salen los requisitos (texto + campos estructurados)
+
+El análisis (`analysis_flow.extract_job_analysis`) integra **dos** fuentes:
+
+| Origen | Qué es | `requirement_level` |
+|---|---|---|
+| `rule` | lo que el extractor leyó del **texto** del aviso | `required` / `preferred` / `ambiguous` |
+| `source_field` | lo que el aviso declara en sus **campos estructurados** (`jobs.skills`, `jobs.languages`) | `inferred` |
+
+Las reglas de `source_field` (módulo `skills_fuente.py`):
+
+1. **solo lo que resuelve a un concepto canónico** — lo demás va a la cola
+   `concepto_no_normalizado` (la taxonomía crece con datos reales, no con
+   códigos inventados);
+2. **las frases de tarea no son competencias** (`ats.es_frase_de_tarea`):
+   "apertura de caja" es competencia, "soporte a equipos Dell" es tarea;
+3. **el nivel es `inferred`**: el campo dice *qué* pide el aviso, no si es
+   obligatorio → nunca bloquea ni activa el tope de banda;
+4. **la evidencia es literal** (la etiqueta que trae el campo);
+5. **no se duplica** lo que el texto del aviso ya dio (mismo código canónico).
+
+Por qué importa: sin estos campos, **135 de 535 avisos** del corpus no
+tenían **ningún** requisito comparable (banda `sin_datos`: no se puede decir
+si el perfil califica porque no hay nada que comparar). El dato existía; el
+sistema no lo usaba.
+
 ### 2.2 Nivel interno de cada requisito
 
 | `requirement_level` | Nivel interno | Peso | Activa el tope de banda |
@@ -171,20 +197,28 @@ misma fórmula semántica (`ats.percentiles_semanticas`): una sola respuesta.
 
 ## 4. Calibración real (corpus de 535 avisos, copia de la BD)
 
-Sin semántica:
+**Después** del bloque de alineación (migraciones 020/021 + campos
+estructurados del aviso), sin semántica:
 
-| Banda | Vacantes |
-|---|---|
-| aplicar | 5 |
-| revisar | 17 |
-| no prioritario | 284 |
-| sin datos | 142 |
-| veto | 87 |
+| Banda | Antes | Después |
+|---|---|---|
+| aplicar | 5 | 4 |
+| revisar | 17 | 2 |
+| no prioritario | 284 | 433 |
+| sin datos | 142 | **9** |
+| veto | 87 | 87 |
 
-**Lectura honesta**: el corpus tiene poca señal por requisito — 49 skills y 29
-licencias del corpus **no tienen `codigo_canonico`** (y el Paso 5 descarta los
-requisitos sin código). El motor es correcto, pero los datos de entrada están
-incompletos; por eso hay tantas vacantes en `sin_datos` y `veto`.
+**Lectura honesta**: la banda `sin_datos` bajó de 142 a **9** porque ahora
+los avisos tienen requisitos comparables (antes el dato —las skills y los
+idiomas del aviso— estaba en la base pero el sistema no lo leía). Los 9 que
+quedan son avisos cuyas skills son **frases de tarea o campos genéricos**
+("desarrollo", "computer hardware"): no hay una competencia que comparar, y
+`sin_datos` es la respuesta honesta (preferible a inventar un requisito).
+
+El top de `aplicar` es estable (Clerk III- Accounts Receivable, Rep HR
+Solutions, Sales Support Coordinator, Imaging Research Associate I) y los
+"falsos positivos" de cloud (F5 BIG IP) bajaron a `revisar` con los gaps
+aws/azure/gcp a la vista.
 
 **Los pesos son priors documentados**, no pesos aprendidos: todavía no hay
 ground truth propio (0 postulaciones registradas). Cuando haya postulaciones
@@ -197,6 +231,8 @@ pero **jamás reentrenar** el score con los rechazos.
 
 1. **El corpus tiene pocos requisitos con código canónico** → muchas vacantes
    quedan en `sin_datos` o se puntúan con la imputación del corpus.
+   *(Mitigado el 2026-11-04 con las migraciones 020/021 y los campos
+   estructurados: `sin_datos` 142 → 9.)*
 2. **La semántica es un percentil, no una medida absoluta** (los cosenos viven
    comprimidos entre 0.1 y 0.6).
 3. **No hay validación en vivo** del cruce con postulaciones (falta CDP y la
@@ -206,6 +242,14 @@ pero **jamás reentrenar** el score con los rechazos.
    el `requirement_level` del análisis vigente.
 5. Los pesos y umbrales están en el **código** (`viabilidad.py`), no en la BD:
    se cambian ahí, no en cada UI.
+6. **La taxonomía sigue incompleta**: 1517 skills de la fuente (de 1773
+   útiles) todavía no tienen concepto canónico → están en la cola
+   `concepto_no_normalizado` (la lista de trabajo de la curación). Cada tanda
+   de curación sube la cobertura y baja los `sin_datos`.
+7. **Los requisitos de la fuente no llevan obligatoriedad**: el aviso
+   declara *qué* pide, no *si lo exige*. El texto sigue mandando (misma regla
+   que el resto del motor): un `inferred` que el texto confirma como
+   obligatorio sube a `required` en la evaluación.
 
 ---
 
@@ -214,6 +258,8 @@ pero **jamás reentrenar** el score con los rechazos.
 | Archivo | Qué es |
 |---|---|
 | `src/jobpulse_v15/viabilidad.py` | El motor (bandas, pesos, imputación, vetos) |
+| `src/jobpulse_v15/skills_fuente.py` | Campos estructurados del aviso → requisitos |
+| `src/jobpulse_v15/analysis_flow.py` | Análisis único (texto + campos estructurados) |
 | `src/jobpulse_v15/postulaciones.py` | Estado del **proceso** (núcleo puro) |
 | `src/jobpulse_v15/correo_postulaciones.py` | Lector IMAP (Gmail) |
 | `src/jobpulse_v15/workday_postulaciones.py` | Parser + fetch de "Mis postulaciones" |
@@ -221,5 +267,6 @@ pero **jamás reentrenar** el score con los rechazos.
 | `src/jobpulse_v15/matching.py` | `EvaluadorPaso5` (reglas duras reutilizadas) |
 | `src/jobpulse_v15/areas.py` | `es_fuera_de_area` (veto de área) |
 | `tests/test_viabilidad.py` | 12 tests del motor |
+| `tests/test_skills_fuente.py` | 24 tests del pipeline de campos estructurados |
 | `tests/test_postulaciones*.py`, `tests/test_correo_postulaciones.py`, `tests/test_workday_postulaciones.py` | Tests de las señales |
 | `AGENTS.md` | §"Motor de VIABILIDAD" y §"POSTULACIONES" |

@@ -434,6 +434,13 @@ py -3.11 -m venv .venv
 # === CAPA B: código canónico del perfil ===
 .\.venv\Scripts\python.exe -X utf8 -m jobpulse_v15 enrich profile-canonico --apply
 
+# === ALINEACIÓN: los campos estructurados del aviso también son requisitos ===
+# Backfill del código canónico de los requisitos ya guardados (taxonomía 020/021).
+.\.venv\Scripts\python.exe -X utf8 -m jobpulse_v15 enrich requirements-canonico --apply
+# Re-análisis que integra `jobs.skills` + `jobs.languages` (simula por omisión).
+.\.venv\Scripts\python.exe -X utf8 -m jobpulse_v15 enrich requirements-source
+.\.venv\Scripts\python.exe -X utf8 -m jobpulse_v15 enrich requirements-source --apply
+
 # === UI ===
 .\.venv\Scripts\python.exe -m jobpulse_v15.ui
 
@@ -445,8 +452,19 @@ python -m pytest tests/ -q    # pytest vive en el python del sistema (el venv no
 
 ## 5. PRÓXIMA ACCIÓN INMEDIATA
 
-Pendientes vivos (handoff vigente `docs/HANDOFF_SESION_2026-10-30.md`):
+Pendientes vivos (handoff vigente `docs/HANDOFF_SESION_2026-11-04_tarde.md`):
 
+0. **APLICAR el bloque de ALINEACIÓN en la BD real** (pide confirmación
+   explícita al usuario; la BD real está en esquema 19):
+   `020` + `021` (taxonomía) → `enrich requirements-canonico --apply`
+   (backfill de los 78 requisitos viejos sin código) →
+   `enrich requirements-source --apply` (re-análisis de los 535 avisos
+   integrando `jobs.skills` / `jobs.languages`) → `run_paso5.py` (corrida
+   nueva) → `generar_evidencia_paso5.py` + `verificar_evidencia.py`.
+   **Medido sobre copias**: requisitos con código 1071/1071 → **2172/2172**;
+   viabilidad `sin_datos` 133 → **9**; Paso 5 `sin_requisitos` 123 → 9.
+   Ojo: **cualquier CLI sobre la BD real auto-migra** (aplicaría 020/021
+   solas); el aviso `[esquema]` sale en consola.
 1. **El usuario marca sus áreas en la UI** (perfil → pestaña **"Áreas de
    empleo"**): hasta entonces el filtro está INACTIVO (sin áreas marcadas se
    evalúa todo, que es lo que hoy ocurre). Después, la próxima corrida del
@@ -461,7 +479,7 @@ Pendientes vivos (handoff vigente `docs/HANDOFF_SESION_2026-10-30.md`):
    `enrich profile-canonico --apply` + fallback slug↔texto). El backfill en
    la BD real es un **no-op** (los hechos sin código son títulos de
    puesto) → no hace falta correrlo. **Pendiente**: re-analizar las vacantes
-   para que los requisitos nuevos nazcan con código.
+   para que los requisitos nuevos nazcan con código (→ punto 0).
 3. **Paso 5 — las 30 `revisar_a_mano / educacion_no_confirmada` siguen ABIERTAS**:
    las firma una **segunda persona** en `docs/PASO5_REVISION_PENDIENTES.md`
    (el autoveredicto del autor de la regla se descarta por sesgo) → después,
@@ -604,12 +622,86 @@ Pendientes vivos (handoff vigente `docs/HANDOFF_SESION_2026-10-30.md`):
 
 ---
 
-*Última actualización: 2026-10-30 (O8.1/O10 — filtro por ÁREA de empleo de punta a punta: taxonomía en BD, clasificación por título al ingerir, pestaña "Áreas de empleo" en el perfil, estado `fuera_de_area` en el Paso 5; además O6.3 con las mecánicas M1–M4 y la corrida vigente `20261030_151648`)*
-*Próxima revisión: tras marcar el usuario sus áreas en la UI y el cierre de la Capa B (extractor educativo)*
+*Última actualización: 2026-11-04 tarde (bloque de ALINEACIÓN: los campos estructurados del aviso — `jobs.skills` / `jobs.languages` — son requisitos comparables; migraciones 020/021 + `skills_fuente.py` + CLI `enrich requirements-source`; suite 922 tests + 241 subtests)*
+*Próxima revisión: tras aplicar 020/021 + re-análisis en la BD real (pide confirmación) y el cierre de la Capa B (extractor educativo)*
 
 ---
 
 ## 8. HISTORIAL DE CAMBIOS RECIENTES
+
+### 2026-11-04 (tarde) — ALINEACIÓN: los campos estructurados del aviso también son requisitos
+
+**Objetivo que ordena el bloque**: encontrar, entre **TODOS** los puestos, los
+que tienen los requisitos más compatibles con la persona del CV. Para
+comparar un requisito del aviso con un hecho del perfil, los dos tienen que
+hablar el mismo idioma: la tabla `concepto` (variante → `codigo_canonico`).
+El motor **solo compara los requisitos con código**: los demás se ignoran
+**en silencio**.
+
+**Diagnóstico (corpus real, 535 avisos)**:
+- 135 avisos estaban en la banda `sin_datos` del motor (sin NINGÚN requisito
+  comparable) y **133 de esos 135 sí tenían `jobs.skills`** informado;
+- con la taxonomía de la 020 solo resolvían **45 de 2438** menciones de skills
+  de la fuente (el 98% no era comparable con el perfil);
+- 511/535 avisos tienen `jobs.languages` (el idioma que **piden**, con nivel
+  CEFR explícito) — dato que el sistema no leía.
+
+**1. Módulo nuevo `skills_fuente.py`** (tests `tests/test_skills_fuente.py`, 24):
+convierte los campos estructurados del aviso en requisitos comparables, con
+cinco reglas duras: (1) solo lo que resuelve a concepto canónico (lo demás va
+a la cola `concepto_no_normalizado`); (2) las **frases de tarea** no son
+competencias (`ats.es_frase_de_tarea`); (3) el nivel es `inferred` (el campo
+dice QUÉ pide, no si es obligatorio); (4) evidencia literal; (5) no se
+duplica lo que el texto ya dio.
+
+**2. `analysis_flow.py`** pasa a ser la implementación **única** del análisis
+(la usan la CLI, la UI clásica, la UI v2 y `run_full_flow`): integra texto +
+campos estructurados, con `VERSION_ANALISIS = "rules-2+fuente"` (las
+revisiones viejas quedan como historial).
+
+**3. Bugs corregidos (fallos silenciosos de alineación)**:
+- **niveles de idioma**: la escala tenía las claves en MAYÚSCULAS ("B2") y
+  los requisitos traen el nivel en minúsculas ("b2") → la comparación caía
+  siempre en `no_verificable`. Ahora `idiomas.normalizar_nivel` ("B2+",
+  "C1-C2", "fluent", "intermedio", "nativo") + `orden_nivel`;
+- **`conceptos.resolver`**: usaba solo `value_code`; las licencias sin clase
+  ("Driver's license") perdían el código → se añade el fallback a
+  `value_text`.
+
+**4. Taxonomía (migraciones `020` y `021`)**: `020` = conceptos de alineación
+(java, tableau, six_sigma, c++, c#, typescript, autocad, solidworks + clases
+de licencia de CR) + `Repository.backfill_requirements_canonico()` + CLI
+`enrich requirements-canonico`. `021` = idiomas que faltaban + alias +
+~180 conceptos nuevos curados del corpus real (retail, manufactura, calidad,
+contabilidad, finanzas, IT/soporte, RRHH). **Criterio de curación**: solo
+entra lo que nombra una competencia, herramienta, norma o método concreto
+(ni funciones como "ventas", ni sectores como "construcción", ni palabras
+vacías como "analysis").
+
+**5. CLI**: `enrich requirements-source [--apply] [--platform X] [--limit N]`
+(simulación por omisión; re-analiza y guarda con `--apply`).
+
+**Medición (COPIAS — la BD real quedó INTACTA)**:
+
+| Métrica | Antes | Después |
+|---|---|---|
+| Requisitos vigentes con `codigo_canonico` | 1071/1071 | **2172/2172** (1101 de `source_field`) |
+| Viabilidad `sin_datos` | 133 | **9** |
+| Viabilidad `aplicar` / `revisar` | 4 / 4 | 4 / 2 |
+| Paso 5 `sin_requisitos` | 123 | **9** |
+| Paso 5 `revisar_a_mano` | 111 | 275 |
+
+Los 9 que quedan en `sin_datos` son avisos cuyas skills son **frases de
+tarea o campos genéricos** ("desarrollo", "computer hardware"): no hay
+competencia que comparar y `sin_datos` es la respuesta honesta.
+
+**6. Postulaciones = REGISTRO (no señal de aptitud)**: `applied` = "postulada,
+sin respuesta o en proceso"; el rechazo solo se registra si el portal/correo
+lo dice explícitamente; **el silencio NO es rechazo**
+(`postulaciones.sin_respuesta`, `ETIQUETA_ESTADO`, columna `estado_texto` en
+`listar_postulaciones` y en el CSV del CLI).
+
+**Suite**: 846 → **922 tests verdes + 241 subtests**.
 
 ### 2026-11-04 — MOTOR DE VIABILIDAD (ajuste técnico) + POSTULACIONES + CAPA B
 

@@ -125,6 +125,17 @@ Cuando el usuario dice "vamos a otra sesión":
 .\.venv\Scripts\python.exe -X utf8 -m jobpulse_v15 enrich profile-canonico
 .\.venv\Scripts\python.exe -X utf8 -m jobpulse_v15 enrich profile-canonico --apply
 
+# ALINEACION: backfill del codigo canonico de los requisitos YA guardados
+# (la taxonomia crece con cada migracion: 020/021).
+.\.venv\Scripts\python.exe -X utf8 -m jobpulse_v15 enrich requirements-canonico
+.\.venv\Scripts\python.exe -X utf8 -m jobpulse_v15 enrich requirements-canonico --apply
+
+# ALINEACION: re-analisis que integra los CAMPOS ESTRUCTURADOS del aviso
+# (jobs.skills + jobs.languages). Sin esto, 135/535 avisos quedan sin
+# NINGUN requisito comparable (banda 'sin_datos'). Simula por omision.
+.\.venv\Scripts\python.exe -X utf8 -m jobpulse_v15 enrich requirements-source
+.\.venv\Scripts\python.exe -X utf8 -m jobpulse_v15 enrich requirements-source --apply
+
 # MOTOR DE VIABILIDAD = AJUSTE TECNICO (0-100) + banda. NO es probabilidad
 # de contratacion (ver docs/MOTOR_VIABILIDAD.md).
 .\.venv\Scripts\python.exe -X utf8 -m jobpulse_v15 viabilidad list [--banda aplicar]
@@ -339,6 +350,58 @@ ese caso mandan los que pide. Implementación: `matching.requisitos_efectivos`
   SEGUNDA persona con `docs/PASO5_REVISION_PENDIENTES.md` (el veredicto del
   autor de la regla se descarta por sesgo). NO actualizar estados hasta esa
   firma.
+
+## ALINEACIÓN: los campos estructurados del aviso también son requisitos (2026-11-04)
+
+Objetivo del software: encontrar, entre **TODOS** los puestos, los que tienen
+los requisitos más compatibles con la persona del CV. Para comparar un
+requisito del aviso con un hecho del perfil, los dos tienen que hablar el
+mismo idioma: la tabla `concepto` (variante → `codigo_canonico`). El motor
+**solo compara los requisitos con código** (`AND codigo_canonico IS NOT NULL`):
+los demás se ignoran **en silencio**.
+
+- **El texto no lo dice todo**: los avisos traen sus competencias en
+  `jobs.skills` y los **idiomas que piden** en `jobs.languages` (461/535 y
+  511/535 avisos del corpus). El extractor por reglas (`analysis.py`) solo lee
+  el texto → sin integrar esos campos, **135 de 535 avisos** quedaban sin
+  NINGÚN requisito comparable (banda `sin_datos` del motor).
+- **Módulo real**: `src/jobpulse_v15/skills_fuente.py` (tests
+  `tests/test_skills_fuente.py`). El análisis vive en
+  `analysis_flow.extract_job_analysis` (**implementación única**: la usan la
+  CLI, la UI clásica, la UI v2 y `run_full_flow`).
+- **Reglas duras**:
+  1. solo lo que resuelve a un concepto canónico (lo demás →
+     `concepto_no_normalizado`, la cola de curación; nunca se inventa un
+     código);
+  2. las **frases de tarea** no son competencias (`ats.es_frase_de_tarea`:
+     "soporte a equipos Dell" es tarea; "apertura de caja" es competencia);
+  3. el nivel es **`inferred`**: el campo dice QUÉ pide el aviso, no si es
+     obligatorio → nunca bloquea ni activa el tope de banda;
+  4. la **evidencia es literal** (la etiqueta del campo);
+  5. **no se duplica** lo que el texto ya dio (mismo código canónico).
+- **Idioma**: `jobs.languages` es "lo que el aviso PIDE" → manda sobre la
+  regla implícita del idioma del aviso. Los niveles se **normalizan**
+  (`idiomas.normalizar_nivel`: "B2", "b2", "B2+", "C1-C2", "fluent",
+  "intermedio", "nativo"). **Bug corregido**: la escala de niveles tenía las
+  claves en MAYÚSCULAS y los requisitos traen el nivel en minúsculas → la
+  comparación caía siempre en `no_verificable` y el gap de idioma se
+  escondía en silencio.
+- **Versión del análisis**: `analysis_flow.VERSION_ANALISIS` =
+  `"rules-2+fuente"` (distinta de `analysis.EXTRACTOR_VERSION`): las
+  revisiones viejas quedan como historial (`job_analysis.is_current`).
+- **CLI**: `enrich requirements-source [--apply] [--platform X] [--limit N]`
+  (simulación por omisión; `--apply` re-analiza y guarda). Lo que no resuelve
+  se encola en `concepto_no_normalizado` (`origen='oferta'`).
+- **Migraciones**: `020_conceptos_alineacion.sql` (java, tableau, six_sigma,
+  c++, c#, typescript, autocad, solidworks + clases de licencia CR) y
+  `021_taxonomia_fuente.sql` (idiomas que faltaban + alias + ~180 conceptos
+  nuevos curados del corpus real). **020/021 todavía NO se han aplicado a la
+  BD real** (esquema 19).
+- **Backfill**: `Repository.backfill_requirements_canonico()` + CLI
+  `enrich requirements-canonico [--apply]` (rellena solo los `NULL`).
+- **Medición (COPIAS, BD real intacta)**: requisitos vigentes con código
+  1071/1071 → **2172/2172** (1101 nuevos de `source_field`); viabilidad
+  `sin_datos` 133 → **9**; Paso 5 `sin_requisitos` 123 → 9.
 
 ## CAPA B — el perfil debe llevar `codigo_canonico` (2026-11-04)
 
@@ -675,34 +738,53 @@ desmarca (pestaña **“Áreas de empleo”** en `ui_perfil.py` → hechos
     debe aplicarse en silencio sobre la base real. Ojo: `init-db`, `backup` y
     `db check` NO migran (son los comandos explícitos).
 
-## Estado de referencia (verificado 2026-11-04, tras O2.2 + O3 + viabilidad)
+## Estado de referencia (verificado 2026-11-04 tarde, tras el bloque de ALINEACIÓN)
 
-- Suite: **846 tests verdes** + 241 subtests (`python -m pytest tests/ -q`,
-  ~3:05 min); `test_matching.py` 87, `test_areas.py` 20, `test_ubicaciones_cr.py`
-  34, `test_idiomas.py` 7, `test_salario.py` 16, `test_ats_ranking.py` 44,
-  `test_scraper.py` 11, `test_browser_manager.py` 21, `test_cuentas.py` 9,
-  `test_paso5.py` 6, `test_caches.py` 12, `test_diagnostico.py` 6,
-  `test_retencion.py` 13, `test_ui_v2.py` 95 (O2.2), `test_repository.py` 51
-  (O2.2 + O3), `test_clean_run.py` 6 (O3), `test_cli_sitios.py` 6 (O2.2 + O3),
-  `test_viabilidad.py` 12, `test_postulaciones.py` 21,
-  `test_postulaciones_persistencia.py` 8, `test_correo_postulaciones.py` 12,
-  `test_workday_postulaciones.py` 13, `test_perfil_canonico.py` 14,
-  `test_conceptos.py` 9, `test_migraciones.py` 14, `test_cli_viabilidad.py` 10.
-- **Esquema 19** (migraciones aplicadas solo en BDs de prueba: la real sigue
-  en 16): `017` educación granular · `018` postulaciones · `019` corrección
-  del alias `google-workspace` (NO es `microsoft-365`).
+- Suite: **922 tests verdes** + 241 subtests (`python -m pytest tests/ -q`,
+  ~4:15 min); `test_matching.py` 87, `test_areas.py` 20, `test_ubicaciones_cr.py`
+  34, `test_idiomas.py` 19 (+12 de niveles), `test_salario.py` 16,
+  `test_ats_ranking.py` 44, `test_scraper.py` 11, `test_browser_manager.py` 21,
+  `test_cuentas.py` 9, `test_paso5.py` 6, `test_caches.py` 12,
+  `test_diagnostico.py` 6, `test_retencion.py` 13, `test_ui_v2.py` 95 (O2.2),
+  `test_repository.py` 51 (O2.2 + O3), `test_clean_run.py` 6 (O3),
+  `test_cli_sitios.py` 6 (O2.2 + O3), `test_viabilidad.py` 12,
+  `test_postulaciones.py` 21, `test_postulaciones_persistencia.py` 8,
+  `test_correo_postulaciones.py` 12, `test_workday_postulaciones.py` 13,
+  `test_perfil_canonico.py` 14, `test_conceptos.py` 9, `test_migraciones.py` 27
+  (+13 de la 021), `test_cli_viabilidad.py` 19 (+4 de `requirements-source`),
+  `test_requisitos_canonico.py` 19 (bloque de alineación),
+  `test_skills_fuente.py` 24 (campos estructurados).
+- **Esquema 19 en la BD REAL** (la real sigue en 19: las migraciones `020` y
+  `021` **NO se han aplicado todavía**; sí están aplicadas en BDs de prueba):
+  `017` educación granular · `018` postulaciones · `019` corrección del alias
+  `google-workspace` (NO es `microsoft-365`) · `020` conceptos de alineación
+  · `021` taxonomía de los campos estructurados.
+- **Bloque de ALINEACIÓN implementado y MEDIDO sobre copias** (la BD real
+  intacta): `skills_fuente.py` (campos estructurados → requisitos) +
+  `analysis_flow` (implementación única) + `idiomas.normalizar_nivel` (fix del
+  bug de niveles) + `conceptos.resolver` (fallback a `value_text`) +
+  `Repository.backfill_requirements_canonico` + CLI
+  `enrich requirements-canonico` / `enrich requirements-source`.
+  Resultado: requisitos vigentes con código 1071/1071 → **2172/2172**;
+  viabilidad `sin_datos` 133 → **9**; Paso 5 `sin_requisitos` 123 → 9.
+  **PENDIENTE**: aplicar 020+021 + backfill + re-análisis en la BD real
+  (requiere confirmación del usuario; cualquier CLI sobre la BD real
+  auto-migra).
 - **Capa B IMPLEMENTADA** (perfil con `codigo_canonico`): resolver al
   guardar + backfill idempotente + `enrich profile-canonico`. La cola del
   perfil solo recibe conceptos (nada de títulos de puesto).
 - **Motor de VIABILIDAD implementado** (ajuste técnico, no probabilidad de
   contratación): `viabilidad.py` + CLI `viabilidad list|top` + columnas
   "Ajuste"/"Banda" en la UI v2. Calibración real sobre copia de la BD
-  (535 avisos): **aplicar 5 · revisar 17 · no prioritario 284 · sin datos
-  142 · veto 87** (sin semántica).
+  (535 avisos): **aplicar 4 · revisar 2 · no prioritario 433 · sin datos
+  9 · veto 87** (sin semántica, tras el bloque de alineación).
 - **Postulaciones implementadas** (estado del proceso, no de aptitud):
   núcleo puro + persistencia (018) + lector IMAP + parser de "Mis
   postulaciones" de Workday + CLI. **Pendiente de validación en vivo**:
   falta CDP (Brave con puerto de depuración) y la app-password de Gmail.
+  **Es REGISTRO, no señal de aptitud**: `applied` = "postulada, sin respuesta
+  o en proceso"; el rechazo solo se registra si el portal/correo lo dice
+  explícitamente; **el silencio NO es rechazo** (`postulaciones.sin_respuesta`).
 - **O2.2 COMPLETADO**: columna "Req." + filtro "solo con requisitos
   obligatorios" en UI clásica, UI v2 y CLI (ver §"Conteo de requisitos
   obligatorios"). Definición única en `Repository.search_jobs`.
