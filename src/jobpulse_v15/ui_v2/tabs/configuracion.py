@@ -223,6 +223,10 @@ class ConfiguracionTab(BaseTab):
         self._widgets["ia_rpm"] = self._fila_form(
             form, 5, "RPM:", ttk.Entry(form, width=12),
             hint=t("IA_RPM · vacío = sin rate limit (opt-in)"))
+        self._widgets["ia_max_vacantes"] = self._fila_form(
+            form, 6, "Máx. avisos:", ttk.Entry(form, width=12),
+            hint=t("IA_MAX_VACANTES · avisos por corrida · vacío = sin tope "
+                   "(súbelo o bájalo cuando quieras)"))
 
         botones = tk.Frame(card.body, bg=theme.color("surface"))
         botones.grid(row=2, column=0, sticky="w", pady=(10, 0))
@@ -841,22 +845,39 @@ class ConfiguracionTab(BaseTab):
             return
 
         def tarea() -> None:
-            base, arriba, error = "", False, ""
+            base, arriba, error, externo = "", False, "", False
             try:
                 from jobpulse_v15.ia_servidor import _config
-                base = _config()[0]
-                arriba = servidor_arriba(timeout=3.0)
+                base, es_local, _puerto = _config()
+                externo = not es_local
+                if not externo:
+                    arriba = servidor_arriba(timeout=3.0)
             except Exception as exc:  # noqa: BLE001
                 error = str(exc)
-            self._programar(lambda: self._pintar_estado(base, arriba, error))
+            self._programar(
+                lambda: self._pintar_estado(base, arriba, error, externo))
 
         self._lanzar_hilo(tarea)
 
-    def _pintar_estado(self, base: str, arriba: bool, error: str) -> None:
+    def _pintar_estado(self, base: str, arriba: bool, error: str,
+                       externo: bool = False) -> None:
         estado = self._widgets.get("ia_estado")
         if estado is None:
             return
         try:
+            if externo:
+                # La IA configurada es un proveedor externo: no hay servidor
+                # local que arrancar ni que parar (se usa el endpoint tal cual).
+                estado.configure(
+                    text=f"Estado: IA externa · {base} "
+                         "(no hay servidor local que arrancar)",
+                    fg=self.theme.color("text_muted"),
+                )
+                for clave in ("ia_arrancar", "ia_detener"):
+                    boton = self._widgets.get(clave)
+                    if boton is not None:
+                        boton.configure(state="disabled")
+                return
             if error:
                 estado.configure(
                     text=f"Estado: no se pudo comprobar — {error}",
@@ -888,6 +909,13 @@ class ConfiguracionTab(BaseTab):
             global _HANDLE_SERVIDOR
             ok, mensaje = False, ""
             try:
+                from jobpulse_v15.ia_servidor import _config
+                base, es_local, _puerto = _config()
+                if not es_local:
+                    raise RuntimeError(
+                        f"La IA configurada es EXTERNA ({base}): no hay "
+                        "servidor local que arrancar."
+                    )
                 handle = asegurar_servidor(on_log=None)
                 if handle is not None:      # None = ya estaba arriba
                     _HANDLE_SERVIDOR = handle
@@ -959,6 +987,7 @@ class ConfiguracionTab(BaseTab):
         self._set("ia_api_key", os.getenv("IA_API_KEY", "sk-no-key-needed"))
         self._set("ia_max", os.getenv("IA_MAX_LLAMADAS", ""))
         self._set("ia_rpm", os.getenv("IA_RPM", ""))
+        self._set("ia_max_vacantes", os.getenv("IA_MAX_VACANTES", ""))
 
     def _clave_proveedor(self) -> str:
         """Clave del proveedor elegido (el combo muestra nombres legibles)."""
@@ -996,8 +1025,10 @@ class ConfiguracionTab(BaseTab):
             return
         max_llamadas = self._get("ia_max")
         rpm = self._get("ia_rpm")
+        max_vacantes = self._get("ia_max_vacantes")
         for nombre, valor in (("IA_MAX_LLAMADAS", max_llamadas),
-                              ("IA_RPM", rpm)):
+                              ("IA_RPM", rpm),
+                              ("IA_MAX_VACANTES", max_vacantes)):
             if valor and not valor.isdigit():
                 self._warn("Límite inválido",
                            f"{nombre} debe ser un número entero "
@@ -1012,6 +1043,7 @@ class ConfiguracionTab(BaseTab):
                 # Vacío = sin tope: ia_api trata "" como falsy (opt-in).
                 "IA_MAX_LLAMADAS": max_llamadas,
                 "IA_RPM": rpm,
+                "IA_MAX_VACANTES": max_vacantes,
             }
             configuracion.guardar_env(valores)
         except OSError as exc:

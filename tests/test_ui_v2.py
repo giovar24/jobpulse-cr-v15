@@ -988,18 +988,33 @@ class TestConfiguracionTab(unittest.TestCase):
                              "http://localhost:11434/v1")
             self.pestana._set("ia_max", "100")
             self.pestana._set("ia_rpm", "")
+            self.pestana._set("ia_max_vacantes", "50")
             self.pestana.guardar_ia()
         self.assertTrue(guardar.called)
         valores = guardar.call_args.args[0]
-        self.assertEqual(valores["IA_PROVEEDOR"], "ollama")  # clave, no nombre
+        self.assertEqual(valores["IA_PROVEEDOR"], "ollama-local")  # clave, no nombre
         self.assertEqual(valores["IA_MAX_LLAMADAS"], "100")
         self.assertEqual(valores["IA_RPM"], "")  # vacío = sin tope
+        self.assertEqual(valores["IA_MAX_VACANTES"], "50")  # tope ajustable
 
         with unittest.mock.patch.object(config_ui, "guardar_env") as guardar:
             self.pestana._set("ia_max", "no-es-numero")
             self.pestana.guardar_ia()
         self.assertFalse(guardar.called)
         self.assertTrue(self.showwarning.called)
+
+    def test_ollama_cloud_es_un_preset_mas(self):
+        """La nube (acceso gratis) y Ollama local son opciones distintas."""
+        self.root.update()
+        with unittest.mock.patch.object(config_ui, "guardar_env") as guardar:
+            self.pestana._widgets["ia_proveedor"].set("Ollama Cloud")
+            self.pestana._on_proveedor()
+            self.assertEqual(self.pestana._get("ia_base_url"),
+                             "https://ollama.com/v1")
+            self.pestana.guardar_ia()
+        valores = guardar.call_args.args[0]
+        self.assertEqual(valores["IA_PROVEEDOR"], "ollama")
+        self.assertEqual(valores["IA_BASE_URL"], "https://ollama.com/v1")
 
     def test_guardar_ia_toma_effecto_en_la_misma_sesion(self):
         """load_dotenv NO pisa variables ya presentes: se actualiza os.environ."""

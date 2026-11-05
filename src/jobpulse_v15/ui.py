@@ -1801,6 +1801,13 @@ class JobPulseWindow:
                 dias = 30
 
             total_sel = len(sitios_seleccionados)
+            # IA externa: el texto de los avisos saldría de la máquina → se
+            # pide permiso ANTES de arrancar el barrido (el flujo completo
+            # enrichment se dispara al final del barrido).
+            if flujo_completo_var.get() and not self._confirmar_ia_externa(
+                parent=dialog
+            ):
+                return
             progress.configure(value=0, maximum=total_sel)
             resultado_text.delete("1.0", "end")
             resultado_text.insert("end", "Iniciando barridos...\n\n")
@@ -2111,9 +2118,12 @@ class JobPulseWindow:
                     _log("IA no configurada (Configuración → IA); paso omitido.\n")
                     veredicto = None
                 else:
-                    if servidor_arriba():
+                    cliente = iae.get_ia_client()
+                    es_local = bool(getattr(cliente, "es_local", False))
+                    if es_local and servidor_arriba():
                         _log("Servidor IA ya activo (no se toca).\n")
                     else:
+                        # IA externa: `asegurar_servidor` no arranca nada local.
                         servidor = asegurar_servidor(on_log=_log)
                     antes = ie.snapshot_enriquecimiento()
                     _log(
@@ -2230,18 +2240,50 @@ class JobPulseWindow:
 
         threading.Thread(target=_run, daemon=True).start()
 
+    def _confirmar_ia_externa(self, parent=None) -> bool:
+        """Pide confirmación si la IA configurada NO es local.
+
+        Con IA local (llama.cpp, LM Studio, Ollama local) el texto de los
+        avisos NO sale de la máquina. Con un proveedor externo (Ollama Cloud,
+        OpenRouter, Gemini, NVIDIA…) el texto viaja al servicio: hay que
+        avisar y pedir permiso ANTES de enviarlo. Devuelve True si se puede
+        seguir (IA local, IA no configurada o usuario conforme).
+        """
+        from jobpulse_v15 import ia_enrichment as iae
+
+        cliente = iae.get_ia_client()
+        if cliente is None:
+            return True
+        aviso = iae.aviso_privacidad(cliente)
+        if not aviso:
+            return True
+        return bool(
+            messagebox.askyesno(
+                "IA externa: el texto sale de esta máquina",
+                aviso
+                + "\n\n¿Continuar con el enriquecimiento?",
+                parent=parent if parent is not None else self.root,
+            )
+        )
+
     def open_enriquecimiento(self) -> None:
         """O7.3: enriquecimiento IA con el servidor bajo demanda.
 
         Arranca el servidor local si hace falta (y lo detiene al terminar SOLO
         si esta ventana lo arrancó), corre el pase completo (idempotente) y
         refresca la lista principal.
+
+        Si la IA configurada es EXTERNA, pide confirmación antes de enviar
+        el texto de los avisos (el pase arranca solo al abrir la ventana).
         """
         import asyncio
 
         from jobpulse_v15 import ia_enrichment as iae
         from jobpulse_v15 import ia_estado as ie
         from jobpulse_v15.ia_servidor import asegurar_servidor, servidor_arriba
+
+        if not self._confirmar_ia_externa(parent=self.root):
+            return
 
         dialog = tk.Toplevel(self.root)
         dialog.title("Enriquecimiento IA")
@@ -2288,9 +2330,12 @@ class JobPulseWindow:
                     _log("ERROR: IA no configurada (Configuración → IA, o .env).")
                     dialog.after(0, lambda: status_var.set("IA no configurada"))
                     return
-                if servidor_arriba():
+                cliente = iae.get_ia_client()
+                es_local = bool(getattr(cliente, "es_local", False))
+                if es_local and servidor_arriba():
                     _log("Servidor IA ya activo (no se toca).")
                 else:
+                    # IA externa: `asegurar_servidor` no arranca nada local.
                     servidor = asegurar_servidor(on_log=_log)
                 dialog.after(0, lambda: info_var.set("Enriqueciendo..."))
                 antes = ie.snapshot_enriquecimiento()

@@ -1,13 +1,16 @@
 # Enriquecimiento IA (O1) — operación y configuración
 
-Cómo funciona el enriquecimiento de ofertas con IA local (llama.cpp) y cómo
-operarlo/depurarlo. Todo configurable desde `.env` (sin tocar código).
+Cómo funciona el enriquecimiento de ofertas con IA (local llama.cpp **o**
+externa: Ollama, LM Studio, gateways cloud) y cómo operarlo/depurarlo. Todo
+configurable desde `.env` (sin tocar código).
 
 ## Arquitectura
 
 ```
 BD jobs ──> ia_enrichment.run_ia_enrichment ──> IAClient (OpenAI-compat)
-                                               └─> llama-server (puerto 8081)
+                                               ├─> llama-server local (8081)
+                                               └─> proveedor externo (Ollama Cloud,
+                                                   LM Studio, OpenRouter, Gemini…)
 ```
 
 - Campos **críticos**: `city`, `region`, `work_mode`, `date_published`.
@@ -28,6 +31,67 @@ Verificación rápida:
 python start_ia_server.py --check     # exit 0 = arriba / 1 = apagado
 ```
 
+## IA externa: Ollama, LM Studio y cloud gratis
+
+La IA local (Gemma/llama.cpp) y la IA externa usan **el mismo cliente y el
+mismo pase**: no hay dos implementaciones. Lo único que cambia es el
+proveedor del `.env`.
+
+### Proveedores (presets)
+
+| `IA_PROVEEDOR` | Qué es | `IA_BASE_URL` por defecto | API key |
+|---|---|---|---|
+| `custom` | llama.cpp / vLLM / cualquier OpenAI-compatible | (la del `.env`) | no hace falta |
+| `ollama` | **Ollama Cloud** (cuenta gratis en la nube) | `https://ollama.com/v1` | `OLLAMA_API_KEY` (opcional) |
+| `ollama-local` | Ollama instalado en esta máquina | `http://localhost:11434/v1` | no |
+| `lmstudio` | LM Studio (servidor local) | `http://localhost:1234/v1` | no |
+| `openrouter` | OpenRouter | `https://openrouter.ai/api/v1` | `OPENROUTER_API_KEY` |
+| `nvidia` | NVIDIA NIM | `https://integrate.api.nvidia.com/v1` | `NVIDIA_API_KEY` |
+| `google` | Google Gemini | `https://generativelanguage.googleapis.com/v1beta/openai/` | `GEMINI_API_KEY` |
+
+La lista vive en `ia_api.PRESETS` (fuente única): las dos UIs la muestran y
+la guardan en el `.env`.
+
+### Ejemplo: Ollama Cloud (acceso gratis)
+
+```env
+IA_PROVEEDOR=ollama
+IA_BASE_URL=https://ollama.com/v1
+IA_MODEL=<modelo del endpoint>     # o "auto" si el proveedor lo resuelve
+OLLAMA_API_KEY=...                 # si la cuenta lo exige
+```
+
+### Qué cambia al usar un proveedor externo
+
+1. **No se arranca nada local**: `ia_servidor.asegurar_servidor()` devuelve
+   `None` si el endpoint no es de esta máquina (antes fallaba con
+   *"Servidor EXTERNO no responde"* porque buscaba `/health`).
+2. **Degradación del formato de respuesta**: muchos OpenAI-compatible no
+   aceptan `response_format: json_schema` estricto (→ HTTP 400). El cliente
+   degrada solo: `json_schema` → `json_object` → sin `response_format`
+   (el prompt ya pide JSON). Un 429/404 **no** degrada: son errores reales.
+3. **Preflight con el mensaje correcto**: si no responde, el error dice qué
+   revisar (URL, modelo, API key) en vez de "arranca llama-server".
+4. **Privacidad**: el texto de los avisos (descripción, requisitos y perfil)
+   **sale de la máquina**. Por eso:
+   - la UI pide confirmación antes de enrichcer con IA no local
+     (botón "Enriquecer" y "Flujo completo");
+   - el CLI pide confirmación por consola (`--confirmar-externo` la omite
+     para corridas no interactivas);
+   - el pase deja el aviso en el log de la corrida.
+
+### Límites (opt-in y ajustables)
+
+| Variable | Qué limita | Vacío |
+|---|---|---|
+| `IA_MAX_LLAMADAS` | llamadas HTTP por corrida | sin tope |
+| `IA_RPM` | requests por minuto | sin rate limit |
+| `IA_MAX_VACANTES` | **avisos a enriquecer por corrida** | sin tope (todo lo pendiente) |
+
+Ningún límite tiene valor fijo: el usuario los sube o los baja cuando
+quiere (Configuración → IA externa, en ambas UIs, o editando el `.env`).
+`IA_MAX_VACANTES=0` también significa "sin tope".
+
 ## Ejecutar el pase
 
 ```powershell
@@ -46,6 +110,18 @@ IA_PROVEEDOR=custom
 IA_BASE_URL=http://127.0.0.1:8081/v1
 IA_MODEL=gemma4-e2b-qat
 IA_API_KEY=...            # llama.cpp acepta cualquier valor
+
+# IA externa (alternativas a la local): Ollama Cloud, Ollama local,
+# LM Studio, OpenRouter, NVIDIA, Gemini o cualquier OpenAI-compatible.
+# IA_PROVEEDOR=ollama
+# IA_BASE_URL=https://ollama.com/v1
+# IA_MODEL=gpt-oss:120b
+# OLLAMA_API_KEY=...
+
+# Límites (opt-in, vacío = sin tope):
+# IA_MAX_LLAMADAS=
+# IA_RPM=
+# IA_MAX_VACANTES=
 ```
 
 Variables de rutas (compartidas por `start_ia_server.py` y el instalador):

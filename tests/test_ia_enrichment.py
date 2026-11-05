@@ -6,6 +6,7 @@ pase completo (incluye jobs que solo necesitan campos secundarios) y
 persistencia en BD.
 """
 import asyncio
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -388,7 +389,7 @@ class TestPaseCompleto(unittest.TestCase):
     def test_ciclos_y_pase_completo(self):
         llamadas = []
 
-        async def fake_run(limit=50, only_critical=True):
+        async def fake_run(limit=50, only_critical=True, db_path=None):
             llamadas.append(("crit" if only_critical else "full", limit))
             if only_critical:
                 if len([c for c in llamadas if c[0] == "crit"]) == 1:
@@ -399,9 +400,11 @@ class TestPaseCompleto(unittest.TestCase):
                                          fields_filled={"skills": 2})}
 
         eventos = []
-        with patch.object(iae, "run_ia_enrichment", fake_run), \
+        with patch.dict(os.environ, {}, clear=False), \
+             patch.object(iae, "run_ia_enrichment", fake_run), \
              patch.object(iae, "get_ia_client", lambda: FakeIAClient()), \
              patch.object(iae, "verificar_servidor_ia", self._verificar_ok):
+            os.environ.pop("IA_MAX_VACANTES", None)  # sin tope (opt-in)
             r = self._run(iae.pase_completo(on_event=eventos.append))
         self.assertEqual(len(r["ciclos"]), 2)  # 1 con trabajo + 1 vacío = stop
         self.assertEqual(r["completo"]["total"], 5)
@@ -416,15 +419,17 @@ class TestPaseCompleto(unittest.TestCase):
     def test_solo_criticos_no_corre_pase_completo(self):
         llamadas = []
 
-        async def fake_run(limit=50, only_critical=True):
+        async def fake_run(limit=50, only_critical=True, db_path=None):
             llamadas.append(("crit" if only_critical else "full", limit))
             if only_critical:
                 return {"stats": self._stats()}
             raise AssertionError("el pase completo no debe correr con --solo-criticos")
 
-        with patch.object(iae, "run_ia_enrichment", fake_run), \
+        with patch.dict(os.environ, {}, clear=False), \
+             patch.object(iae, "run_ia_enrichment", fake_run), \
              patch.object(iae, "get_ia_client", lambda: FakeIAClient()), \
              patch.object(iae, "verificar_servidor_ia", self._verificar_ok):
+            os.environ.pop("IA_MAX_VACANTES", None)  # sin tope (opt-in)
             r = self._run(iae.pase_completo(solo_criticos=True))
         self.assertIsNone(r["completo"])
         self.assertEqual([c[0] for c in llamadas], ["crit"])
@@ -436,7 +441,7 @@ class TestPaseCompleto(unittest.TestCase):
         self.assertIn("no configurada", r["error"])
 
     def test_error_del_pase_se_propaga_con_lo_acumulado(self):
-        async def fake_run(limit=50, only_critical=True):
+        async def fake_run(limit=50, only_critical=True, db_path=None):
             if len([1]) == 1 and only_critical:
                 # primer ciclo ok, segundo ciclo revienta
                 if not getattr(fake_run, "_ya", False):

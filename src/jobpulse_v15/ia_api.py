@@ -27,6 +27,8 @@ from typing import Any, Dict, List, Optional
 
 import httpx
 
+from jobpulse_v15.ia_servidor import es_endpoint_local
+
 logger = logging.getLogger("jobpulse.ia")
 
 # ──────────────────────────────────────────────────────────────
@@ -70,6 +72,13 @@ PRESETS: Dict[str, ProviderPreset] = {
         modelo_default="auto",
         requiere_key=False,
     ),
+    "ollama-local": ProviderPreset(
+        nombre="Ollama (local)",
+        base_url="http://localhost:11434/v1",
+        env_key="OLLAMA_API_KEY",
+        modelo_default="auto",
+        requiere_key=False,
+    ),
     "lmstudio": ProviderPreset(
         nombre="LM Studio (local)",
         base_url="http://localhost:1234/v1",
@@ -90,6 +99,29 @@ PROVEEDOR_NOMBRES = {k: v.nombre for k, v in PRESETS.items()}
 
 PROMPT_VERSION = "v3"  # invalida cache al cambiar
 
+
+def opt_int(explicito: Optional[int], env: Optional[str]) -> Optional[int]:
+    """Resuelve un límite OPT-IN: explícito > variable de entorno > sin tope.
+
+    ``None`` significa SIN TOPE (se procesa todo). Una cadena vacía (así
+    queda en el ``.env`` cuando la UI deja el campo en blanco) también
+    significa "sin tope", y un valor no numérico se descarta con aviso en
+    vez de reventar el arranque.
+    """
+    if explicito is not None:
+        return explicito if explicito > 0 else None
+    if env is None:
+        return None
+    texto = str(env).strip()
+    if not texto:
+        return None
+    try:
+        valor = int(texto)
+    except ValueError:
+        logger.warning("IA: límite ignorado, no es un número: %r", env)
+        return None
+    return valor if valor > 0 else None
+
 # ──────────────────────────────────────────────────────────────
 # Errores
 # ──────────────────────────────────────────────────────────────
@@ -106,6 +138,12 @@ class IAModeloError(IAError):
 
 class IACuotaError(IAError):
     """429 / 402 - cuota agotada."""
+
+
+class IAPeticionError(IAError):
+    """400 / 422 - el proveedor RECHAZÓ la petición (p.ej. no soporta
+    ``response_format: json_schema``). Es la unica clase de error que
+    justifica reintentar con otro modo de respuesta (fallback)."""
     pass
 
 
@@ -160,28 +198,30 @@ class IAClient:
         *,
         timeout: float = 120.0,
         lote: int = 8,
-        max_vacantes: int = 60,
+        max_vacantes: Optional[int] = None,
         max_llamadas: Optional[int] = None,
         rpm: Optional[int] = None,
     ) -> None:
         """
         Args:
             config: dict con claves opcionales:
-                - proveedor: "openrouter" | "nvidia" | "google" | "ollama" | "lmstudio" | "custom"
+                - proveedor: "openrouter" | "nvidia" | "google" | "ollama" |
+                  "ollama-local" | "lmstudio" | "custom"
                 - base_url: override (requerido si proveedor="custom")
                 - modelo: override del default del preset
                 - api_key: override (si no, usa env var del preset)
             timeout: timeout por request (segundos)
             lote: tamano de lote para procesamiento batch
-            max_vacantes: tope de items a evaluar en una corrida
+            max_vacantes: tope de avisos a procesar por corrida.
+                None (default) -> toma IA_MAX_VACANTES; si no hay env var:
+                SIN TOPE (se procesa todo lo pendiente). Un int explicito
+                siempre gana. 0 o negativo = sin tope.
             max_llamadas: tope de llamadas HTTP por corrida.
                 None (default) -> toma IA_MAX_LLAMADAS; si no hay env var:
-                servidores LOCALES (127.0.0.1/localhost) sin tope practico
-                (no hay costo), APIs EXTERNAS conservan el tope
-                conservador de pago (12). Un int explicito siempre gana.
+                SIN TOPE (regla del proyecto: los limites son opt-in).
+                Un int explicito siempre gana.
             rpm: requests por minuto (rate limit).
-                None (default) -> toma IA_RPM; si no hay env var: 60 para
-                servidores locales, 8 para externos de pago.
+                None (default) -> toma IA_RPM; si no hay env var: SIN tope.
         """
         config = config or {}
 
@@ -227,27 +267,23 @@ class IAClient:
 
         # Parámetros de control.
         # POR DEFECTO NO HAY TOPE (salir corriendo no es gratis en una API
-        # local y el usuario decide si pone limites). Los limites son
-        # OPT-IN para APIs externas de pago, via .env (IA_MAX_LLAMADAS /
-        # IA_RPM) o via argumento explicito. Un int explicito siempre gana.
+        # externa y el usuario decide si pone limites). Los limites son
+        # OPT-IN, via .env (IA_MAX_LLAMADAS / IA_RPM / IA_MAX_VACANTES) o
+        # via argumento explicito. Un int explicito siempre gana.
         self.timeout = timeout
         self.lote = lote
-        self.max_vacantes = max_vacantes
-        self._es_local = (
-            "127.0.0.1" in self.base_url or "localhost" in self.base_url
-        )
+        self.max_vacantes = opt_int(max_vacantes, os.getenv("IA_MAX_VACANTES"))
+        # Mismo criterio que `ia_servidor`: de esto depende el aviso de
+        # privacidad (si el texto sale de la máquina o no).
+        self._es_local = es_endpoint_local(self.base_url)
         if max_llamadas is not None:
             self.max_llamadas = max_llamadas            # explicito gana
-        elif os.getenv("IA_MAX_LLAMADAS"):
-            self.max_llamadas = int(os.getenv("IA_MAX_LLAMADAS"))
         else:
-            self.max_llamadas = None                    # sin tope
+            self.max_llamadas = opt_int(None, os.getenv("IA_MAX_LLAMADAS"))
         if rpm is not None:
             self.rpm = rpm
-        elif os.getenv("IA_RPM"):
-            self.rpm = int(os.getenv("IA_RPM"))
         else:
-            self.rpm = None                             # sin rate limit
+            self.rpm = opt_int(None, os.getenv("IA_RPM"))
 
         # Estado runtime
         self.llamadas = 0
@@ -324,6 +360,15 @@ class IAClient:
                     await asyncio.sleep(5)
                     continue
                 raise IACuotaError(f"Cuota agotada o rate limit ({resp.status_code})")
+            if resp.status_code in (400, 422):
+                # El proveedor rechazo la peticion (formato, modelo, schema).
+                # NO se reintenta igual: hay que degradar el modo de respuesta.
+                raise IAPeticionError(
+                    f"El proveedor rechazo la peticion ({resp.status_code}): "
+                    f"{resp.text[:300]}"
+                )
+            if resp.status_code == 403:
+                raise IAError(f"Acceso denegado (403): {resp.text[:200]}")
             if resp.status_code >= 500:
                 if intento == 0:
                     await asyncio.sleep(3)
@@ -353,6 +398,26 @@ class IAClient:
         except Exception as e:
             logger.warning("IA listar_modelos falló (%s): %s", self.proveedor, e)
             return []
+
+    async def _resolver_modelo(self) -> str:
+        """Resuelve el modelo cuando está en "auto" (Ollama, LM Studio…).
+
+        ``IA_MODEL=auto`` (o vacío) hace que el cliente pregunte ``GET /models``
+        y use el primer modelo disponible. Si el endpoint no expone modelos,
+        el error es explícito: hay que definir ``IA_MODEL`` en el ``.env``.
+        """
+        if self.modelo:
+            return self.modelo
+        modelos = await self.listar_modelos()
+        if not modelos:
+            raise IAModeloError(
+                f"No se pudo autodetectar el modelo en {self.base_url} "
+                f"({self.proveedor}): el endpoint no devolvió /models. "
+                "Define IA_MODEL en el .env."
+            )
+        self.modelo = modelos[0]
+        logger.info("IA: modelo autodetectado (%s): %s", self.proveedor, self.modelo)
+        return self.modelo
 
     def chat(
         self,
@@ -384,8 +449,12 @@ class IAClient:
         if self.max_llamadas is not None and self.llamadas >= self.max_llamadas:
             raise IAError(f"Límite de llamadas alcanzado ({self.max_llamadas})")
 
+        # "auto" (Ollama, LM Studio): se resuelve con GET /models antes de
+        # armar la caché (la clave depende del modelo).
+        modelo = await self._resolver_modelo()
+
         # Cache key
-        cache_key = _cache_key(self.proveedor, self.modelo, messages,
+        cache_key = _cache_key(self.proveedor, modelo, messages,
                                temperature=temperature, max_tokens=max_tokens,
                                response_format=response_format)
         if use_cache:
@@ -395,7 +464,7 @@ class IAClient:
                 return cached
 
         payload = {
-            "model": self.modelo,
+            "model": modelo,
             "messages": messages,
             "temperature": temperature,
             "max_tokens": max_tokens,
@@ -431,19 +500,55 @@ class IAClient:
     ) -> Dict:
         """
         Chat completion que exige respuesta JSON válido.
-        Si schema se provee, usa response_format={type: "json_schema", ...}
+
+        Modos de respuesta, en orden de preferencia y con DEGRADACION
+        automatica si el proveedor los rechaza (400/422):
+
+        1. ``json_schema`` estricto (llama.cpp, OpenAI, OpenRouter);
+        2. ``json_object`` (Gemini/OpenAI-compat, LM Studio, Ollama…);
+        3. sin ``response_format`` (el prompt ya pide JSON; el cliente
+           limpia la respuesta con ``_json_de_texto``).
+
+        Solo se degrada ante un rechazo del PROVEEDOR (``IAPeticionError``):
+        un 429, un 404 de modelo o el tope de llamadas se propagan tal cual
+        (degradar ahi gastaria dinero y esconderia el error real).
         """
-        rf = None
+        modos: List[Optional[Dict]] = []
         if schema:
-            rf = {"type": "json_schema", "json_schema": {"name": "response", "schema": schema, "strict": True}}
-        else:
-            rf = {"type": "json_object"}
+            modos.append({
+                "type": "json_schema",
+                "json_schema": {"name": "response", "schema": schema, "strict": True},
+            })
+        modos.append({"type": "json_object"})
+        modos.append(None)
 
-        resp = await self.achat(messages, temperature=temperature, max_tokens=max_tokens,
-                                response_format=rf, use_cache=use_cache)
+        ultimo_error: Optional[Exception] = None
+        for modo in modos:
+            try:
+                resp = await self.achat(
+                    messages,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                    response_format=modo,
+                    use_cache=use_cache,
+                )
+            except IAPeticionError as exc:
+                ultimo_error = exc
+                logger.info(
+                    "IA: el proveedor rechazo el modo de respuesta (%s); "
+                    "se degrada a %s",
+                    str(exc)[:120],
+                    "json_object" if modo and modo.get("type") == "json_schema"
+                    else "sin response_format",
+                )
+                continue
+            content = resp["choices"][0]["message"]["content"]
+            return self._json_de_texto(content)
 
-        content = resp["choices"][0]["message"]["content"]
-        return self._json_de_texto(content)
+        raise IAError(
+            "El proveedor no acepto ningun modo de respuesta JSON: "
+            f"{ultimo_error}"
+        )
 
     @staticmethod
     def _json_de_texto(texto: str) -> Dict:

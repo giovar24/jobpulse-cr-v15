@@ -22,8 +22,10 @@ Equivalentes CLI (raíz del repo):
     python start_ia_server.py            # verifica; si no responde, arranca
     python start_ia_server.py --check     # solo verifica (exit 1 si apagado)
 
-Servidor EXTERNO: si IA_BASE_URL no es 127.0.0.1/localhost, jamás se intenta
-arrancar nada local — solo se reporta si responde o no.
+Servidor EXTERNO (Ollama Cloud, OpenRouter, Gemini, LM Studio remoto…): si
+``IA_BASE_URL`` no apunta a esta máquina (``ia_servidor.es_endpoint_local``),
+jamás se intenta arrancar nada local — el pase IA usa directamente el
+endpoint del proveedor.
 """
 from __future__ import annotations
 
@@ -32,6 +34,7 @@ import subprocess
 import time
 from pathlib import Path
 from typing import Callable, Optional
+from urllib.parse import urlparse
 
 import httpx
 from dotenv import load_dotenv
@@ -41,12 +44,39 @@ from jobpulse_v15.instalacion_ia import modelo_dir, ruta_llama_server
 # Raíz del repo (src/jobpulse_v15/ia_servidor.py -> parents[2] = raíz).
 RAIZ = Path(__file__).resolve().parents[2]
 
+#: Hosts que cuentan como "esta máquina" (el texto NO sale de la PC).
+HOSTS_LOCALES = frozenset({
+    "127.0.0.1", "localhost", "::1", "0.0.0.0", "host.docker.internal",
+})
+
+
+def es_endpoint_local(base_url: Optional[str] = None) -> bool:
+    """True si el endpoint IA corre en ESTA máquina (nada sale de la PC).
+
+    Sin argumento usa ``IA_BASE_URL`` del ``.env``. Un host como
+    ``127.0.0.2`` o ``localhost`` es local; ``ollama.com``,
+    ``openrouter.ai`` o ``generativelanguage.googleapis.com`` NO lo son
+    (ahí el texto de los avisos viaja a un servicio externo).
+    """
+    if not base_url:
+        base_url = _config()[0]
+    try:
+        host = (urlparse(base_url).hostname or "").strip().lower()
+    except ValueError:
+        host = ""
+    if not host:
+        # URL sin esquema (p.ej. "127.0.0.1:8081/v1"): fallback textual.
+        host = base_url.split("/")[0].split(":")[0].lower()
+    if host in HOSTS_LOCALES:
+        return True
+    return host.startswith("127.")
+
 
 def _config() -> tuple[str, bool, str]:
     """(base_url, es_local, puerto) según .env/env — se lee en cada llamada."""
     load_dotenv(RAIZ / ".env")
     base_url = (os.getenv("IA_BASE_URL") or "http://127.0.0.1:8081/v1").rstrip("/")
-    es_local = "127.0.0.1" in base_url or "localhost" in base_url
+    es_local = es_endpoint_local(base_url)
     if ":" in base_url.split("/")[-2]:
         puerto = base_url.split("/")[-2].split(":")[-1]
     else:
@@ -177,7 +207,19 @@ def asegurar_servidor(
 
     El caller SOLO debe detener lo que reciba (política O7.3: el servidor
     preexistente del usuario nunca se toca).
+
+    IA EXTERNA (Ollama Cloud, OpenRouter, Gemini, LM Studio en otra máquina…):
+    NO hay nada local que arrancar, así que se devuelve ``None`` sin intentar
+    nada. El preflight real lo hace ``ia_enrichment.verificar_servidor_ia``,
+    que habla el protocolo del proveedor (no ``/health``).
     """
+    base_url, es_local, _ = _config()
+    if not es_local:
+        # Endpoint externo: jamás se arranca llama-server (y jamás se detiene
+        # un proceso que no es nuestro).
+        if on_log:
+            on_log(f"IA externa ({base_url}): no se arranca servidor local.")
+        return None
     if servidor_arriba():
         return None
     return arrancar_servidor(on_log=on_log)

@@ -26,7 +26,14 @@ from jobpulse_v15.ubicaciones_cr import ciudad_es_valida, es_provincia_valida
 
 # Import IA client
 try:
-    from jobpulse_v15.ia_api import IAClient, IAError, IAModeloError, IACuotaError
+    from jobpulse_v15.ia_api import (
+        IAClient,
+        IAError,
+        IAModeloError,
+        IACuotaError,
+        PROVEEDOR_NOMBRES,
+        opt_int,
+    )
     IA_AVAILABLE = True
 except ImportError:
     IA_AVAILABLE = False
@@ -34,6 +41,8 @@ except ImportError:
     IAError = Exception
     IAModeloError = Exception
     IACuotaError = Exception
+    PROVEEDOR_NOMBRES = {}
+    opt_int = None  # type: ignore[assignment]
 
 logger = logging.getLogger("jobpulse.ia_enrich")
 
@@ -460,10 +469,14 @@ def needs_secondary_enrichment(job: Dict[str, Any]) -> bool:
 
 
 async def verificar_servidor_ia(client: IAClient) -> Optional[str]:
-    """Preflight: verifica que el servidor IA responde antes del pase.
+    """Preflight: verifica que el backend IA responde antes del pase.
 
     Devuelve None si responde, o un mensaje de error si no. Evita lanzar
     el pase completo cuando el backend esta apagado (mil fallas en fila).
+
+    El mensaje distingue LOCAL (llama.cpp/LM Studio/Ollama local: hay que
+    arrancar el proceso) de EXTERNO (Ollama Cloud, OpenRouter, Gemini…: hay
+    que revisar la URL, el modelo y la API key).
     """
     try:
         await client.chat_json(
@@ -482,11 +495,57 @@ async def verificar_servidor_ia(client: IAClient) -> Optional[str]:
         )
         return None
     except Exception as e:
+        base = getattr(client, "base_url", "?")
+        modelo = getattr(client, "modelo", "?")
+        if getattr(client, "es_local", False):
+            return (
+                f"El servidor IA local no responde en {base} "
+                f"(modelo {modelo}): {e}. "
+                "Arranca llama-server y reintenta."
+            )
         return (
-            f"Servidor IA no responde en {getattr(client, 'base_url', '?')} "
-            f"(modelo {getattr(client, 'modelo', '?')}): {e}. "
-            "Arranca llama-server y reintenta."
+            f"El proveedor IA externo no responde en {base} "
+            f"(modelo {modelo}): {e}. "
+            "Verifica IA_BASE_URL / IA_MODEL y la API key del proveedor."
         )
+
+
+def aviso_privacidad(client: Any) -> Optional[str]:
+    """Texto de aviso cuando la IA NO es local (o ``None`` si es local).
+
+    Con IA local (llama.cpp, LM Studio, Ollama local) el texto de los avisos
+    NO sale de la máquina. Con un proveedor externo (Ollama Cloud, OpenRouter,
+    Gemini, NVIDIA…) el texto viaja al servicio: hay que avisar ANTES de
+    enviarlo, no después.
+    """
+    if client is None:
+        return None
+    if getattr(client, "es_local", False):
+        return None
+    proveedor = getattr(client, "proveedor", "") or "externo"
+    nombre = PROVEEDOR_NOMBRES.get(proveedor, proveedor)
+    base = getattr(client, "base_url", "?")
+    return (
+        f"IA externa ({nombre} — {base}): el TEXTO de los avisos "
+        "(descripción, requisitos y datos del perfil) se enviará a ese "
+        "servicio y sale de esta máquina. JobPulse no guarda el texto del "
+        "mensaje, pero el proveedor sí recibe el prompt."
+    )
+
+
+def tope_vacantes(explicito: Optional[int] = None) -> Optional[int]:
+    """Tope de avisos a enriquecer por corrida — OPT-IN y AJUSTABLE.
+
+    ``None`` = SIN TOPE (se procesa todo lo pendiente). El valor sale de
+    ``IA_MAX_VACANTES`` (``.env`` o la tarjeta "IA externa" de la UI v2);
+    el usuario lo sube o lo baja cuando quiera. Un entero explícito
+    (argumento) siempre gana; ``0`` o negativo = sin tope.
+    """
+    if explicito is not None:
+        return explicito if explicito > 0 else None
+    if opt_int is None:
+        return None
+    return opt_int(None, os.getenv("IA_MAX_VACANTES"))
 
 
 def get_ia_client() -> Optional[IAClient]:
@@ -528,20 +587,29 @@ MAPEO_SAVE = {
 async def run_ia_enrichment(
     db_path: str = "data/jobpulse_v15.db",
     limit: int = 50,
-    only_critical: bool = True
+    only_critical: bool = True,
+    max_vacantes: Optional[int] = None,
 ) -> Dict[str, Any]:
     """
     Pipeline principal: carga jobs sin campos críticos, enriquece campo por campo, guarda.
+
+    ``max_vacantes`` (o ``IA_MAX_VACANTES``) limita cuántos avisos se toman
+    en esta llamada; es OPT-IN: sin valor no hay tope.
     """
     from dotenv import load_dotenv
     load_dotenv()  # asegura IA_* disponibles tambien desde UI/scripts
 
     if not IA_AVAILABLE:
         return {"error": "IA client no disponible (import failed)"}
-    
+
     ia_client = get_ia_client()
     if not ia_client:
         return {"error": "IA no configurada (ver .env: IA_PROVEEDOR, IA_BASE_URL, IA_MODEL, IA_API_KEY)"}
+
+    # Tope de avisos (opt-in, ajustable desde .env / UI).
+    tope = tope_vacantes(max_vacantes)
+    if tope is not None and tope < limit:
+        limit = tope
 
     # Preflight: si el backend esta apagado, abortar de inmediato y no
     # generar una avalancha de fallos job por job.
@@ -575,7 +643,7 @@ async def run_ia_enrichment(
         job_ids = [row[0] for row in cur.fetchall()]
     
     if not job_ids:
-        return {"stats": {"total": 0, "enriched": 0, "skipped": 0, "failed": 0}, "message": "No hay jobs para enriquecer"}
+        return {"stats": {"total": 0, "seleccionados": 0, "enriched": 0, "skipped": 0, "failed": 0}, "message": "No hay jobs para enriquecer"}
     
     # Cargar jobs completos
     jobs = []
@@ -591,10 +659,10 @@ async def run_ia_enrichment(
             jobs.append(job)
     
     if not jobs:
-        return {"stats": {"total": len(job_ids), "enriched": 0, "skipped": len(job_ids), "failed": 0}, "message": "Todos los jobs ya tienen campos críticos"}
-    
+        return {"stats": {"total": len(job_ids), "seleccionados": len(job_ids), "enriched": 0, "skipped": len(job_ids), "failed": 0}, "message": "Todos los jobs ya tienen campos críticos"}
+
     # Enriquecer en lotes
-    stats = {"total": len(jobs), "enriched": 0, "skipped": 0, "failed": 0, "fields_filled": {"city": 0, "region": 0, "work_mode": 0, "date_published": 0, "employment_type": 0, "salary": 0, "skills": 0, "languages": 0}}
+    stats = {"total": len(jobs), "seleccionados": len(job_ids), "enriched": 0, "skipped": 0, "failed": 0, "fields_filled": {"city": 0, "region": 0, "work_mode": 0, "date_published": 0, "employment_type": 0, "salary": 0, "skills": 0, "languages": 0}}
     
     batch_size = 3  # Lotes pequeños para modelo pequeño
     updated_jobs = []
@@ -667,6 +735,8 @@ async def run_ia_enrichment(
 async def pase_completo(
     solo_criticos: bool = False,
     on_event=None,
+    max_vacantes: Optional[int] = None,
+    db_path: str = "data/jobpulse_v15.db",
 ) -> Dict[str, Any]:
     """Orquestación completa del enriquecimiento (compartida CLI/UI, O7.3).
 
@@ -676,7 +746,9 @@ async def pase_completo(
     languages) para los jobs que les falte algo.
 
     ``on_event(texto)`` recibe el avance ciclo por ciclo (para logs o UI).
-    Devuelve ``{"ciclos": [stats...], "completo": stats | None}`` o
+    ``max_vacantes`` (o ``IA_MAX_VACANTES``) es el tope de avisos de la
+    corrida: OPT-IN y AJUSTABLE — sin valor no hay tope (se procesa todo lo
+    pendiente). Devuelve ``{"ciclos": [stats...], "completo": stats | None}`` o
     ``{"error": ...}`` (con lo acumulado hasta el fallo, si hubo).
     """
     def _reporta(texto: str) -> None:
@@ -692,20 +764,41 @@ async def pase_completo(
     cliente = get_ia_client()
     if not cliente:
         return {"error": "IA no configurada (ver .env: IA_PROVEEDOR, IA_BASE_URL, IA_MODEL)"}
+    es_local = bool(getattr(cliente, "es_local", False))
     _reporta(
-        f"Servidor IA: {getattr(cliente, 'base_url', '?')} | "
+        f"{'Servidor' if es_local else 'Proveedor'} IA: "
+        f"{getattr(cliente, 'base_url', '?')} | "
         f"modelo: {getattr(cliente, 'modelo', '?')}"
     )
+    aviso = aviso_privacidad(cliente)
+    if aviso:
+        _reporta(f"⚠️ {aviso}")
+    tope = tope_vacantes(max_vacantes)
+    if tope is None:
+        _reporta("Tope de avisos: SIN TOPE (se procesa todo lo pendiente).")
+    else:
+        _reporta(
+            f"Tope de avisos por corrida: {tope} (opt-in; se ajusta con "
+            "IA_MAX_VACANTES en .env o en Configuración → IA externa)."
+        )
     error = await verificar_servidor_ia(cliente)
     if error:
         return {"error": error}
-    _reporta("Preflight OK: el servidor responde.")
+    _reporta("Preflight OK: el backend responde.")
 
     resumen: Dict[str, Any] = {"ciclos": [], "completo": None}
+    if tope is not None:
+        resumen["tope_vacantes"] = tope
+    restante = tope
     ciclo = 0
     while True:
         ciclo += 1
-        r = await run_ia_enrichment(limit=500, only_critical=True)
+        limite = 500 if restante is None else min(500, restante)
+        if limite <= 0:
+            _reporta("Tope de avisos alcanzado: se detiene el pase crítico.")
+            break
+        r = await run_ia_enrichment(limit=limite, only_critical=True,
+                                    db_path=db_path)
         if "error" in r:
             return {"error": f"CRÍTICO ciclo {ciclo}: {r['error']}", **resumen}
         s = r["stats"]
@@ -715,13 +808,19 @@ async def pase_completo(
             f"failed={s['failed']} skipped={s['skipped']} "
             f"fills={json.dumps(s.get('fields_filled', {}), ensure_ascii=False)}"
         )
+        if restante is not None:
+            restante = max(
+                0, restante - int(s.get("seleccionados", s.get("total", 0)) or 0)
+            )
         if s["total"] == 0 or s["enriched"] == 0:
             break
         if ciclo >= 5:  # guardia de seguridad
             break
 
     if not solo_criticos:
-        r = await run_ia_enrichment(limit=2000, only_critical=False)
+        limite = 2000 if restante is None else min(2000, restante)
+        r = await run_ia_enrichment(limit=limite, only_critical=False,
+                                    db_path=db_path)
         if "error" in r:
             return {"error": f"COMPLETO: {r['error']}", **resumen}
         s = r["stats"]

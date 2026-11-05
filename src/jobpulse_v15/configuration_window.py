@@ -31,15 +31,28 @@ from jobpulse_v15.credenciales import (
 from jobpulse_v15.db import Database
 from jobpulse_v15.repository import Repository
 
-# IA Providers disponibles
-IA_PROVIDERS = {
-    "openrouter": {"nombre": "OpenRouter", "base_url": "https://openrouter.ai/api/v1", "modelo_def": "~openai/gpt-latest"},
-    "nvidia": {"nombre": "NVIDIA NIM", "base_url": "https://integrate.api.nvidia.com/v1", "modelo_def": "openai/gpt-oss-20b"},
-    "google": {"nombre": "Google Gemini", "base_url": "https://generativelanguage.googleapis.com/v1beta/openai/", "modelo_def": "gemini-2.5-flash"},
-    "ollama": {"nombre": "Ollama (local)", "base_url": "http://localhost:11434/v1", "modelo_def": "auto"},
-    "lmstudio": {"nombre": "LM Studio (local)", "base_url": "http://localhost:1234/v1", "modelo_def": "auto"},
-    "custom": {"nombre": "Custom (llama.cpp, vLLM, etc.)", "base_url": "", "modelo_def": ""},
-}
+# IA Providers disponibles — FUENTE ÚNICA: `jobpulse_v15.ia_api.PRESETS`.
+# Antes esta tabla estaba duplicada aquí y divergía del cliente (ej. Ollama
+# era "local:11434" aquí y "Ollama Cloud" en el cliente); ahora ambos
+# sitios leen los MISMOS presets:
+#   - ollama        → Ollama Cloud   (https://ollama.com/v1, cuenta gratis)
+#   - ollama-local  → Ollama local    (http://localhost:11434/v1)
+#   - lmstudio      → LM Studio local (http://localhost:1234/v1)
+# El base_url/modelo siempre se pueden sobreescribir a mano (campo Custom).
+def _proveedores_ia() -> Dict[str, Dict[str, str]]:
+    from jobpulse_v15.ia_api import PRESETS
+
+    return {
+        clave: {
+            "nombre": preset.nombre,
+            "base_url": preset.base_url,
+            "modelo_def": preset.modelo_default,
+        }
+        for clave, preset in PRESETS.items()
+    }
+
+
+IA_PROVIDERS = _proveedores_ia()
 
 CONFIG_FILE = os.path.join(os.path.expanduser("~"), ".jobpulse_v15", "ui_config.json")
 
@@ -217,18 +230,33 @@ class ConfigurationWindow:
             row=3, column=2, padx=(6, 0)
         )
 
+        # Tope de avisos por corrida (OPT-IN, ajustable).
+        ttk.Label(frame, text="Máx. avisos por corrida:").grid(
+            row=5, column=0, sticky="w", pady=4
+        )
+        self.ia_max_vacantes_var = tk.StringVar()
+        ttk.Entry(frame, textvariable=self.ia_max_vacantes_var, width=16).grid(
+            row=5, column=1, sticky="w", pady=4, padx=(6, 0)
+        )
+        ttk.Label(
+            frame,
+            text="Vacío = sin tope (se procesa todo lo pendiente)",
+            foreground="gray",
+        ).grid(row=5, column=2, sticky="w", padx=(6, 0))
+
         # Test connection
         ttk.Button(frame, text="Probar conexi\u00f3n", command=self._test_ia_connection).grid(
-            row=4, column=1, sticky="w", pady=(10, 0), padx=(6, 0)
+            row=6, column=1, sticky="w", pady=(10, 0), padx=(6, 0)
         )
 
         # Info
         info_text = (
             "Variables de entorno equivalentes: IA_PROVEEDOR, IA_BASE_URL, IA_MODEL, IA_API_KEY.\n"
-            "Para llama.cpp local: IA_PROVEEDOR=custom, IA_BASE_URL=http://localhost:8080/v1"
+            "Para llama.cpp local: IA_PROVEEDOR=custom, IA_BASE_URL=http://localhost:8080/v1\n"
+            "IA externa: Ollama Cloud (ollama), Ollama local (ollama-local), LM Studio (lmstudio)."
         )
         ttk.Label(frame, text=info_text, foreground="gray", wraplength=600, justify="left").grid(
-            row=5, column=0, columnspan=3, sticky="w", pady=(10, 0)
+            row=7, column=0, columnspan=3, sticky="w", pady=(10, 0)
         )
 
     def _on_provider_change(self, event: tk.Event = None) -> None:
@@ -735,6 +763,7 @@ class ConfigurationWindow:
         self.ia_base_url_var.set(os.getenv("IA_BASE_URL", "http://127.0.0.1:8081/v1"))
         self.ia_model_var.set(os.getenv("IA_MODEL", "qwen3.5-2b"))
         self.ia_api_key_var.set(os.getenv("IA_API_KEY", "sk-no-key-needed"))
+        self.ia_max_vacantes_var.set(os.getenv("IA_MAX_VACANTES", ""))
 
         # UI prefs (desde archivo)
         ui_cfg = _load_ui_config()
@@ -810,6 +839,8 @@ class ConfigurationWindow:
                 "IA_BASE_URL": self.ia_base_url_var.get(),
                 "IA_MODEL": self.ia_model_var.get(),
                 "IA_API_KEY": self.ia_api_key_var.get(),
+                # Vacío = sin tope (opt-in): el usuario lo sube o lo baja.
+                "IA_MAX_VACANTES": self.ia_max_vacantes_var.get().strip(),
             })
         except Exception as exc:
             messagebox.showerror("Error al guardar IA (.env)", str(exc), parent=self.window)
