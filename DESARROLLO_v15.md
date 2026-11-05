@@ -118,9 +118,22 @@ def fetch(self, site: dict, *, pages: int, search_text: str | None,
 | `recordatorio.py` | Portado | Login startup + recordatorio Windows (Task Scheduler) |
 | `jobpulse-v15.cmd` | Nuevo | Launcher UI + corrida con un clic |
 
-### OBJETIVOS O1–O10 (lista canónica, estado al 2026-10-30)
+### OBJETIVOS O1–O10 (lista canónica) + O11–O14 (2026-11-05)
 
 > Cada handoff de sesión lleva su copia de esta tabla con el estado al cierre.
+>
+> **Metas replanteadas el 2026-11-05** (ver `docs/PLAN_MEJORAS.md` para el
+> detalle y el orden de ejecución). La prioridad real ya no es "más features"
+> sino **que la UI dé los mismos números que la CLI** y **que la IA no esté
+> atada a la máquina del usuario**:
+>
+> | Orden | Meta | Por qué |
+> |---|---|---|
+> | 1 | **O12** — paridad CLI/UI (una sola implementación del pipeline) | La UI deja 231 avisos `sin_requisitos` vs 11 de la CLI: el resultado que ve el usuario no es el real |
+> | 2 | **O13** — recuperar fuentes (LinkedIn, Elempleo, login-wall de ANE) | Dos plataformas dan 0 avisos por DOM roto; ANE pierde la cookie de sesión |
+> | 3 | **O11/O14** — IA externa y límites opt-in | Hecho: otro usuario sin GPU puede usar el enriquecimiento |
+> | 4 | O5.3, O6.4, O8.2/O8.4, O9 | Calidad de datos y UI (-impacto medio) |
+> | 5 | O4 (`superseded`), embeddings en viabilidad, upsert de análisis | Se pueden dejar de último (mucho esfuerzo, poco efecto inmediato) |
 
 | Objetivo | Qué es | Estado |
 |---|---|---|
@@ -134,6 +147,10 @@ def fetch(self, site: dict, *, pages: int, search_text: str | None,
 | **O8** Ciclo de vida de la vacante | Plan previo del usuario (recordado 2026-10-27; formalizado tras investigar el estado real del código). **O8.1 categorías de puestos ✅ PRIMERA VERSIÓN (2026-10-30)** — resuelto como **taxonomía de ÁREAS DE EMPLEO**: 20 áreas definidas por el SISTEMA en la BD (`area` + `area_regla`, migración `016_areas.sql`, semilla versionada `seeds/areas.json` con 51 reglas), clasificación por **TÍTULO** con reglas por **prioridad** (empate en la prioridad máxima → `otros`) y el perfil solo **marca/desmarca** (pestaña "Áreas de empleo" → `candidate_profile_facts.category='area'`). El borrador de categorías con IA (`tools/categorias_borrador.py`) deja de hacer falta: las categorías son **declarativas y versionadas**. El filtro en el MOTOR del Paso 5 (estado `fuera_de_area`) es de O10 (ver bloque "O8.1/O10 — Filtro por ÁREA de empleo") · **O8.2 recurrentes y aplicadas ocultas por defecto (decisión del usuario 27-10, refinada con ejemplo Concentrix)**: ⚠️ **ESTABA RESUELTO en v1.x (tombstones + `dup_of`, ver sub-diseño) y NO se portó**; hoy la republicación nace con ID nuevo y el estado manual del ID viejo NO se arrastra. Diseño aprobado: **matching por compañía + huella de descripción** (el título NO como criterio primario — O5.4 demostró falsos: 13 coincidencias solo-título NO eran republicaciones y grupos mismo-título eran plazas distintas). Al INGERIR una copia nueva que coincida (huella exacta o ratio ≥ ~0.92) con una ya marcada reviewed/applied → **la copia hereda el estado manual automáticamente** (nace oculta + nota de herencia con el ID origen; datos intactos — regla de repo actualizada 27-10: duplicado EXACTO = auto, patrón de v1.x; dudoso = manual). Margen incierto (ratio medio) → `quality duplicates` (dedupe conservador intacto). Opt-in en UI para mostrar repetidas/ya aplicadas; marcar aplicado = SIEMPRE manual. Y la ocultación NO es perpetua: **ventana temporal definida por el usuario en la pestaña de Configuración** (selector 1/2/3/6 meses, etc. — decisión del usuario 27-10; ancla = `updated_at` del estado del original): la copia solo hereda el estado (y queda oculta) si el estado del original tiene MENOS de la ventana; si el original ya la supera, la copia entra como vacante NUEVA (nuevo ciclo, re-aplicable). Default DECIDIDO por el usuario (27-10): **3 meses** (persistencia en `ui_config.json`, pestaña nueva "Vacantes" de Configuración; selector 1/2/3/6/12) · **O8.3 registro de aplicados** ✅ YA EXISTE: estado "Aplicada" en el diálogo de estado (excluye de búsqueda por defecto vía skip_automatic) + tabla `applications` (planned → applied → recruiter_contact → interview → offer, con applied_at + next_action_at + notas) + diálogo Seguimiento por vacante · **O8.4 de-baja automática por tiempo** ⚠️ **EXISTÍA en v1.x (`purge_expired`, ver sub-diseño) y NO se portó**: en v1.5 la búsqueda no filtra por edad ni vigencia (`expires_at` SOLO ANE lo llena; `gate.es_vigente` dormido sin callers) → portar como **OCULTAR, no borrar** (v1.x borraba filas): vencidas por `expires_at`, sin vencimiento → fuera de la ventana de publicación, sin fecha legible → TTL por `created_at`; ventana configurable en la MISMA pestaña "Vacantes" (decisión 27-10; default propuesto: 6 meses) | 🔵 diseñado 27-10 — implementación = portación de v1.x |
 | **O9** Optimización de UI | Ajustes de interfaz pedidos por el usuario y siempre pospuestos — alcances por definir (después de O2-redefinido) | ⏳ placeholder |
 | **O10** Mejorar filtros de búsqueda y compatibilidad | El paso 4 del flujo filtraba `matched` a ciegas → grilla vacía (0 jobs cuando 370/447 análisis son `partial`). `ui.elegir_filtro_compatibilidad()` usa `matched` si existe y si no muestra todos los vigentes, explicando por qué. **Filtro por ÁREA ✅ (2026-10-30)**: combo "Área" + casilla "Solo áreas de mi perfil" + columna "Área" en la UI principal, y filtro en el MOTOR del Paso 5 (estado `fuera_de_area`, motivo `fuera_de_area_del_perfil`; "evaluar todo" = `run_paso5.py --evaluar-todo`). Pendiente: refinar `solo_vigentes` (uso `date_published` vs `last_seen_at`), visibilidad opt-in de recurrentes/aplicadas (O8.2). La columna "Req." (O2.2) ya no está pendiente: **✅ 2026-11-04**. | 🟡 `elegir_filtro_compatibilidad` (28-10) + filtro por área (30-10) + columna/filtro "Req." (04-11) implementados |
+| **O11** IA externa / motor intercambiable | Que el enriquecimiento (y las tareas futuras) funcionen con **cualquier** motor OpenAI-compatible, no solo con llama.cpp en esta máquina: Ollama **Cloud** (acceso gratis), Ollama local, LM Studio, OpenRouter, NVIDIA, Gemini o `custom`. Mismo cliente, mismo pase, sin código duplicado | ✅ **COMPLETO (2026-11-05)**: `ia_servidor.es_endpoint_local()` (con endpoint externo no se arranca nada local) · degradación `json_schema` → `json_object` → sin `response_format` ante el rechazo del proveedor (400/422) · `IA_MODEL=auto` autodetecta el modelo con `GET /models` · presets **unificados** (`ia_api.PRESETS` es la fuente única que ven las dos UIs) · aviso de privacidad + confirmación (UI) y `--confirmar-externo` (CLI) · preflight con mensaje según local/externo. **39 tests nuevos** (`tests/test_ia_externa.py`, incl. end-to-end por HTTP) |
+| **O12** Paridad CLI/UI (una sola implementación del pipeline) | La UI debe dar **los mismos números** que la CLI. Hoy NO: la UI analysis **antes** de la IA y nunca re-analiza, así que los campos estructurados (`jobs.skills`/`languages`) nunca se convierten en requisitos → 231 avisos `sin_requisitos` (vs 11) y 32 calificadas de menos | 🔴 **ABIERTO — es la meta #1** (2026-11-05). Plan en `docs/PLAN_MEJORAS.md`: Ola 1 (re-análisis incremental, detección de obsoletos, guarda en el Paso 5, evidencia como módulo) + Ola 2 (orquestador `pipeline.py`, botones "Procesar" y "Enriquecer IA" en UI v2, paso 3.5 en el flujo clásico) |
+| **O13** Cobertura de fuentes (que el barrido traiga los avisos que existen) | **LinkedIn** da 0 avisos (DOM nuevo: `/jobs/search-results/` con clases ofuscadas, sin `div.base-card` ni `/jobs/view/`) · **Elempleo** da 0 avisos (ahora `.ee_list-item`, no `.result-item`) · **ANE** pierde la cookie de sesión porque `login_ane.py` cierra el Brave que abrió (el login debe hacerse sobre la instancia viva) · la salud de sitios no distingue "login-wall" de "selector roto" | 🔴 **ABIERTO** (2026-11-05). Ola 3 del plan: selectores + test por fetcher, login ANE sin cerrar el navegador, estado `requiere_login` en la salud |
+| **O14** Control del coste de la IA (límites opt-in, nunca fijos) | Que el usuario pueda poner y **quitar** límites: `IA_MAX_LLAMADAS` (llamadas por corrida), `IA_RPM` (requests por minuto) y `IA_MAX_VACANTES` (**avisos por corrida**). Vacío = sin tope. El tope de avisos **no puede ser un valor fijo**: subirlo o bajarlo según el presupuesto y la cuota | ✅ **COMPLETO (2026-11-05)**: los tres límites son opt‑in y ajustables desde `.env` **y** desde "Configuración → IA externa" en las dos UIs; el presupuesto por corrida se consume a lo largo de los ciclos (no se reinicia); `0` o un valor no numérico = sin tope (con aviso, no con crash) |
 
 **O7 — sub-objetivos (implementados 2026-10-27, tras el barrido fallido desde la UI):**
 
@@ -452,25 +469,30 @@ python -m pytest tests/ -q    # pytest vive en el python del sistema (el venv no
 
 ## 5. PRÓXIMA ACCIÓN INMEDIATA
 
-Pendientes vivos (handoff vigente `docs/HANDOFF_SESION_2026-11-04_tarde.md`):
+Pendientes vivos (handoff vigente `docs/HANDOFF_SESION_2026-11-05.md`; plan
+completo en `docs/PLAN_MEJORAS.md`):
 
-0. **APLICAR el bloque de ALINEACIÓN en la BD real** (pide confirmación
-   explícita al usuario; la BD real está en esquema 19):
-   `020` + `021` (taxonomía) → `enrich requirements-canonico --apply`
-   (backfill de los 78 requisitos viejos sin código) →
-   `enrich requirements-source --apply` (re-análisis de los 535 avisos
-   integrando `jobs.skills` / `jobs.languages`) → `run_paso5.py` (corrida
-   nueva) → `generar_evidencia_paso5.py` + `verificar_evidencia.py`.
-   **Medido sobre copias**: requisitos con código 1071/1071 → **2172/2172**;
-   viabilidad `sin_datos` 133 → **9**; Paso 5 `sin_requisitos` 123 → 9.
-   Ojo: **cualquier CLI sobre la BD real auto-migra** (aplicaría 020/021
-   solas); el aviso `[esquema]` sale en consola.
-1. **El usuario marca sus áreas en la UI** (perfil → pestaña **"Áreas de
+0. **O12 — paridad CLI/UI** (meta #1): ejecutar la **Ola 1** del plan —
+   re-análisis incremental de los avisos con campos estructurados sin
+   integrar (1.1) · detección/badge de análisis obsoleto (1.2) · guarda antes
+   del Paso 5 (1.3) · evidencia como módulo, sin subprocess (1.4) · login ANE
+   sin cerrar el navegador (1.5). Criterio: la UI deja de dejar avisos
+   `sin_requisitos` que la CLI sí resuelve.
+   El bloque de ALINEACIÓN **ya está aplicado en la BD real** (esquema 21,
+   705 avisos, corrida `20261104_231932`): lo pendiente es que las UIs lo
+   repitan, no volver a aplicarlo.
+1. **O13 — cobertura de fuentes**: selectores de **LinkedIn**
+   (`/jobs/search-results/` con clases ofuscadas) y **Elempleo**
+   (`.ee_list-item`) con su test por fetcher · login de **ANE** sobre la
+   instancia viva de Brave (la cookie se pierde si el login cierra el
+   navegador) · estado `requiere_login` en la salud de sitios (distinguir
+   login-wall de selector roto).
+2. **El usuario marca sus áreas en la UI** (perfil → pestaña **"Áreas de
    empleo"**): hasta entonces el filtro está INACTIVO (sin áreas marcadas se
    evalúa todo, que es lo que hoy ocurre). Después, la próxima corrida del
    Paso 5 deja las ofertas de otras áreas con estado `fuera_de_area` (o
    `run_paso5.py --evaluar-todo` para evaluating todas).
-2. **Capa B — extractor educativo** (aprobada por el usuario): migración
+3. **Capa B — extractor educativo** (aprobada por el usuario): migración
    **`017`** (filas `concepto`: master/MBA/associate/técnico superior) —
    **ESCRITA y APLICADA** el 2026-11-04 (esquema 19 en la BD real);
    `Repository.save_analysis` rellena `codigo_canonico` al guardar y
@@ -480,26 +502,26 @@ Pendientes vivos (handoff vigente `docs/HANDOFF_SESION_2026-11-04_tarde.md`):
    la BD real es un **no-op** (los hechos sin código son títulos de
    puesto) → no hace falta correrlo. **Pendiente**: re-analizar las vacantes
    para que los requisitos nuevos nazcan con código (→ punto 0).
-3. **Paso 5 — las 30 `revisar_a_mano / educacion_no_confirmada` siguen ABIERTAS**:
+4. **Paso 5 — las 31 `revisar_a_mano / educacion_no_confirmada` siguen ABIERTAS**:
    las firma una **segunda persona** en `docs/PASO5_REVISION_PENDIENTES.md`
    (el autoveredicto del autor de la regla se descarta por sesgo) → después,
    tabla `job_match_decision` + decisiones finales + UI + export (Paso 7).
    **No tocar los umbrales** (cobertura 0.60 / puntaje 0.80) sin acuerdo
    explícito.
-4. **O8.2 ciclo de vida de la vacante**: recurrentes y aplicadas ocultas por
+5. **O8.2 ciclo de vida de la vacante**: recurrentes y aplicadas ocultas por
    defecto (opt-in para verlas); aplicado = manual; herencia por compañía +
    huella de descripción (exacta o ratio ≥ ~0.92; margen incierto → quality
    duplicates), con **ventana temporal configurable en Configuración**
    (1/2/3/6 meses…; fuera de la ventana la copia entra nueva).
-5. **O5.3**: re-barrido de los jobs con descripción basura (login-wall) —
-   hoy ~46; vía UI.
-6. **O2-redefinido (afinar búsqueda)**: **O2.1** normalizar locations
+6. **O5.3**: re-barrido de los jobs con descripción basura (login-wall) —
+   hoy ~43 (35 de ANE); vía UI.
+7. **O2-redefinido (afinar búsqueda)**: **O2.1** normalizar locations
    crudos de Indeed ("Heredia, Provincia de Heredia") — ✅ hecho;
    **O2.2** filtro "solo con requisitos obligatorios" + columna "Req." —
    **✅ cerrado el 2026-11-04** (UI clásica + UI v2 + CLI, definición única en
    `Repository.search_jobs`); motor semántico DORMIDO (vive como ranking ATS,
    que NO es un filtro).
-7. Luego: **O6.4** (dedupe semántico del perfil: slugs ES/EN — decidir import
+8. Luego: **O6.4** (dedupe semántico del perfil: slugs ES/EN — decidir import
    vs diálogo) · **O9** (optimización de UI — alcances por definir) · **O4**
    (calibración — **redefinir o cerrar como *superseded***: sin gate semántico
    no tiene contra-qué comparar; el motor real es `matching.py`).
@@ -628,6 +650,56 @@ Pendientes vivos (handoff vigente `docs/HANDOFF_SESION_2026-11-04_tarde.md`):
 ---
 
 ## 8. HISTORIAL DE CAMBIOS RECIENTES
+
+### 2026-11-05 — IA EXTERNA (Ollama/LM Studio/cloud) + METAS REPLANTEADAS (O11–O14)
+
+**Pedido del usuario**: "que se pueda usar la IA externa para el análisis y,
+si no está, poner la opción para implementarlo… que se pueda usar para el
+enriquecimiento y para otras tareas que veremos más adelante, porque ello
+pueden dar acceso gratis a servidores en la nube".
+
+**Diagnóstico**: el cliente (`ia_api.py`) y las dos UIs **ya** permitían
+configurar un proveedor externo; lo que estaba roto era el **camino de
+ejecución**:
+1. `ia_servidor.asegurar_servidor()` arrancaba llama-server y lanzaba
+   `RuntimeError("Servidor EXTERNO ... no responde")` (buscaba `/health`,
+   que las APIs externas no tienen) → el pase moría antes de empezar;
+2. `chat_json` forzaba `response_format: json_schema` estricto → 400 en
+   Gemini / LM Studio / Ollama (no lo soportan);
+3. `IA_MODEL=auto` enviaba `model: ""` (no había autodetección);
+4. ningún aviso de privacidad: el texto de los avisos salía de la máquina
+   sin que nadie lo dijera;
+5. los presets estaban **duplicados y divergentes** entre el cliente y la UI
+   ("ollama" = cloud en uno, local en el otro).
+
+**Implementado**:
+- `ia_servidor.es_endpoint_local()` (host real, no búsqueda de texto) +
+  `asegurar_servidor()` devuelve `None` con endpoint externo (no arranca ni
+  detiene nada local);
+- `chat_json` degrada el modo de respuesta solo ante el rechazo del
+  proveedor (400/422): `json_schema` → `json_object` → sin `response_format`.
+  Un 429/404 **no** degrada (son errores reales, no de formato);
+- `IAClient._resolver_modelo()`: `auto` → `GET /models` (con error explícito
+  si el endpoint no expone modelos);
+- presets **unificados** en `ia_api.PRESETS` (fuente única que ven las dos
+  UIs): `ollama`=**Ollama Cloud**, `ollama-local`, `lmstudio`, `openrouter`,
+  `nvidia`, `google`, `custom`;
+- **aviso de privacidad + confirmación**: UI (botón "Enriquecer" y "Flujo
+  completo") y CLI (`--confirmar-externo`); el pase deja el aviso en el log;
+- **O14 — límites opt-in y ajustables**: `IA_MAX_LLAMADAS`, `IA_RPM` y
+  `IA_MAX_VACANTES` (avisos por corrida). Vacío = **sin tope**; `0` o un
+  valor no numérico = sin tope (con aviso, no con crash). El tope de avisos
+  se edita en "Configuración → IA externa" (las dos UIs) o en el `.env`;
+- `pase_completo` acepta `max_vacantes`/`db_path` (testabilidad y CLI).
+
+**Metas replanteadas** (tabla O1–O14): la prioridad ya no es "más features"
+sino **O12 (paridad CLI/UI)** y **O13 (cobertura de fuentes)**; O11/O14
+quedan hechos; O4 se propone cerrar como *superseded*. Plan de 5 olas con
+criterio de aceptación en `docs/PLAN_MEJORAS.md`.
+
+**Suite**: **961 passed + 241 subtests** (base 922 → +39 tests nuevos en
+`tests/test_ia_externa.py`, con un end-to-end contra un proveedor
+OpenAI-compatible real por HTTP).
 
 ### 2026-11-04 (tarde) — ALINEACIÓN: los campos estructurados del aviso también son requisitos
 

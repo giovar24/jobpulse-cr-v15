@@ -1,4 +1,4 @@
-# Paso 5 — HOJA DE REVISIÓN PENDIENTE (corrida `20261103_155215`)
+# Paso 5 — HOJA DE REVISIÓN PENDIENTE (corrida `20261104_231932`)
 
 > Documento GENERADO por `generar_revision_pendientes.py` — contiene
 > **solo textos literales de la BD, sin ningún veredicto**.
@@ -32,12 +32,12 @@ depende de ellas y hay que decidirlas **con una fuente**, no por impulso:
    la carrera) cuenta como requisito universitario cumplido? A día de hoy
    el módulo NO define qué pasa con estudios parciales.
 
-## Casos a revisar (30)
+## Casos a revisar (31)
 
 Columnas de la tabla de firmas: `veredicto` (bloqueo real / no bloqueo /
 dudoso), `criterio que lo justifica`, `revisor`, `fecha`.
 
-### 1. `linkedin-4460642248` — Technical Support Specialist
+### 1. `indeed-bf3386c86f36686f` — Technical Support Engineer II - Costa Rica, Colombia, Mexico
 
 | veredicto | criterio | revisor | fecha |
 |---|---|---|---|
@@ -45,33 +45,16 @@ dudoso), `criterio que lo justifica`, `revisor`, `fecha`.
 
 **Texto 1 (verbatim):**
 
-> ve self-service resources for clients Provide regular status updates to management, clients, and all relevant stakeholders Analyze customer needs and platform usage to provide strategic recommendations for improved performance, functionality, and efficiency Required Qualifications: 5+ years of experience in Customer Support/Technical Support roles Bachelor's degree in Computer Science, Information Technology, or equivalent Fluent in English (spoken and written) Strong problem-solving skills with deep investigative and analytical abilities Excellent technical writing skills with experience creating clear, concise documentation and knowledge base articles Ability to work independently and think outside the box
+> Technical Support Engineer I, addressing concerns promptly and professionally to ensure customer satisfaction. Participate in customer video calls when appropriate to troubleshoot complex technical issues live, helping reduce back-and-forth communication and speed up resolution for high-priority or advanced customer cases. EDUCATION AND EXPERIENCE Bachelor's or Master's degree in Computer Science or a related field or equivalent experience. 3+ years of Support Engineering, Software Engineering experience. Thorough knowledge with consuming RESTful and GraphQL APIs. Working knowledge of at least one modern JavaScript framework such as Vue.js, React, Next.js, or Nuxt.js and their fundamental principles. Ability to debug an
 
 **Requisito(s) `education` extraído(s) por el extractor** — la
 citas son literales del texto de la oferta:
 
-- `value_text="Bachelor's degree"` · `requirement_level='required'` · evidencia: > What You'll Do: Provide expert-level technical support for Magentrix software, troubleshooting issues and isolating root causes Think quickly and critically to diagnose, investigate, and resolve complex technical problems efficiently Guide customers in navigating the platform and its various modules to ensure optimal use and efficiency Apply solution engineering principles to design and recommend tailored configurations, integrations, and optimizations that meet customer needs Go above and beyond to deliver the 'Magentrix Magic Experience' by providing outstanding customer service at every interaction Work closely with internal teams to escalate and resolve complex technical issues, sharing innovative ideas to enhance support processes Maintain and update Knowledge Base articles to improve self-service resources for clients Provide regular status updates to management, clients, and all relevant stakeholders Analyze customer needs and platform usage to provide strategic recommendations for improved performance, functionality, and efficiency Required Qualifications: 5+ years of experience in Customer Support/Technical Support roles Bachelor's degree in Computer Science, Information Technology, or equivalent Fluent in English (spoken and written) Strong problem-solving skills with deep investigative and analytical abilities Excellent technical writing skills with experience creating clear, concise documentation and knowledge base articles Ability to work independently and think outside the box to solve technical challenges Ability to work Eastern Time Zone hours (8 AM to 8 PM ET) Current residence in Brazil Experience in customer-facing roles with demonstrated communication excellence Bonus Skills: Technical knowledge of CSS, JavaScript, JSON, C#, .NET, and HTML Previous experience with CRM systems (Salesforce, Microsoft Dynamics, or HubSpot) Salesforce Administration Experience with SAML-based SSO and identity management solutions Customer Success experience What Sets You Apart: You're a fast thinker who thrives in dynamic environments You have a knack for thinking outside the box You're naturally curious and enjoy deep investigation You can work independently while maintaining strong team collaboration Why Join Us: Join a growing, innovative company Develop your skills with a supportive team Career advancement opportunities and professional growth paths Make a real impact on customer success Remote work flexibility Compensation: $1,000 - $1,300 USD/monthly Ready to take your career to the next level?
+- `value_text="Bachelor's"` · `requirement_level='inferred'` · evidencia: > EDUCATION AND EXPERIENCE Bachelor's or Master's degree in Computer Science or a related field or equivalent experience.
 
 ---
 
-### 2. `linkedin-4483157697` — Technical Support Specialist (Tier 2)
-
-| veredicto | criterio | revisor | fecha |
-|---|---|---|---|
-|   |   |   |   |
-
-**Texto 1 (verbatim):**
-
-> tcpdump. Solid understanding of networking fundamentals, including TCP/IP, DNS, NAT, firewalls, and routing. Strong analytical and problem-solving skills. Ability to troubleshoot technical issues independently using a structured, evidence-based approach. Excellent written and verbal communication skills. Fluent English, both written and spoken. No university degree required. What We Offer Fully remote position. Monthly compensation of USD 1,400 – 1,600. Full-time schedule, Monday through Friday. 10 days of paid time off (PTO). U.S. holidays. Initial training and onboarding. Hiring Process The selection process includes 1–2 interviews and a technical skills assessment. Apply Now! If you have experience troubl
-
-**Requisito(s) `education` extraído(s) por el extractor** — la
-citas son literales del texto de la oferta:
-
-- `value_text='university degree'` · `requirement_level='required'` · evidencia: > No university degree required.
-
----
-
-### 3. `recruitee-transperfect-2770002` — Client Service Executive
+### 2. `recruitee-transperfect-2770002` — Client Service Executive
 
 | veredicto | criterio | revisor | fecha |
 |---|---|---|---|
@@ -88,7 +71,7 @@ citas son literales del texto de la oferta:
 
 ---
 
-### 4. `workday-Accounts-Payable-Representative_J-020440` — Accounts Payable Representative
+### 3. `workday-Accounts-Payable-Representative_J-020440` — Accounts Payable Representative
 
 | veredicto | criterio | revisor | fecha |
 |---|---|---|---|
@@ -105,7 +88,7 @@ citas son literales del texto de la oferta:
 
 ---
 
-### 5. `workday-Analyst-Payroll_R273170` — Analyst Payroll
+### 4. `workday-Analyst-Payroll_R273170` — Analyst Payroll
 
 | veredicto | criterio | revisor | fecha |
 |---|---|---|---|
@@ -122,7 +105,7 @@ citas son literales del texto de la oferta:
 
 ---
 
-### 6. `workday-Audience-Management_26999789` — Audience Management
+### 5. `workday-Audience-Management_26999789` — Audience Management
 
 | veredicto | criterio | revisor | fecha |
 |---|---|---|---|
@@ -139,7 +122,7 @@ citas son literales del texto de la oferta:
 
 ---
 
-### 7. `workday-Buyer-Planner-Sr_31163601` — Buyer Planner Sr
+### 6. `workday-Buyer-Planner-Sr_31163601` — Buyer Planner Sr
 
 | veredicto | criterio | revisor | fecha |
 |---|---|---|---|
@@ -156,7 +139,7 @@ citas son literales del texto de la oferta:
 
 ---
 
-### 8. `workday-Cardiac-Specialist-II_R18282-1` — Cardiac Specialist II
+### 7. `workday-Cardiac-Specialist-II_R18282-1` — Cardiac Specialist II
 
 | veredicto | criterio | revisor | fecha |
 |---|---|---|---|
@@ -173,7 +156,7 @@ citas son literales del texto de la oferta:
 
 ---
 
-### 9. `workday-Clinical-Project-Manager_R18034-1` — Clinical Project Manager
+### 8. `workday-Clinical-Project-Manager_R18034-1` — Clinical Project Manager
 
 | veredicto | criterio | revisor | fecha |
 |---|---|---|---|
@@ -194,7 +177,7 @@ citas son literales del texto de la oferta:
 
 ---
 
-### 10. `workday-Commercial-Analyst_R-01372758` — Commercial Analyst
+### 9. `workday-Commercial-Analyst_R-01372758` — Commercial Analyst
 
 | veredicto | criterio | revisor | fecha |
 |---|---|---|---|
@@ -211,7 +194,7 @@ citas son literales del texto de la oferta:
 
 ---
 
-### 11. `workday-Creative-Execution-Manager--CrM-_261002442` — Creative Execution Manager (CrM)
+### 10. `workday-Creative-Execution-Manager--CrM-_261002442` — Creative Execution Manager (CrM)
 
 | veredicto | criterio | revisor | fecha |
 |---|---|---|---|
@@ -228,7 +211,7 @@ citas son literales del texto de la oferta:
 
 ---
 
-### 12. `workday-Credit---Collections-Specialist--2_R232432` — Credit & Collections Specialist
+### 11. `workday-Credit---Collections-Specialist--2_R232432` — Credit & Collections Specialist
 
 | veredicto | criterio | revisor | fecha |
 |---|---|---|---|
@@ -245,7 +228,7 @@ citas son literales del texto de la oferta:
 
 ---
 
-### 13. `workday-Datacenter-Engineer--L3-ERT_1212932-2` — Datacenter Engineer- L3/ERT
+### 12. `workday-Datacenter-Engineer--L3-ERT_1212932-2` — Datacenter Engineer- L3/ERT
 
 | veredicto | criterio | revisor | fecha |
 |---|---|---|---|
@@ -267,7 +250,7 @@ citas son literales del texto de la oferta:
 
 ---
 
-### 14. `workday-Datacenter-Engineer--L3-ERT_1212933-2` — Datacenter Engineer- L3/ERT
+### 13. `workday-Datacenter-Engineer--L3-ERT_1212933-2` — Datacenter Engineer- L3/ERT
 
 | veredicto | criterio | revisor | fecha |
 |---|---|---|---|
@@ -284,7 +267,7 @@ citas son literales del texto de la oferta:
 
 ---
 
-### 15. `workday-Fire-Protection-Project-Development-Specialist_WD30282840` — Fire Protection Project Development Specialist
+### 14. `workday-Environmental-Program-Manager---Latin-America_R-69389-1` — Environmental Program Manager – Latin America
 
 | veredicto | criterio | revisor | fecha |
 |---|---|---|---|
@@ -292,16 +275,28 @@ citas son literales del texto de la oferta:
 
 **Texto 1 (verbatim):**
 
-> You will use facts, candor, and practical problem solving to improve scopes, estimates, and handoffs. You will improve every day through disciplined follow-up and continuous learning, bringing lessons from each project into the next one. You will win as one team by building trust across sales, engineering, operations, and the field. Qualifications Bachelor’s degree in Engineering, Construction, Business, or a related technical field, or equivalent experience. Experience supporting fire protection, fire alarm, sprinkler, suppression, or related technical project development work. Ability to read and interpret drawings, specifications, scope documents, and customer requirements. Strong communication and coordi
+> any required remediation work and other regulatory corrective actions, submission of regulatory reports as authorized/delegated, maintaining regulatory process documentation (e.g., permit applications/renewals, air emissions calculations), obtaining funding approval and processing/verifying payments for environmental regulatory fees, and managing associated compliance status records. Develop proficiency with environmental SaaS tools used to deliver Kyndryl’s E&EnMS requirements including applications for Environmental Management, Chemical/SDS Management, Utility and Sustainability Management, Document Management system, and Project / vendor “Extra Works” Management. Manage vendors performing environ
+
+**Texto 2 (verbatim):**
+
+> s waste suppliers. Validate/update waste characterizations/profiles. Ensure shipments follow regulatory and Kyndryl requirements and that regulatory documentation, waste type, waste volume, and disposal method information is received and entered into our Environmental Management tool. Maintain site waste generator/storage registrations and process associated fee payments. Chemical Management: Evaluate and authorize or prohibit use of chemicals at Kyndryl locations and ensure they will be stored, used, and/or distributed in accordance with regulatory and Kyndryl program requirements. Lease/Property selection and transaction support for LatAm facilities: Ensure Corporate Environmental Due Diligence for
+
+**Texto 3 (verbatim):**
+
+> rt: Execute agency notifications and environmental permit and registration transfers or revocations Obtain and retain copies of all environmental records under regulatory requirements and Kyndryl’s document retention policy Close out or transition all environmental operational activities to new responsible parties Manage environmental requirements associated with infrastructure transfer, decommissioning, or disposal Direct the recycling and disposal activities for facilities wastes as per corporate requirements Incident Management: serve as Incident Coordinator for environmental incidents in our Environmental Management tool, ensuring that incidents are properly documented per EMS requirements, inves
+
+**Texto 4 (verbatim):**
+
+> with FSV/Kyndryl staff responsible for provision of data. Budget planning : prepare and submit annual environmental operations expense budget to RDC LatAm territory leaders. Other activities as identified in support of environmental regulatory, corporate, and operational requirements for the Kyndryl Latin America portfolio. Who You Are Education: Bachelor's degree or equivalent in environmental science, environmental engineering, or a related field. Work / Program Management experience: 5+ years’ experience in Environmental Management related to data center / facilities operations, consulting, design, or project oversight Environmental programs, permitting, & reporting – Air Emissions, Hazardous Waste, Wate
 
 **Requisito(s) `education` extraído(s) por el extractor** — la
 citas son literales del texto de la oferta:
 
-- `value_text='Bachelor'` · `requirement_level='ambiguous'` · evidencia: > Qualifications Bachelor’s degree in Engineering, Construction, Business, or a related technical field, or equivalent experience.
+- `value_text="Bachelor's degree"` · `requirement_level='inferred'` · evidencia: > Who You Are Education: Bachelor's degree or equivalent in environmental science, environmental engineering, or a related field.
 
 ---
 
-### 16. `workday-HR-Benefits-Operations-Analyst_261003280` — HR Benefits Operations Analyst
+### 15. `workday-HR-Benefits-Operations-Analyst_261003280` — HR Benefits Operations Analyst
 
 | veredicto | criterio | revisor | fecha |
 |---|---|---|---|
@@ -318,7 +313,7 @@ citas son literales del texto de la oferta:
 
 ---
 
-### 17. `workday-HR-Operations-Support-Lead-Analyst_25848722` — HR Operations Support Lead Analyst (C13) hybrid located in Heredia
+### 16. `workday-HR-Operations-Support-Lead-Analyst_25848722` — HR Operations Support Lead Analyst (C13) hybrid located in Heredia
 
 | veredicto | criterio | revisor | fecha |
 |---|---|---|---|
@@ -335,7 +330,7 @@ citas son literales del texto de la oferta:
 
 ---
 
-### 18. `workday-IT-Security-Engineer-II_R-01372831` — IT Security Engineer II
+### 17. `workday-IT-Security-Engineer-II_R-01372831` — IT Security Engineer II
 
 | veredicto | criterio | revisor | fecha |
 |---|---|---|---|
@@ -352,24 +347,7 @@ citas son literales del texto de la oferta:
 
 ---
 
-### 19. `workday-Instructional-Designer_R17971` — Instructional Designer – Hybrid
-
-| veredicto | criterio | revisor | fecha |
-|---|---|---|---|
-|   |   |   |   |
-
-**Texto 1 (verbatim):**
-
-> ffectiveness, identify improvement opportunities, and communicate project risks in a timely manner. Support hybrid collaboration through regular in-office participation and effective remote engagement. What We Look For Hybrid Work Availability: Candidates must be available to work in a hybrid setting, including regular on-site presence as required Bachelor's degree or certification in Learning and Development, Education, Business, or a related field. 2+ years of experience in a corporate training, learning and development, or instructional design role. Proven expertise in applying instructional design methodologies to create engaging and impactful learning experiences. Experience developing eLearning and ins
-
-**Requisito(s) `education` extraído(s) por el extractor** — la
-citas son literales del texto de la oferta:
-
-- `value_text="Bachelor's degree"` · `requirement_level='required'` · evidencia: > What We Look For Hybrid Work Availability: Candidates must be available to work in a hybrid setting, including regular on-site presence as required Bachelor's degree or certification in Learning and Development, Education, Business, or a related field.
-
----
-
-### 20. `workday-Network-Support-Engineer_1211197` — Network Support Engineer
+### 18. `workday-Network-Support-Engineer_1211197` — Network Support Engineer
 
 | veredicto | criterio | revisor | fecha |
 |---|---|---|---|
@@ -386,7 +364,24 @@ citas son literales del texto de la oferta:
 
 ---
 
-### 21. `workday-Principal-Cybersecurity-Engineer_R0007423` — Principal Cybersecurity Engineer
+### 19. `workday-Operations-Engineer_R0007464` — Operations Engineer
+
+| veredicto | criterio | revisor | fecha |
+|---|---|---|---|
+|   |   |   |   |
+
+**Texto 1 (verbatim):**
+
+> esearch production performance issues, initiating corrective actions as needed. Perform error research based on production logs and prioritize issues accordingly. Conduct User Acceptance Tests in production and research relevant errors. Work with Product and Development for releases and enhancements. Experience, Required Skills and Qualifications: Bachelor’s degree in computer science, electronics, telecommunication, or equivalent work experience. 3-5 years of professional experience in application support, Production support, technical customer support, problem management, relational databases, programming, Cloud engineer, Application Operations etc. Experience operating messaging platforms or related appli
+
+**Requisito(s) `education` extraído(s) por el extractor** — la
+citas son literales del texto de la oferta:
+
+- `value_text='Bachelor'` · `requirement_level='required'` · evidencia: > Experience, Required Skills and Qualifications: Bachelor’s degree in computer science, electronics, telecommunication, or equivalent work experience.
+
+---
+
+### 20. `workday-Principal-Cybersecurity-Engineer_R0007423` — Principal Cybersecurity Engineer
 
 | veredicto | criterio | revisor | fecha |
 |---|---|---|---|
@@ -403,7 +398,7 @@ citas son literales del texto de la oferta:
 
 ---
 
-### 22. `workday-Principal-Engineer--Quality_Req-51750` — Principal Engineer, Quality
+### 21. `workday-Principal-Engineer--Quality_Req-51750` — Principal Engineer, Quality
 
 | veredicto | criterio | revisor | fecha |
 |---|---|---|---|
@@ -424,7 +419,7 @@ citas son literales del texto de la oferta:
 
 ---
 
-### 23. `workday-Production-Supervisor-I_31163511` — Production Supervisor I
+### 22. `workday-Production-Supervisor-I_31163511` — Production Supervisor I
 
 | veredicto | criterio | revisor | fecha |
 |---|---|---|---|
@@ -446,7 +441,7 @@ citas son literales del texto de la oferta:
 
 ---
 
-### 24. `workday-Production-Supervisor-I_31163518` — Production Supervisor I
+### 23. `workday-Production-Supervisor-I_31163518` — Production Supervisor I
 
 | veredicto | criterio | revisor | fecha |
 |---|---|---|---|
@@ -468,7 +463,7 @@ citas son literales del texto de la oferta:
 
 ---
 
-### 25. `workday-Sales-Specialist_R-117581` — Sales Specialist
+### 24. `workday-Sales-Specialist_R-117581` — Sales Specialist
 
 | veredicto | criterio | revisor | fecha |
 |---|---|---|---|
@@ -485,7 +480,7 @@ citas son literales del texto de la oferta:
 
 ---
 
-### 26. `workday-Security-Governance---Compliance-Specialist_2022361-1` — Security Governance & Compliance Specialist
+### 25. `workday-Security-Governance---Compliance-Specialist_2022361-1` — Security Governance & Compliance Specialist
 
 | veredicto | criterio | revisor | fecha |
 |---|---|---|---|
@@ -502,7 +497,7 @@ citas son literales del texto de la oferta:
 
 ---
 
-### 27. `workday-Security-Governance---Compliance-Specialist_2023168-1` — Security Governance & Compliance Specialist
+### 26. `workday-Security-Governance---Compliance-Specialist_2023168-1` — Security Governance & Compliance Specialist
 
 | veredicto | criterio | revisor | fecha |
 |---|---|---|---|
@@ -519,7 +514,7 @@ citas son literales del texto de la oferta:
 
 ---
 
-### 28. `workday-Senior-Client-Services-Executive_R2025-244318` — Senior Client Services Executive
+### 27. `workday-Senior-Client-Services-Executive_R2025-244318` — Senior Client Services Executive
 
 | veredicto | criterio | revisor | fecha |
 |---|---|---|---|
@@ -536,7 +531,41 @@ citas son literales del texto de la oferta:
 
 ---
 
-### 29. `workday-SeniorTechnician--Laboratory--Microbiology-_Req-51330` — SeniorTechnician, Laboratory (Microbiology)
+### 28. `workday-Senior-Project-Manager_R13442` — Senior Project Manager
+
+| veredicto | criterio | revisor | fecha |
+|---|---|---|---|
+|   |   |   |   |
+
+**Texto 1 (verbatim):**
+
+> k) Thorough knowledge of project management fundamentals as they apply to the localization industry. Exceptional attention to detail, organizational skills, and ability to multi-task. Excellent oral and written communication skills. Excellent interpersonal skills. Foreign language skills a plus. Appropriate Education and Experience: A minimum of a Bachelor's degree or equivalent experience. Hands-on knowledge of database functions and concepts. Must be very resourceful, with the ability to work independently. Must have proven organizational and communication skills. If you are an individual with a disability and require reasonable accommodation to complete any part of the application process, or are limited
+
+**Requisito(s) `education` extraído(s) por el extractor** — la
+citas son literales del texto de la oferta:
+
+- `value_text="Bachelor's degree"` · `requirement_level='required'` · evidencia: > Appropriate Education and Experience: A minimum of a Bachelor's degree or equivalent experience.
+
+---
+
+### 29. `workday-Senior-Specialist--Technical-Training_R576356` — Senior Specialist, Technical Training
+
+| veredicto | criterio | revisor | fecha |
+|---|---|---|---|
+|   |   |   |   |
+
+**Texto 1 (verbatim):**
+
+> ct as an escalation point, drive collaboration with stakeholders and team members to resolve process/system issues, and deviations to drive them to resolution. Generate and distribute training metrics and/or Key Performance Indicators (KPIs). Perform additional duties and projects, as assigned, to support enterprise priorities. What you will need: Bachelor’s degree in Business, Education, Human Resources, or related field (or equivalent experience).Bachelor’s degree in Business, Education, Human Resources, or related field (or equivalent experience). 2-4 years of experience in learning coordination, facilitation, content development, or LMS management Experience designing and developing eLearning content preferred. Strong understanding of learning technologies (LMS, ServiceNow, content authoring tools). Stron
+
+**Requisito(s) `education` extraído(s) por el extractor** — la
+citas son literales del texto de la oferta:
+
+- `value_text='Bachelor'` · `requirement_level='inferred'` · evidencia: > What you will need: Bachelor’s degree in Business, Education, Human Resources, or related field (or equivalent experience).Bachelor’s degree in Business, Education, Human Resources, or related field (or equivalent experience).
+
+---
+
+### 30. `workday-SeniorTechnician--Laboratory--Microbiology-_Req-51330` — SeniorTechnician, Laboratory (Microbiology)
 
 | veredicto | criterio | revisor | fecha |
 |---|---|---|---|
@@ -553,7 +582,7 @@ citas son literales del texto de la oferta:
 
 ---
 
-### 30. `workday-TnF-Manager-Systems---Software_1214477-2` — TnF Manager Systems / Software
+### 31. `workday-SharePoint-Application-Developer_R55630-1` — SharePoint Application Developer
 
 | veredicto | criterio | revisor | fecha |
 |---|---|---|---|
@@ -561,15 +590,11 @@ citas son literales del texto de la oferta:
 
 **Texto 1 (verbatim):**
 
-> nd infrastructure procurement, vendor coordination, and resource justification. Reports project status, risks, and business impact to senior management and stakeholders. Encourages continuous improvement, innovation, and cost savings through in-house solutions that reduce reliance on external tools and equipment. Education and Experience Required: Bachelor's or Master's degree in Computer Science, Computer/Electronics Engineering, Information Systems, or equivalent. Typically 8+ years of software engineering experience, including at least 2–3 years leading or managing engineering teams. English communication skills Knowledge and Skills: Proven experience leading software engineering teams and delivering complex tools, a
-
-**Texto 2 (verbatim):**
-
-> t environments. Experience with project and portfolio management, including prioritization, planning, and risk management. Strong people leadership skills: coaching, performance management, conflict resolution, and team building. Strong analytical, problem-solving, and decision-making skills. Excellent written and verbal communication skills, with mastery of English and the local language. Able to present technical strategy, project status, and resource needs to senior leadership and negotiate options with them. Accessibility HPE is committed to creating an inclusive and accessible workplace and encourages applications from all qualified individuals, including those with disabilities. If you belie
+> resolve SharePoint-related issues. Support migrations and modernization from legacy SharePoint environments. Establish development standards and documentation. Collaborate with business users, IT teams, and vendors to deliver solutions. Performs other additional duties as assigned. What We’re Looking For: 3 to 5 Years of relevant work experience. Bachelor's Degree with Computer Science / MIS field of study required. Core SharePoint Skills SharePoint Online SharePoint Framework (SPFx) SharePoint site architecture Lists, libraries, and content types Permissions and security management Development Skills JavaScript (ES6+) TypeScript HTML5 and CSS3 React (most common with SPFx) REST APIs Microsoft Graph API JSON formatting for SharePoint lists and columns XML & CAML C# for CSOM in VS development (legacy but still used) Client-side web parts and extensions PowerShell (PnP) Microsoft Power Platform Power Automate Power Apps Document management Managed metadata and taxonomy Other Education/Certifications: Advanced study preferred (e.g., Master’s in Information Systems/Software Engineering) or equivalent hands-on experience with Microsoft 365 development. Microsoft Certified: Power Platform Developer Associate (PL-400) SharePoint Online architecture and governance: permissions/security management, managed metadata/taxonomy, content types, and PnP PowerShell; migration/modernization experience Working Conditions: Professional environment (Hybrid). Occasional non-standard work hours or overtime as business requires. Represents the company to the customer
 
 **Requisito(s) `education` extraído(s) por el extractor** — la
 citas son literales del texto de la oferta:
 
-- `value_text="Bachelor's"` · `requirement_level='required'` · evidencia: > Education and Experience Required: Bachelor's or Master's degree in Computer Science, Computer/Electronics Engineering, Information Systems, or equivalent.
+- `value_text="Bachelor's Degree"` · `requirement_level='ambiguous'` · evidencia: > Bachelor's Degree with Computer Science / MIS field of study required.
 
 ---
