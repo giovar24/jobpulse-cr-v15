@@ -901,6 +901,19 @@ def main() -> int:
     scrape_ane.add_argument(
         "--dias", type=int, default=30, help="Ventana de días hacia atrás (default: 30)."
     )
+    scrape_ane.add_argument(
+        "--revisitar",
+        action="store_true",
+        help=(
+            "Re-baja el DETALLE de los avisos YA guardados (no usa el listado). "
+            "Sirve para corregir el texto de avisos viejos cuando cambia el "
+            "parser (Ola 4.1 · O5.3): el listado de ANE solo muestra lo nuevo."
+        ),
+    )
+    scrape_ane.add_argument(
+        "--limite", type=int, default=None,
+        help="Con --revisitar: cuántos avisos revisitar (por defecto, todos).",
+    )
 
     # === CINDE Jobs (API GraphQL, sin browser) ===
     scrape_cinde = scrape_commands.add_parser(
@@ -2279,19 +2292,36 @@ def main() -> int:
                     if not is_ane:
                         parser.error(f"El sitio {args.site!r} no esta registrado como ANE.")
                     try:
-                        result = service.fetch_and_import(
-                            args.site,
-                            lambda: fetcher.fetch(
-                                site,
-                                pages=args.pages,
-                                skip_source_job_ids=(
-                                    repository.list_skipped_source_job_ids(args.site)
+                        if args.revisitar:
+                            # Re-barrido de DETALLE: vuelve a bajar los avisos
+                            # ya guardados (por su URL) para que su texto sea el
+                            # de la fuente con el parser actual.
+                            registros = repository.list_source_records(
+                                args.site, limit=args.limite
+                            )
+                            result = service.fetch_and_import(
+                                args.site,
+                                lambda: fetcher.fetch_detalles_conocidos(
+                                    site,
+                                    source_jobs=registros,
+                                    port=args.port,
                                 ),
-                                port=args.port,
-                                dias=args.dias,
-                            ),
-                            run_kind="ane",
-                        )
+                                run_kind="ane",
+                            )
+                        else:
+                            result = service.fetch_and_import(
+                                args.site,
+                                lambda: fetcher.fetch(
+                                    site,
+                                    pages=args.pages,
+                                    skip_source_job_ids=(
+                                        repository.list_skipped_source_job_ids(args.site)
+                                    ),
+                                    port=args.port,
+                                    dias=args.dias,
+                                ),
+                                run_kind="ane",
+                            )
                     except (IngestionError, ValueError, sqlite3.Error) as exc:
                         parser.error(str(exc))
                     print(json.dumps(result, ensure_ascii=False, indent=2))
@@ -2313,19 +2343,34 @@ def main() -> int:
                     for site in sites:
                         site_id = site["site_id"]
                         try:
-                            result = service.fetch_and_import(
-                                site_id,
-                                lambda site=site, site_id=site_id: fetcher.fetch(
-                                    site,
-                                    pages=args.pages,
-                                    skip_source_job_ids=(
-                                        repository.list_skipped_source_job_ids(site_id)
+                            if args.revisitar:
+                                registros = repository.list_source_records(
+                                    site_id, limit=args.limite
+                                )
+                                result = service.fetch_and_import(
+                                    site_id,
+                                    lambda site=site, site_id=site_id, registros=registros:
+                                    fetcher.fetch_detalles_conocidos(
+                                        site,
+                                        source_jobs=registros,
+                                        port=args.port,
                                     ),
-                                    port=args.port,
-                                    dias=args.dias,
-                                ),
-                                run_kind="ane",
-                            )
+                                    run_kind="ane",
+                                )
+                            else:
+                                result = service.fetch_and_import(
+                                    site_id,
+                                    lambda site=site, site_id=site_id: fetcher.fetch(
+                                        site,
+                                        pages=args.pages,
+                                        skip_source_job_ids=(
+                                            repository.list_skipped_source_job_ids(site_id)
+                                        ),
+                                        port=args.port,
+                                        dias=args.dias,
+                                    ),
+                                    run_kind="ane",
+                                )
                         except (IngestionError, ValueError, sqlite3.Error) as exc:
                             failures.append(
                                 {

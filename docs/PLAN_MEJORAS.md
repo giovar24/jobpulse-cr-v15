@@ -13,7 +13,7 @@
 | 1 (hecha) | **O12** paridad CLI/UI | La UI da los mismos números que la CLI (231 `sin_requisitos` → 11) |
 | 2 (hecha) | **O12** paridad CLI/UI | Una sola implementación del pipeline (orquestador + botones) |
 | 3 (hecha 2026-11-06) | **O13** cobertura de fuentes | LinkedIn 0 → 60 avisos · Elempleo 0 → 3 · `requires_login` · sesión de ANE entre arranques |
-| 4 | O5.3 / taxonomía / métricas | Calidad del dato |
+| 4 (en curso) | O5.3 / taxonomía / métricas | Calidad del dato (4.1 medida: parser de ANE + re-barrido de detalle) |
 | 5 | O4, upsert, embeddings | Se pueden dejar de último |
 
 ## Contexto: el problema de fondo
@@ -212,9 +212,81 @@ de código en el pipeline cuando se cambie de motor.
 
 | # | Mejora | Esfuerzo | Criterio de aceptación |
 |---|---|---|---|
-| 4.1 | Re-barrido de detalle (O5.3) para las 43 descripciones <200 chars (35 de ANE) | medio | endpoint de detalle en vez de listado; descripción completa |
+| 4.1 | Re-barrido de detalle (O5.3) + parser de ANE completo | medio | endpoint de detalle en vez de listado; descripción completa |
 | 4.2 | Curación de la taxonomía: 1988 variantes en `concepto_no_normalizado` (mayoría frases de tarea) | medio | filtrar antes de encolar + curar en tandas |
 | 4.3 | Métricas por etapa (`pipeline_etapa`: tiempo, avisos, requisitos, errores) | bajo | auditar por qué una corrida dio menos |
+
+### 4.1 Re-barrido de detalle + parser completo de ANE — **MEDIDO 2026-11-06**
+
+**Lo que decía el plan**: re-barrer 43 descripciones <200 chars (35 de ANE).
+
+**Lo que se midió primero (y cambió el plan)**: de esos 43, solo **10** tienen
+texto total <200 chars (descripción + requisitos): los otros 33 tenían el
+texto en `requirements_raw`, no en `description_raw`. Y comparando el texto
+guardado con el detalle **en vivo**, el corpus **ya coincidía** con la fuente:
+la descripción corta era real, no un fallo de guardado.
+
+**El hueco real**: el parser de la ficha de ANE **descartaba campos**:
+
+| Campo que se perdía | Por qué importa |
+|---|---|
+| `Nivel académico` | Lo que la empresa PIDE: sin esto no hay dimensión educativa |
+| `Experiencia laboral` | Lo que la empresa PIDE: sin esto no hay dimensión de experiencia |
+| `Estudio técnico` | Técnico (salvo valores negados: "No se especifica estudios técnicos") |
+| `Ocupación`, `Horario`, `Tipo contratación` | Contexto del aviso (no requisitos) |
+
+**Lo que se hizo**:
+
+1. **Parser ampliado** (`ane.py`): lee los campos de arriba; un valor
+   **negado** ("No se especifica…") NO se copia (no es un requisito); el
+   **correo del empleador NO se guarda** (dato personal de un tercero).
+2. **Re-barrido de detalle** (`scrape ane --site ane-cr --revisitar`): vuelve a
+   bajar el detalle de los avisos **ya guardados** (por su URL, no por el
+   listado). Hace falta porque el listado de ANE solo muestra lo nuevo: un
+   aviso viejo guardado con un parser viejo **nunca** vuelve a pasar por el
+   listado, así que su texto se quedaba para siempre incompleto. Si la
+   vacante ya no está en la web, se **omite** (no se borra nada).
+   El re-barrido usa la **misma** construcción de oferta que el barrido
+   (`AneFetcher._oferta`): si construyera el dict aparte, el texto guardado
+   sería distinto y el re-análisis no detectaría el cambio.
+3. **Re-análisis por texto nuevo** (`analysis_flow.avisos_con_texto_cambiado`
+   / `reananalizar_texto_cambiado`): si el `text_hash` del análisis vigente ya
+   no cuadra con el texto del aviso, el aviso está obsoleto → se re-analiza.
+   Es la señal que faltaba (la de la Ola 1.1 solo miraba `skills`/`languages`).
+   Va enganchado en la etapa `reanalisis` del orquestador (`pipeline.py`).
+
+**Medición (sobre una COPIA de la BD real, `%TEMP%\opencode\ola4.db`)**:
+
+| Métrica | Antes | Después |
+|---|---|---|
+| Avisos en el corpus | 705 | **729** (+24 nuevos de ANE) |
+| `calificada` | 239 | 242 |
+| `descartada / titulo_universitario_requerido` | 67 | 76 |
+| `sin_requisitos` | 11 | 24 (+13: los 24 nuevos aún sin enriquecimiento IA) |
+| **`educacion_no_confirmada`** | 31 | **31 (sin cambios)** |
+| Avisos que **cambian de estado** | — | **9 de 705** |
+
+Los 9 cambios (con evidencia literal, revisada uno a uno):
+
+| Aviso | Antes | Después | Evidencia |
+|---|---|---|---|
+| `ane-121783/121784/121786/121788` | `revisar_a_mano/educacion_no_cumple` | `descartada/titulo_universitario_requerido` | "Bachillerato Universitario en Economía Agrícola…" + "Nivel académico:…" |
+| `ane-121789` (Audiólogo) | `revisar_a_mano/skill_faltante` | `descartada/titulo_universitario_requerido` | "Nivel académico: Licenciatura (Requerido)." |
+| `ane-121804` (Gerente RRHH) | `revisar_a_mano/skill_faltante` | `descartada/titulo_universitario_requerido` | "Nivel académico: Licenciatura (Requerido)." |
+| `ane-121911` (Abogada Junior) | `datos_insuficientes/cobertura_insuficiente` | `descartada/titulo_universitario_requerido` | "Nivel académico: Licenciatura (Requerido)." |
+| `ane-121791` (Contador) | `calificada` | `revisar_a_mano/educacion_no_cumple` | "Nivel académico: Licenciatura." (sin "Requerido" → no se descarta) |
+| `ane-121818` (Ingeniero de Proyecto) | `calificada` | `revisar_a_mano/educacion_no_cumple` | "Nivel académico: Licenciatura." (sin "Requerido") |
+
+**Lo importante**: los 4 avisos que pasan a `descartada` dicen
+**"Licenciatura (Requerido)"** (o el texto del aviso ya exigía bachillerato
+universitario) → el texto **confirma** el título obligatorio, que es lo único
+que permite descartar. Los 2 que dicen solo "Nivel académico: Licenciatura"
+**no** se descartan: quedan en `revisar_a_mano` (ante la duda, revisar).
+**`educacion_no_confirmada` no se tocó** (31 → 31): lo firma una segunda
+persona.
+
+**Pendiente**: aplicar el re-barrido + re-análisis + Paso 5 **a la BD real**
+(requiere OK del usuario: cambia el estado de 9 avisos).
 
 ---
 

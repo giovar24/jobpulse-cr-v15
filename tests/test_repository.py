@@ -196,6 +196,53 @@ class TestRepository(unittest.TestCase):
         self.assertEqual(source["content_hash"], "hash-2")
         self.assertEqual(memory["content_hash"], "hash-2")
 
+    def test_list_source_records_devuelve_los_avisos_guardados_con_su_url(self):
+        """Ola 4.1: el re-barrido de detalle necesita la URL de cada aviso."""
+        self.repository.save_job(
+            {
+                "job_id": "job-1",
+                "title": "Power Integrity Engineer",
+                "description_raw": "Bachelor degree required.",
+                "company": "Intel",
+                "location_raw": "Escazú",
+                "posting_language": "en",
+            },
+            site_id="intel-cr",
+            source_job_id="JR-1",
+            source_url="https://example.test/job/1",
+        )
+        self.repository.register_site(
+            "other-site", "workday", "Other", "https://other.example.test/jobs"
+        )
+        self.repository.save_job(
+            {"job_id": "job-2", "title": "Otro"},
+            site_id="other-site",
+            source_job_id="JR-2",
+            source_url="https://other.example.test/job/2",
+        )
+
+        registros = self.repository.list_source_records("intel-cr")
+
+        self.assertEqual(len(registros), 1)
+        self.assertEqual(registros[0]["source_job_id"], "JR-1")
+        self.assertEqual(registros[0]["job_id"], "job-1")
+        self.assertEqual(registros[0]["source_url"], "https://example.test/job/1")
+        self.assertEqual(registros[0]["title"], "Power Integrity Engineer")
+        self.assertEqual(registros[0]["location_raw"], "Escazú")
+
+    def test_list_source_records_respeta_el_limite_y_valida_el_sitio(self):
+        self.repository.save_job(
+            {"job_id": "job-1", "title": "Uno"},
+            site_id="intel-cr",
+            source_job_id="JR-1",
+            source_url="https://example.test/job/1",
+        )
+        self.assertEqual(len(self.repository.list_source_records("intel-cr", limit=1)), 1)
+        with self.assertRaises(ValueError):
+            self.repository.list_source_records("intel-cr", limit=0)
+        with self.assertRaises(ValueError):
+            self.repository.list_source_records("  ")
+
     def test_manual_job_overrides_survive_source_updates_and_can_be_restored(self):
         self.add_job("job-manual-override")
         self.repository.update_job_manual_overrides(

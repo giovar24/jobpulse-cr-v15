@@ -1265,6 +1265,34 @@ class Repository:
             ).fetchall()
         return {str(row["source_job_id"]) for row in rows}
 
+    def list_source_records(
+        self, site_id: str, *, limit: int | None = None
+    ) -> list[dict[str, Any]]:
+        """Avisos YA guardados de un sitio (con su URL de detalle).
+
+        Lo usa el re-barrido de detalle (Ola 4.1 · O5.3): el listado de un
+        sitio solo muestra lo nuevo, asi que para actualizar el texto de un
+        aviso viejo hay que volver a su URL de detalle.
+        """
+        self._required_text(site_id, "site_id")
+        if limit is not None and limit < 1:
+            raise ValueError("limit debe ser mayor que cero.")
+        sql = """
+            SELECT r.source_job_id, r.job_id, r.source_url,
+                   j.title, j.company, j.location_raw
+            FROM job_source_records AS r
+            JOIN jobs AS j ON j.job_id = r.job_id
+            WHERE r.site_id = ?
+            ORDER BY r.last_seen_at DESC, r.source_job_id
+        """
+        params: list[Any] = [site_id.strip()]
+        if limit is not None:
+            sql += " LIMIT ?"
+            params.append(int(limit))
+        with self.database.connection() as connection:
+            rows = connection.execute(sql, tuple(params)).fetchall()
+        return [dict(row) for row in rows]
+
     def set_user_job_state(
         self,
         job_id: str,

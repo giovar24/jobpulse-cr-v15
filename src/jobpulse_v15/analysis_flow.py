@@ -248,6 +248,76 @@ def analisis_refleja_campos(repository: Repository, job_id: str) -> bool:
     )
 
 
+def avisos_con_texto_cambiado(repository: Repository) -> list[str]:
+    """Job ids cuyo TEXTO cambió después de su análisis vigente.
+
+    El análisis guarda el `text_hash` del texto con el que se hizo (sha256
+    de descripción + requisitos). Si el scraper vuelve a traer el aviso con
+    más texto (p. ej. los campos que ANE no se leían: "Nivel académico",
+    "Experiencia laboral"), el análisis vigente **ya no describe** al aviso:
+    el motor evaluaría requisitos que ya no son los del texto.
+
+    Esta es la señal de "hay que re-analizar" que faltaba (la de la Ola 1.1
+    solo miraba los campos estructurados `skills`/`languages`).
+    """
+    with repository.database.connection() as connection:
+        filas = connection.execute(
+            """
+            SELECT j.job_id, j.description_raw, j.requirements_raw,
+                   ja.text_hash
+            FROM jobs AS j
+            JOIN job_analysis AS ja
+              ON ja.job_id = j.job_id AND ja.is_current = 1
+            """
+        ).fetchall()
+    cambiados: list[str] = []
+    for fila in filas:
+        texto = "\n\n".join(
+            valor.strip()
+            for valor in (fila["description_raw"], fila["requirements_raw"])
+            if isinstance(valor, str) and valor.strip()
+        )
+        if not texto:
+            continue
+        if hashlib.sha256(texto.encode("utf-8")).hexdigest() != fila["text_hash"]:
+            cambiados.append(fila["job_id"])
+    return cambiados
+
+
+def reananalizar_texto_cambiado(
+    repository: Repository,
+    on_progress: Any = None,
+    dry_run: bool = False,
+) -> dict[str, Any]:
+    """Re-analiza los avisos cuyo texto cambió (el hash ya no cuadra).
+
+    Idempotente: al terminar, el `text_hash` del análisis vigente vuelve a
+    ser el del texto actual, así que el segundo llamado no encuentra nada.
+    """
+    candidatos = avisos_con_texto_cambiado(repository)
+    stats: dict[str, Any] = {
+        "candidatos": len(candidatos),
+        "reanalizados": 0,
+        "errores": 0,
+    }
+    for job_id in candidatos:
+        try:
+            if not dry_run:
+                extract_job_analysis(repository, job_id)
+            stats["reanalizados"] += 1
+        except Exception as exc:  # noqa: BLE001 - un aviso malo no para el lote
+            stats["errores"] += 1
+            if on_progress:
+                on_progress(f"  error en {job_id}: {exc}")
+            continue
+        if on_progress:
+            on_progress(
+                f"  re-analizado (texto nuevo) {job_id} "
+                f"({stats['reanalizados']}/{len(candidatos)})"
+            )
+    return stats
+
+
 def reananalizar_con_campos_fuente(
     repository: Repository,
     on_progress: Any = None,

@@ -75,6 +75,15 @@ _REQ_UL = (
     "vehiculos",
 )
 
+# Valores que NO son un requisito sino la ausencia de él ("No se especifica
+# estudios técnicos"). Copiarlos al texto haría que el motor los confundiera
+# con una exigencia.
+_VALOR_NEGADO = re.compile(
+    r"(no se especifica|no aplica|no indica|ningun[oa]|n/a|sin especificar|"
+    r"no requiere|no se requiere)",
+    re.IGNORECASE,
+)
+
 
 def _parse_date_es(txt: str) -> str:
     """'Publicado el viernes, 25 de septiembre del 2026' -> '2026-09-25'.
@@ -253,30 +262,7 @@ class AneFetcher:
                     detalle_html = await self._obtener(page, c["url"], requiere_sesion=True)
                     det = self._parse_detalle(detalle_html, c) if detalle_html else {}
 
-                    location_raw = det.get("ubicacion") or c["ubicacion"]
-                    offers.append({
-                        "source_job_id": c["pid"],
-                        "source_url": c["url"],
-                        "source_updated_at": iso,
-                        "job": {
-                            "job_id": f"ane-{c['pid']}",
-                            "title": det.get("titulo") or c["titulo"],
-                            "company": det.get("empresa") or c["empresa"],
-                            "location_raw": location_raw,
-                            "country": "CR",
-                            **normalize_cr_location(location_raw),
-                            "work_mode": "unknown",
-                            "employment_type": None,
-                            "date_published": iso,
-                            "expires_at": det.get("vence") or "",
-                            "posting_language": "es",
-                            "posting_language_origin": "source",
-                            "description_raw": det.get("descripcion") or "",
-                            "requirements_raw": det.get("requisitos") or "",
-                            "salary_raw": det.get("salario") or "",
-                        },
-                        "raw_payload": {"detail_url": c["url"]},
-                    })
+                    offers.append(self._oferta(c["pid"], c["url"], c, det, iso))
                     seen_ids.add(c["pid"])
 
                     if self.request_delay:
@@ -299,6 +285,124 @@ class AneFetcher:
             "ANE barrido: %d nuevas, %d ya guardadas saltadas (tope %d páginas, ventana %d días; corte: %s).",
             len(offers), skipped, pages, dias, motivo or "fin")
         return AneOffers(offers, jobs_skipped=skipped)
+
+    @staticmethod
+    def _oferta(
+        pid: str,
+        url: str,
+        card: Dict[str, str],
+        det: Dict[str, str],
+        iso: str = "",
+    ) -> Dict[str, Any]:
+        """Construye la oferta de ANE (UNA sola implementacion).
+
+        La usan el barrido del listado y el re-barrido de detalle: asi los
+        dos caminos guardan EXACTAMENTE el mismo tipo de aviso (si el
+        re-barrido construyera el dict a mano, el texto guardado seria
+        distinto y el re-analisis no detectaria el cambio).
+        """
+        location_raw = det.get("ubicacion") or card.get("ubicacion") or ""
+        return {
+            "source_job_id": pid,
+            "source_url": url,
+            "source_updated_at": iso,
+            "job": {
+                "job_id": f"ane-{pid}",
+                "title": det.get("titulo") or card.get("titulo") or "",
+                "company": det.get("empresa") or card.get("empresa") or "",
+                "location_raw": location_raw,
+                "country": "CR",
+                **normalize_cr_location(location_raw),
+                "work_mode": "unknown",
+                "employment_type": None,
+                "date_published": iso,
+                "expires_at": det.get("vence") or "",
+                "posting_language": "es",
+                "posting_language_origin": "source",
+                "description_raw": det.get("descripcion") or "",
+                "requirements_raw": det.get("requisitos") or "",
+                "salary_raw": det.get("salario") or "",
+            },
+            "raw_payload": {"detail_url": url},
+        }
+
+    async def _revisitar(
+        self,
+        ctx: BrowserContext,
+        site: dict[str, Any],
+        source_jobs: List[Dict[str, str]],
+    ) -> AneOffers:
+        """Vuelve a bajar el DETALLE de avisos ya guardados (Ola 4.1 · O5.3).
+
+        Por que existe: el listado de ANE solo muestra las vacantas
+        recientes, asi que un aviso viejo guardado con un parser viejo NUNCA
+        vuelve a pasar por el listado: su texto se queda para siempre con
+        los campos que el parser de entonces no leia ("Nivel academico",
+        "Experiencia laboral"...). Este metodo los vuelve a bajar por su
+        URL de detalle para que el texto guardado sea el de la fuente.
+
+        No borra nada: si un aviso ya no esta en la web, se salta (queda lo
+        que habia) y se cuenta como omitido.
+        """
+        if not await self._asegurar_sesion(ctx):
+            logger.warning("ANE: sin sesion de detalle; re-barrido omitido.")
+            raise RequiereLoginError(
+                mensaje_requiere_login(str(site.get("site_id") or "ANE"))
+            )
+
+        offers: List[Dict[str, Any]] = []
+        omitidos = 0
+        page = await ctx.new_page()
+        try:
+            for registro in source_jobs:
+                pid = str(registro.get("source_job_id") or "").strip()
+                url = str(registro.get("source_url") or "").strip()
+                if not pid:
+                    continue
+                if not url:
+                    url = f"{BASE}/Puesto/Detalles?Puesto={pid}"
+                html = await self._obtener(page, url, requiere_sesion=True)
+                card = {
+                    "titulo": str(registro.get("title") or ""),
+                    "empresa": str(registro.get("company") or ""),
+                    "ubicacion": str(registro.get("location_raw") or ""),
+                }
+                det = self._parse_detalle(html, card) if html else {}
+                if not det:
+                    # La vacante ya no esta (o la pagina cambio): no se toca
+                    # lo que ya estaba guardado.
+                    omitidos += 1
+                    logger.info("ANE: detalle no disponible para %s; se omite.", pid)
+                    continue
+                offers.append(self._oferta(pid, url, card, det, ""))
+                if self.request_delay:
+                    await asyncio.sleep(self.request_delay)
+        finally:
+            await page.close()
+
+        logger.info(
+            "ANE re-barrido de detalle: %d revisado(s), %d omitido(s).",
+            len(offers), omitidos,
+        )
+        return AneOffers(offers, jobs_skipped=omitidos)
+
+    def fetch_detalles_conocidos(
+        self,
+        site: dict[str, Any],
+        *,
+        source_jobs: List[Dict[str, str]],
+        port: int = 9222,
+    ) -> AneOffers:
+        """Re-baja el detalle de avisos YA guardados (re-barrido de detalle)."""
+        from playwright.async_api import async_playwright
+
+        async def _run():
+            async with async_playwright() as p:
+                browser = await p.chromium.connect_over_cdp(f"http://localhost:{port}")
+                ctx = browser.contexts[0]
+                return await self._revisitar(ctx, site, source_jobs)
+
+        return asyncio.run(_run())
 
     def _conocidos(self, db_path: str | None) -> set[str]:
         """job_ids ANE ya guardados CON descripción (no hay que re-bajar detalle)."""
@@ -479,16 +583,51 @@ class AneFetcher:
         if extra and extra not in desc:
             desc = f"{desc} | {extra}".strip(" |") if desc else extra
 
+        # --- Campos que el parser DELEGABA (medido 2026-11-06) ---
+        # La ficha de ANE trae "Nivel académico" y "Experiencia laboral" (lo
+        # que la empresa PIDE) y el parser no las leia: sin ellas el motor no
+        # podia evaluar la dimension educativa ni la de experiencia, y esos
+        # avisos acababan "sin requisitos" o "datos insuficientes".
+        nivel = self._campo(izq, "Nivel académico")
+        experiencia = self._campo(izq, "Experiencia laboral")
+        estudio_tecnico = self._campo(der, "Estudio técnico")
+        if _VALOR_NEGADO.search(estudio_tecnico or ""):
+            # "No se especifica estudios técnicos" NO es un requisito.
+            estudio_tecnico = ""
+
+        # Contexto (no son requisitos, pero el aviso los dice y ayudan a
+        # entenderlo): ocupacion, horario y tipo de contratacion.
+        contexto = []
+        for etiqueta, valor in (
+            ("Ocupación", self._campo(izq, "Ocupación")),
+            ("Horario", self._campo(der, "Horario")),
+            ("Tipo de contratación", self._campo(der, "Tipo contratación")),
+        ):
+            if valor and valor.lower() not in desc.lower():
+                contexto.append(f"{etiqueta}: {valor}")
+        if contexto:
+            desc = f"{desc} | {' | '.join(contexto)}".strip(" |") if desc \
+                else " | ".join(contexto)
+
         reqs = [self._campo(der, "Requisitos adicionales para el empleo")]
         for lab_n, lab_txt, items in self._secciones_ul(der):
             if lab_n.startswith(_REQ_UL):
                 reqs.append(f"{lab_txt}: " + ", ".join(items))
+        if nivel:
+            reqs.append(f"Nivel académico: {nivel}")
+        if experiencia:
+            reqs.append(f"Experiencia laboral: {experiencia}")
+        if estudio_tecnico:
+            reqs.append(f"Estudio técnico: {estudio_tecnico}")
         reqs = [r for r in reqs if r]
 
         return {
-            "titulo": _limpiar(h2.get_text()) if h2 else card["titulo"],
-            "empresa": _limpiar(sm.get_text()) if sm else card["empresa"],
-            "ubicacion": "; ".join(self._lista_tras(izq, "Ubicaciones del empleo")) or card["ubicacion"],
+            "titulo": _limpiar(h2.get_text()) if h2 else (card.get("titulo") or ""),
+            "empresa": _limpiar(sm.get_text()) if sm else (card.get("empresa") or ""),
+            "ubicacion": (
+                "; ".join(self._lista_tras(izq, "Ubicaciones del empleo"))
+                or (card.get("ubicacion") or "")
+            ),
             "descripcion": desc,
             "requisitos": ". ".join(reqs),
             "salario": self._campo(der, "Salario"),

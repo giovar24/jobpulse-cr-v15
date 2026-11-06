@@ -469,17 +469,31 @@ python -m pytest tests/ -q    # pytest vive en el python del sistema (el venv no
 
 ## 5. PRÓXIMA ACCIÓN INMEDIATA
 
-Pendientes vivos (handoff vigente `docs/HANDOFF_SESION_2026-11-05.md`; plan
+Pendientes vivos (handoff vigente `docs/HANDOFF_SESION_2026-11-06.md`; plan
 completo en `docs/PLAN_MEJORAS.md`):
 
-0. **O12 — paridad CLI/UI** (meta #1): **Olas 1 y 2 YA ESTÁN** (2026-11-05:
+0. **Ola 4.1 — calidad del dato (MEDIDA 2026-11-06, falta aplicar a la BD
+   real)**: el parser de la ficha de ANE **descartaba campos** ("Nivel
+   académico", "Experiencia laboral", "Estudio técnico") → el motor no podía
+   evaluar esas dimensiones. Medido sobre una **copia** de la BD real
+   (`%TEMP%\opencode\ola4.db`): los 120 avisos ANE guardados tienen **más
+   texto** con el parser nuevo (+24 avisos nuevos = 729), **9 de 705** cambian
+   de estado (7 → `descartada/titulo_universitario_requerido` con evidencia
+   literal "Licenciatura (Requerido)", 2 → `revisar_a_mano/educacion_no_cumple`
+   porque el texto NO dice "Requerido") y **`educacion_no_confirmada` NO
+   cambia** (31 → 31). Lo que falta: **OK del usuario** para aplicarlo a la
+   BD real (re-barrido + re-análisis + Paso 5 nuevo). Lo que ya está en el
+   código: `scrape ane --site ane-cr --revisitar` (re-baja el detalle de los
+   avisos ya guardados) y `analysis_flow.reananalizar_texto_cambiado`
+   (re-analiza los avisos cuyo `text_hash` ya no cuadra).
+1. **O12 — paridad CLI/UI** (meta #1): **Olas 1 y 2 YA ESTÁN** (2026-11-05:
    re-análisis incremental, badge, guarda, evidencia como módulo, login ANE
    con cierre ordenado y orquestador `pipeline.py` con los botones "Procesar"
    y "Enriquecer IA" en la UI v2; medición 231 → 11).
-   El bloque de ALINEACIÓN **ya está aplicado en la BD real** (esquema 21,
+   El bloque de ALINEACIÓN **ya está aplicado en la BD real** (esquema 22,
    705 avisos, corrida `20261104_231932`): lo pendiente es que las UIs lo
    repitan, no volver a aplicarlo.
-1. **O13 — cobertura de fuentes**: **OLA 3 COMPLETA (2026-11-06)**: LinkedIn
+2. **O13 — cobertura de fuentes**: **OLA 3 COMPLETA (2026-11-06)**: LinkedIn
    reescrito (listado por HTTP + `div.base-card` + JSON-LD) → **60 avisos**;
    Elempleo (falso muro de login, empresa, filtro de país) → **3 avisos**;
    estado `requires_login` en la salud de sitios (migración **022**, 🔑 en la
@@ -487,12 +501,12 @@ completo en `docs/PLAN_MEJORAS.md`):
    (`jobpulse_v15.sesion_navegador` → `data/usuario/sesiones/ane.json`),
    verificada con **dos barridos seguidos** (24 avisos cada uno) y también
    con Brave cerrado y reabierto.
-2. **El usuario marca sus áreas en la UI** (perfil → pestaña **"Áreas de
+3. **El usuario marca sus áreas en la UI** (perfil → pestaña **"Áreas de
    empleo"**): hasta entonces el filtro está INACTIVO (sin áreas marcadas se
    evalúa todo, que es lo que hoy ocurre). Después, la próxima corrida del
    Paso 5 deja las ofertas de otras áreas con estado `fuera_de_area` (o
    `run_paso5.py --evaluar-todo` para evaluating todas).
-3. **Capa B — extractor educativo** (aprobada por el usuario): migración
+4. **Capa B — extractor educativo** (aprobada por el usuario): migración
    **`017`** (filas `concepto`: master/MBA/associate/técnico superior) —
    **ESCRITA y APLICADA** el 2026-11-04 (esquema 19 en la BD real);
    `Repository.save_analysis` rellena `codigo_canonico` al guardar y
@@ -502,13 +516,13 @@ completo en `docs/PLAN_MEJORAS.md`):
    la BD real es un **no-op** (los hechos sin código son títulos de
    puesto) → no hace falta correrlo. **Pendiente**: re-analizar las vacantes
    para que los requisitos nuevos nazcan con código (→ punto 0).
-4. **Paso 5 — las 31 `revisar_a_mano / educacion_no_confirmada` siguen ABIERTAS**:
+5. **Paso 5 — las 31 `revisar_a_mano / educacion_no_confirmada` siguen ABIERTAS**:
    las firma una **segunda persona** en `docs/PASO5_REVISION_PENDIENTES.md`
    (el autoveredicto del autor de la regla se descarta por sesgo) → después,
    tabla `job_match_decision` + decisiones finales + UI + export (Paso 7).
    **No tocar los umbrales** (cobertura 0.60 / puntaje 0.80) sin acuerdo
    explícito.
-5. **O8.2 ciclo de vida de la vacante**: recurrentes y aplicadas ocultas por
+6. **O8.2 ciclo de vida de la vacante**: recurrentes y aplicadas ocultas por
    defecto (opt-in para verlas); aplicado = manual; herencia por compañía +
    huella de descripción (exacta o ratio ≥ ~0.92; margen incierto → quality
    duplicates), con **ventana temporal configurable en Configuración**
@@ -650,6 +664,40 @@ completo en `docs/PLAN_MEJORAS.md`):
 ---
 
 ## 8. HISTORIAL DE CAMBIOS RECIENTES
+
+### 2026-11-06 — OLA 4.1: CALIDAD DEL DATO (parser de ANE + re-barrido de detalle + re-análisis por texto nuevo)
+
+**Qué**: el plan pedía "re-barrido de detalle" para 43 descripciones cortas.
+Al medirlo, el problema real era otro: **el parser de la ficha de ANE
+descartaba campos** ("Nivel académico", "Experiencia laboral", "Estudio
+técnico"), o sea justo **lo que la empresa PIDE**. El corpus, en cambio,
+ya coincidía con la fuente (descripción corta ≠ texto perdido: el texto
+estaba en `requirements_raw`).
+
+1. **Parser ampliado** (`ane.py`): lee los campos que se perdían; un valor
+   **negado** ("No se especifica estudios técnicos") NO se copia; el **correo
+   del empleador NO se guarda**; `Ocupación`/`Horario`/`Tipo contratación` van
+   como contexto del aviso, no como requisitos.
+2. **Re-barrido de detalle** (`scrape ane --site ane-cr --revisitar`): vuelve
+   a bajar el detalle de los avisos **ya guardados** (por su URL). Hace falta
+   porque el listado de ANE solo muestra lo nuevo: un aviso viejo guardado con
+   un parser viejo nunca vuelve a pasar por el listado. Lo que ya no existe en
+   la web se **omite** (no se borra nada). La oferta se construye con
+   `AneFetcher._oferta` (**una sola implementación** para barrido y
+   re-barrido).
+3. **Re-análisis por texto nuevo** (`analysis_flow.avisos_con_texto_cambiado`
+   / `reananalizar_texto_cambiado`): si el `text_hash` del análisis vigente no
+   cuadra con el texto del aviso, el aviso está obsoleto → se re-analiza
+   (enganchado en la etapa `reanalisis` de `pipeline.py`).
+
+**Medición (copia de la BD real, `%TEMP%\opencode\ola4.db`)**: 120 avisos ANE
+con **más texto** (+24 nuevos = 729), **9 de 705 cambian de estado**, y
+**`educacion_no_confirmada` no cambia** (31 → 31). De los 9: 7 pasan a
+`descartada` con evidencia literal **"Nivel académico: Licenciatura
+(Requerido)"** y 2 pasan a `revisar_a_mano` porque el texto dice solo
+"Nivel académico: Licenciatura" (sin "Requerido" → ante la duda, revisar).
+
+**Pendiente**: aplicar a la BD real (OK del usuario).
 
 ### 2026-11-06 — OLA 3 DE O13: COBERTURA DE FUENTES (LinkedIn, Elempleo, `requires_login`, sesión de ANE)
 

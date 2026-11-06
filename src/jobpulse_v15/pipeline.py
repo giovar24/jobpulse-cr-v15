@@ -308,11 +308,30 @@ def _etapa_ia(
 
 
 def _etapa_reanalisis(repository, log, *, should_stop=None, **_ignorados) -> dict[str, Any]:
-    """Re-análisis de los avisos que quedaron sin integrar `skills`/idiomas."""
-    from jobpulse_v15.analysis_flow import reananalizar_con_campos_fuente
+    """Re-análisis de lo que quedó obsoleto.
+
+    Dos motivos (O13 · Ola 4.1):
+    * el aviso tiene `skills`/idiomas que su análisis no integró (Ola 1.1);
+    * el TEXTO del aviso cambió (el scraper trajo más texto del que se
+      analizó): el `text_hash` del análisis vigente ya no cuadra.
+    """
+    from jobpulse_v15.analysis_flow import (
+        reananalizar_con_campos_fuente,
+        reananalizar_texto_cambiado,
+    )
 
     stats = reananalizar_con_campos_fuente(repository, on_progress=log)
-    return dict(stats, ok=stats.get("errores", 0) == 0)
+    texto = reananalizar_texto_cambiado(repository, on_progress=log)
+    log(
+        "Re-análisis por texto nuevo: %d de %d aviso(s) re-analizado(s)."
+        % (texto.get("reanalizados", 0), texto.get("candidatos", 0))
+    )
+    return dict(
+        stats,
+        texto_candidatos=texto.get("candidatos", 0),
+        texto_reanalizados=texto.get("reanalizados", 0),
+        ok=stats.get("errores", 0) == 0 and texto.get("errores", 0) == 0,
+    )
 
 
 def _etapa_backfill(repository, log, **_ignorados) -> dict[str, Any]:

@@ -29,9 +29,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from jobpulse_v15.analysis_flow import (  # noqa: E402
     analisis_refleja_campos,
     avisos_con_campos_sin_integrar,
+    avisos_con_texto_cambiado,
     cuenta_analisis_obsoletos,
     extract_job_analysis,
     reananalizar_con_campos_fuente,
+    reananalizar_texto_cambiado,
 )
 from jobpulse_v15.db import Database  # noqa: E402
 from jobpulse_v15.repository import Repository  # noqa: E402
@@ -257,6 +259,112 @@ class TestReanalisisIncremental(Base):
 
         self.assertEqual(stats["candidatos"], 0)
         self.assertEqual(stats["reanalizados"], 0)
+
+
+class TestReanalisisPorTextoNuevo(Base):
+    """Ola 4.1: el scraper trajo MÁS texto del que se había analizado.
+
+    Caso real (2026-11-06): el parser de ANE no leía "Nivel académico" ni
+    "Experiencia laboral" de la ficha. Al arreglarlo, el texto del aviso
+    cambia → el ``text_hash`` del análisis vigente ya no describe al aviso y
+    hay que re-analizarlo (si no, el motor evalúa el texto viejo).
+    """
+
+    def _cambiar_texto(self, job_id, texto):
+        with self.database.connection() as connection:
+            connection.execute(
+                "UPDATE jobs SET description_raw = ? WHERE job_id = ?",
+                (texto, job_id),
+            )
+
+    def test_un_aviso_con_texto_nuevo_es_candidato(self):
+        job_id = self._job()
+        extract_job_analysis(self.repository, job_id)
+        self._cambiar_texto(
+            job_id,
+            "Buscamos una persona con experiencia en el area. "
+            "Nivel academico: Licenciatura. Experiencia laboral: 2 anos.",
+        )
+
+        self.assertEqual(avisos_con_texto_cambiado(self.repository), [job_id])
+
+    def test_un_aviso_sin_cambio_no_es_candidato(self):
+        job_id = self._job()
+        extract_job_analysis(self.repository, job_id)
+
+        self.assertEqual(avisos_con_texto_cambiado(self.repository), [])
+
+    def test_reanaliza_y_el_analisis_vigente_describe_el_texto_nuevo(self):
+        job_id = self._job()
+        extract_job_analysis(self.repository, job_id)
+        self._cambiar_texto(
+            job_id,
+            "Se requiere licencia de conducir B1 para la flota de la empresa.",
+        )
+
+        stats = reananalizar_texto_cambiado(self.repository)
+
+        self.assertEqual(stats["candidatos"], 1)
+        self.assertEqual(stats["reanalizados"], 1)
+        self.assertEqual(stats["errores"], 0)
+        self.assertEqual(avisos_con_texto_cambiado(self.repository), [])
+        # El texto nuevo se ve en los requisitos del análisis vigente.
+        textos = " ".join(fila["value_text"] for fila in self._requisitos(job_id))
+        self.assertIn("B1", textos)
+
+    def test_es_idempotente(self):
+        job_id = self._job()
+        extract_job_analysis(self.repository, job_id)
+        self._cambiar_texto(job_id, "Otro texto completamente distinto.")
+        reananalizar_texto_cambiado(self.repository)
+
+        segunda = reananalizar_texto_cambiado(self.repository)
+
+        self.assertEqual(segunda["candidatos"], 0)
+        self.assertEqual(segunda["reanalizados"], 0)
+
+    def test_el_dry_run_no_guarda_nada(self):
+        job_id = self._job()
+        extract_job_analysis(self.repository, job_id)
+        self._cambiar_texto(job_id, "Texto nuevo que no se debe guardar todavia.")
+
+        stats = reananalizar_texto_cambiado(self.repository, dry_run=True)
+
+        self.assertEqual(stats["candidatos"], 1)
+        self.assertEqual(stats["reanalizados"], 1)
+        # Sigue pendiente (no se guardo nada).
+        self.assertEqual(avisos_con_texto_cambiado(self.repository), [job_id])
+
+    def test_un_aviso_sin_texto_no_rompe_el_lote(self):
+        """Un aviso que se quedó sin texto no se re-analiza ni rompe el lote.
+
+        Sin texto no hay nada que analizar (`preparar_analisis` lanza), así que
+        el aviso se salta (no se toca su análisis vigente) y el resto del
+        lote sigue.
+        """
+        vacio = self._job(job_id="job-vacio")
+        ok = self._job(job_id="job-ok")
+        extract_job_analysis(self.repository, ok)
+        extract_job_analysis(self.repository, vacio)
+        self._cambiar_texto(ok, "Texto nuevo del aviso bueno.")
+        self._cambiar_texto(vacio, "   ")
+
+        stats = reananalizar_texto_cambiado(self.repository)
+
+        self.assertEqual(stats["errores"], 0)
+        self.assertEqual(stats["reanalizados"], 1)
+        # El aviso sin texto no entra ni como candidato ni como error.
+        self.assertNotIn(vacio, avisos_con_texto_cambiado(self.repository))
+
+    def test_avisa_el_progreso(self):
+        job_id = self._job()
+        extract_job_analysis(self.repository, job_id)
+        self._cambiar_texto(job_id, "Un texto nuevo para este aviso.")
+        mensajes = []
+
+        reananalizar_texto_cambiado(self.repository, on_progress=mensajes.append)
+
+        self.assertTrue(any(job_id in mensaje for mensaje in mensajes), mensajes)
 
 
 if __name__ == "__main__":

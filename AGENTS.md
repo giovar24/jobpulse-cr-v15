@@ -159,6 +159,24 @@ incompleta.
   `data/usuario/sesiones/ane.json` (fuera del repo: es un secret) tras el
   login y la restaura cuando falta la sesión. Si el servidor la caducó, el
   archivo se borra.
+  **Trampa 3 (verificada 2026-11-06, Ola 4.1)**: el listado de ANE solo
+  muestra las vacantas **recientes** → un aviso viejo guardado con un parser
+  viejo **nunca** vuelve a pasar por el listado y su texto se queda para
+  siempre con los campos que el parser no leía ("Nivel académico",
+  "Experiencia laboral"). Para corregirlo: `scrape ane --site ane-cr
+  --revisitar` (re-baja el detalle de los avisos YA guardados por su URL; lo
+  que ya no exista en la web se **omite**, no se borra). El parser de la
+  ficha vive en `AneFetcher._parse_detalle` y la oferta se construye en
+  `AneFetcher._oferta` (**una sola implementación** para el barrido y el
+  re-barrido: si construyeran el dict por separado, el texto guardado
+  diferiría y el re-análisis no detectaría el cambio).
+- **Re-análisis por texto nuevo (Ola 4.1)**: `job_analysis.text_hash` es el
+  sha256 de descripción + requisitos. Si el scraper trae más texto, el hash
+  ya no cuadra → el aviso está obsoleto →
+  `analysis_flow.avisos_con_texto_cambiado` /
+  `reananalizar_texto_cambiado` (enganchado en la etapa `reanalisis` de
+  `pipeline.py`). **Si cambias un parser, re-barrida y re-analiza**: si no,
+  el motor evalúa el texto viejo.
 - **LinkedIn**: el listado público se pide por **HTTP simple**
   (`/jobs/search/?keywords=…&location=…` → `div.base-card` + JSON-LD
   `ItemList`); `/jobs/search-results/` responde **999** y el navegador sin
