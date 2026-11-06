@@ -13,7 +13,7 @@
 | 1 (hecha) | **O12** paridad CLI/UI | La UI da los mismos números que la CLI (231 `sin_requisitos` → 11) |
 | 2 (hecha) | **O12** paridad CLI/UI | Una sola implementación del pipeline (orquestador + botones) |
 | 3 (hecha 2026-11-06) | **O13** cobertura de fuentes | LinkedIn 0 → 60 avisos · Elempleo 0 → 3 · `requires_login` · sesión de ANE entre arranques |
-| 4 (en curso) | O5.3 / taxonomía / métricas | Calidad del dato (4.1 medida: parser de ANE + re-barrido de detalle) |
+| 4 (4.1 hecha 2026-11-06) | O5.3 / taxonomía / métricas | Calidad del dato (parser de ANE + re-barrido de detalle, aplicada a la BD real) |
 | 5 | O4, upsert, embeddings | Se pueden dejar de último |
 
 ## Contexto: el problema de fondo
@@ -285,8 +285,37 @@ que permite descartar. Los 2 que dicen solo "Nivel académico: Licenciatura"
 **`educacion_no_confirmada` no se tocó** (31 → 31): lo firma una segunda
 persona.
 
-**Pendiente**: aplicar el re-barrido + re-análisis + Paso 5 **a la BD real**
-(requiere OK del usuario: cambia el estado de 9 avisos).
+**Pendiente**: ~~aplicar el re-barrido + re-análisis + Paso 5 **a la BD real**~~
+
+### 4.1 APLICADO A LA BD REAL (2026-11-06, con OK del usuario)
+
+Se aplicó **solo a los 120 avisos ANE ya guardados** (decisión del usuario: los
+24 avisos nuevos se dejan para el barrido normal, con su pase de IA):
+
+| Paso | Comando | Resultado |
+|---|---|---|
+| Respaldo | `… backup --output data\backups\pre_ola4_20261106_151857.db` | 18,7 MB |
+| Re-barrido de detalle | `… scrape ane --site ane-cr --revisitar` | 120 revisados, 0 nuevos, 0 omitidos |
+| Re-análisis + backfill + Paso 5 + evidencia | `pipeline.ejecutar(…, etapas=("reanalisis","backfill","paso5","evidencia"))` | 120 re-analizados · backfill 0 · **corrida `20261106_152304`** · evidencia OK (137 verificaciones) |
+
+**Resultado en la BD real** (idéntico a la medición sobre la copia):
+
+| Métrica | Antes (`20261104_231932`) | Ahora (`20261106_152304`) |
+|---|---|---|
+| Avisos | 705 | 705 (sin scrape: solo texto corregido) |
+| Texto total de los avisos ANE | 115.601 chars | **141.967 chars** (+23 %; los 120 con más texto) |
+| `calificada` | 239 | 237 |
+| `descartada` | 89 | 96 |
+| `datos_insuficientes` | 42 | 41 |
+| `revisar_a_mano` | 324 | 320 |
+| `sin_requisitos` | 11 | 11 |
+| **`educacion_no_confirmada`** | 31 | **31 (sin cambios)** |
+| Avisos que cambian de estado | — | **9** (7 → `descartada` con evidencia literal, 2 → `revisar_a_mano`) |
+
+`db check` → `integrity_check ok`, 0 violaciones de FK. `verificar_evidencia.py`
+→ **137 verificaciones con frase LITERAL, 0 fallos**. La hoja de firma
+(`docs/PASO5_REVISION_PENDIENTES.md`) se regeneró para la corrida vigente
+(31 casos, sin veredictos: los firma una segunda persona).
 
 ---
 

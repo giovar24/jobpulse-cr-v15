@@ -30,8 +30,13 @@ Medido sobre una **copia** de la BD real: los 120 avisos ANE guardados tienen
 **más texto** (+24 nuevos = 729), **9 de 705 cambian de estado** (7 a
 `descartada` con evidencia literal "Licenciatura (Requerido)", 2 a
 `revisar_a_mano` porque el texto NO dice "Requerido") y
-**`educacion_no_confirmada` NO cambia** (31 → 31). **Falta el OK del usuario
-para aplicarlo a la BD real.**
+**`educacion_no_confirmada` NO cambia** (31 → 31). **Aplicado a la BD real con
+OK del usuario** (solo los 120 existentes): respaldo
+`data/backups/pre_ola4_20261106_151857.db` → re-barrido (120 revisados, 0
+omitidos) → re-análisis (120) → backfill → **corrida `20261106_152304`** →
+evidencia OK (137 verificaciones, 0 fallos) → `db check` ok. Texto total de
+los avisos ANE: 115.601 → **141.967 chars** (+23 %). `educacion_no_confirmada`
+sigue en **31**.
 
 > ℹ️ Esta sesión continúa la del **2026-11-05** (`docs/HANDOFF_SESION_2026-11-05.md`):
 > Ola 1 y Ola 2 de O12 ya estaban hechas y pusheadas.
@@ -176,7 +181,7 @@ Tests: `tests/test_sesion_navegador.py` (18) + 2 en `tests/test_ane_login.py`.
 | **O13 Cobertura de fuentes** | Que el barrido traiga los avisos que existen | 🟢 **Ola 3 COMPLETA (2026-11-06)**: LinkedIn 0 → 60 · Elempleo 0 → 3 · `requires_login` · sesión de ANE entre arranques · ANE con dos barridos seguidos |
 | **O14 Control del coste de la IA** | Límites opt-in y ajustables | ✅ Hecho (2026-11-05) |
 | `educacion_no_confirmada` | 31 casos | ⏳ **ABIERTO** (firma de una 2ª persona) |
-| O5.3 (re-barrido de descripciones basura) | 43 descripciones <200 chars (35 de ANE) | 🟡 **MEDIDO (2026-11-06)**: el corpus ya coincidía con la fuente; el hueco real era el **parser** (campos descartados). Hecho: parser ampliado + `scrape ane --revisitar` + re-análisis por texto nuevo. **Falta aplicar a la BD real** (OK del usuario): 9 de 705 avisos cambian de estado |
+| O5.3 (re-barrido de descripciones basura) | 43 descripciones <200 chars (35 de ANE) | 🟢 **HECHO Y APLICADO (2026-11-06)**: el corpus ya coincidía con la fuente; el hueco real era el **parser** (campos descartados). Parser ampliado + `scrape ane --revisitar` + re-análisis por texto nuevo. En la BD real: texto ANE 115.601 → 141.967 chars, **9 de 705 cambian de estado**, `educacion_no_confirmada` 31 → 31, corrida `20261106_152304` |
 | O6.4 (dedupe slugs ES/EN) | — | ⏳ Parcial |
 | O4 (calibración gate-vs-IA) | — | 🟡 Proponer cerrar como *superseded* |
 | O8.2 / O8.4 / O9 / pestañas nuevas UI v2 | — | ⏳ Pendiente (Ola 4) |
@@ -251,12 +256,18 @@ python -m pytest tests/test_ane_detalle.py tests/test_reanalisis.py `
 
 ## 7. Contexto (estado de la BD real)
 
-- **BD real `data/jobpulse_v15.db`**: **esquema 22** (migración 022 aplicada el
-  2026-11-06), **705 avisos**, 129 sitios, 134 corridas de sitio, 705
-  `job_analysis`, 1259 `job_match`. `integrity_check ok`, 0 violaciones de FK.
-  Corrida Paso 5 vigente `20261104_231932`: calificada 239 · revisar 324 ·
-  descartada 89 · datos_insuf 42 · sin_requisitos 11.
-- **Respaldo**: `data/backups/pre_mig022_20261106_130349.db` (antes de la 022) y
+- **BD real `data/jobpulse_v15.db`**: **esquema 22**, **705 avisos**, 129 sitios,
+  136 corridas de sitio, 825 `job_analysis` (705 vigentes + 120 del
+  re-análisis), 1964 `job_match` (1 corrida válida). `integrity_check ok`,
+  0 violaciones de FK.
+  Corrida Paso 5 vigente `20261106_152304` (aplicada por la Ola 4.1):
+  calificada 237 · revisar 320 · descartada 96 · datos_insuf 41 ·
+  sin_requisitos 11 · `educacion_no_confirmada` 31.
+  Corrida anterior (sigue en la BD, `valida=0`): `20261104_231932`
+  (calificada 239 · revisar 324 · descartada 89 · datos_insuf 42 ·
+  sin_requisitos 11).
+- **Respaldo**: `data/backups/pre_ola4_20261106_151857.db` (antes de la Ola
+  4.1), `data/backups/pre_mig022_20261106_130349.db` (antes de la 022) y
   `data/backups/pre_limpieza_20261104_211349.db`.
 - **Mediciones de la Ola 3** (todas sobre `%TEMP%\opencode\ane_check.db`, copia
   de la BD real): ANE 24 avisos (1er barrido, 24 nuevos) → 24 avisos (2º
@@ -293,19 +304,20 @@ python -m pytest tests/test_ane_detalle.py tests/test_reanalisis.py `
 
 ## 8. Pendiente inmediato
 
-1. **Ola 4.1 — aplicar a la BD REAL** (pide OK del usuario): re-barrido de
-   detalle (`scrape ane --site ane-cr --revisitar`) + re-análisis por texto
-   nuevo + **Paso 5 (corrida nueva)**. Efecto medido: **9 de 705** avisos
-   cambian de estado (7 a `descartada` con evidencia literal, 2 a
-   `revisar_a_mano`), `educacion_no_confirmada` **no** cambia (31 → 31).
-   Antes: respaldo (`… backup --output data\backups\pre_ola4_<stamp>.db`).
-2. **Ola 4 — seguir** (`docs/PLAN_MEJORAS.md`): 4.2 curación de la taxonomía
-   (`concepto_no_normalizado`: 1988 variantes) · 4.3 métricas por etapa.
+1. **Ola 4 — seguir** (`docs/PLAN_MEJORAS.md`): 4.2 curación de la taxonomía
+   (`concepto_no_normalizado`: 1988 variantes; en la BD real la cola de
+   requisitos sin `codigo_canonico` es **1**) · 4.3 métricas por etapa.
+2. **Los 24 avisos ANE nuevos** (122031+) que se detectaron al medir: el
+   usuario decidió **no** meterlos en la Ola 4.1 (entran en el barrido normal,
+   con su pase de IA). Si se quieren ya: `scrape ane --site ane-cr` (24
+   nuevos) → `analysis extract-pending` → `run_enriquecimiento.py` → re-análisis
+   → backfill → `run_paso5.py`.
 3. (Opcional, con permiso del usuario) migrar la **UI clásica** al orquestador
    `pipeline.py` (usa las mismas implementaciones por etapa, pero mantiene su
    propio flujo; la UI clásica no se toca sin pedirlo).
 4. `educacion_no_confirmada` (31 casos): **NO** actualizar estados hasta que
-   una **segunda persona** firme `docs/PASO5_REVISION_PENDIENTES.md`.
+   una **segunda persona** firme `docs/PASO5_REVISION_PENDIENTES.md` (ya
+   regenerada para la corrida `20261106_152304`).
 5. Decidir si el **rate-limit de LinkedIn** sube de 1,5 s según la carga real
    (medido: 10 peticiones sin espera → 429).
 
@@ -313,7 +325,8 @@ python -m pytest tests/test_ane_detalle.py tests/test_reanalisis.py `
 
 ## 9. Commits de esta sesión
 
-- **HEAD (Ola 4.1)** — `feat(o5.3): Ola 4.1 - parser de ANE completo, re-barrido de detalle y re-análisis por texto nuevo` — parser ampliado, `scrape ane --revisitar`, `reananalizar_texto_cambiado`, medición sobre copia (9 de 705 cambian de estado; `educacion_no_confirmada` 31 → 31).
+- **HEAD (aplicación a la BD real)** — `docs(o5.3): Ola 4.1 aplicada a la BD real (texto de ANE corregido, corrida 20261106_152304)` — evidencia + hoja de firma regeneradas, docs actualizadas.
+- `280b4e7` — `feat(o5.3): Ola 4.1 - parser de ANE completo, re-barrido de detalle y re-análisis por texto nuevo` (pusheado) — parser ampliado, `scrape ane --revisitar`, `reananalizar_texto_cambiado`, medición sobre copia (9 de 705 cambian de estado; `educacion_no_confirmada` 31 → 31).
 - `14bba25` — `feat(o13): Ola 3 - cobertura de fuentes (LinkedIn, Elempleo, requires_login, sesión ANE)` — scrapers reescritos, migración 022, `requiere_login.py`, `sesion_navegador.py`, 52 tests nuevos + 2 de UI v2 + 2 de ANE, docs actualizadas. Suite: **1083 passed + 247 subtests**.
 - `680024f` — `feat(o12): Ola 2 - orquestador único (pipeline.py) y botones "Procesar"/"Enriquecer IA" en la UI v2` (pusheado).
 - `21af318` — `feat(o12): Ola 1 - paridad CLI/UI (re-análisis, evidencia, login ANE)` (pusheado).

@@ -472,20 +472,19 @@ python -m pytest tests/ -q    # pytest vive en el python del sistema (el venv no
 Pendientes vivos (handoff vigente `docs/HANDOFF_SESION_2026-11-06.md`; plan
 completo en `docs/PLAN_MEJORAS.md`):
 
-0. **Ola 4.1 — calidad del dato (MEDIDA 2026-11-06, falta aplicar a la BD
-   real)**: el parser de la ficha de ANE **descartaba campos** ("Nivel
+0. **Ola 4.1 — calidad del dato: APLICADA A LA BD REAL (2026-11-06, con OK
+   del usuario)**: el parser de la ficha de ANE **descartaba campos** ("Nivel
    académico", "Experiencia laboral", "Estudio técnico") → el motor no podía
-   evaluar esas dimensiones. Medido sobre una **copia** de la BD real
-   (`%TEMP%\opencode\ola4.db`): los 120 avisos ANE guardados tienen **más
-   texto** con el parser nuevo (+24 avisos nuevos = 729), **9 de 705** cambian
-   de estado (7 → `descartada/titulo_universitario_requerido` con evidencia
-   literal "Licenciatura (Requerido)", 2 → `revisar_a_mano/educacion_no_cumple`
-   porque el texto NO dice "Requerido") y **`educacion_no_confirmada` NO
-   cambia** (31 → 31). Lo que falta: **OK del usuario** para aplicarlo a la
-   BD real (re-barrido + re-análisis + Paso 5 nuevo). Lo que ya está en el
-   código: `scrape ane --site ane-cr --revisitar` (re-baja el detalle de los
-   avisos ya guardados) y `analysis_flow.reananalizar_texto_cambiado`
-   (re-analiza los avisos cuyo `text_hash` ya no cuadra).
+   evaluar esas dimensiones. Aplicado **solo a los 120 avisos ANE ya
+   guardados** (respaldo `data/backups/pre_ola4_20261106_151857.db`): texto
+   total de ANE 115.601 → **141.967 chars** (+23 %), **9 de 705** cambian de
+   estado (7 → `descartada/titulo_universitario_requerido` con evidencia
+   literal "Nivel académico: Licenciatura (Requerido)", 2 →
+   `revisar_a_mano/educacion_no_cumple` porque el texto NO dice "Requerido"),
+   **`educacion_no_confirmada` NO cambia** (31 → 31). Corrida vigente
+   **`20261106_152304`** · evidencia OK (137 verificaciones) · `db check` ok.
+   Lo que sigue: 4.2 (curación de la taxonomía) · 4.3 (métricas por etapa) ·
+   los 24 avisos ANE nuevos (122031+) quedan para el barrido normal con IA.
 1. **O12 — paridad CLI/UI** (meta #1): **Olas 1 y 2 YA ESTÁN** (2026-11-05:
    re-análisis incremental, badge, guarda, evidencia como módulo, login ANE
    con cierre ordenado y orquestador `pipeline.py` con los botones "Procesar"
@@ -697,7 +696,18 @@ con **más texto** (+24 nuevos = 729), **9 de 705 cambian de estado**, y
 (Requerido)"** y 2 pasan a `revisar_a_mano` porque el texto dice solo
 "Nivel académico: Licenciatura" (sin "Requerido" → ante la duda, revisar).
 
-**Pendiente**: aplicar a la BD real (OK del usuario).
+**Pendiente**: los 24 avisos ANE nuevos (122031+) que aparecieron al medir
+quedan para el barrido normal (con pase de IA): `scrape ane --site ane-cr` →
+`analysis extract-pending` → `run_enriquecimiento.py` → re-análisis → backfill
+→ `run_paso5.py`.
+
+**APLICADO A LA BD REAL (2026-11-06, con OK del usuario)**: solo los 120
+avisos ANE ya guardados. Respaldo
+`data/backups/pre_ola4_20261106_151857.db` → re-barrido (120 revisados, 0
+omitidos) → re-análisis (120) → backfill (0) → **corrida `20261106_152304`** →
+evidencia OK (137 verificaciones, 0 fallos) → `db check` ok. Texto total de
+ANE 115.601 → **141.967 chars** (+23 %) · **9 de 705** cambian de estado ·
+`educacion_no_confirmada` **31 → 31** · hoja de firma regenerada (31 casos).
 
 ### 2026-11-06 — OLA 3 DE O13: COBERTURA DE FUENTES (LinkedIn, Elempleo, `requires_login`, sesión de ANE)
 

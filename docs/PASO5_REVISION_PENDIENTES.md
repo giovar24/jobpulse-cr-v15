@@ -1,4 +1,4 @@
-# Paso 5 — HOJA DE REVISIÓN PENDIENTE (corrida `20261104_231932`)
+# Paso 5 — HOJA DE REVISIÓN PENDIENTE (corrida `20261106_152304`)
 
 > Documento GENERADO por `generar_revision_pendientes.py` — contiene
 > **solo textos literales de la BD, sin ningún veredicto**.
