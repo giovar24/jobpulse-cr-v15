@@ -129,6 +129,169 @@ def preparar_analisis(
     }
 
 
+# ──────────────────────────────────────────────────────────────
+# Re-análisis incremental (O12 · Ola 1.1 y 1.2)
+# ──────────────────────────────────────────────────────────────
+#
+# El hueco que separaba la CLI de las UIs: el análisis se hacía ANTES del
+# pase IA, así que `jobs.skills` / `jobs.languages` (que produce la IA)
+# nunca se convertían en requisitos comparables. La CLI lo resolvía con
+# `enrich requirements-source --apply` (re-análisis de TODO); las UIs no
+# tienen ese paso → 231 avisos quedaban `sin_requisitos` (vs 11 de la CLI).
+#
+# Aquí se hace lo mismo pero SOLO sobre los avisos que lo necesitan:
+# los que tienen campos estructurados y cuyo análisis vigente NO los
+# integró (0 requisitos `origin='source_field'`).
+
+#: Valores de `jobs.skills` / `jobs.languages` que NO son "hay dato".
+_VALORES_VACIOS = ("", "[]", "{}", "null")
+
+
+def avisos_con_campos_sin_integrar(repository: Repository) -> list[str]:
+    """Job ids con campos estructurados cuyo análisis vigente no los integró.
+
+    Consulta barata (una sola SQL): el aviso tiene `skills`/`languages`
+    informados y su análisis vigente **no** tiene ningún requisito
+    `origin='source_field'` → el análisis se hizo antes de que la IA
+    rellenara los campos (o con un extractor que los ignoraba).
+    """
+    with repository.database.connection() as connection:
+        rows = connection.execute(
+            """
+            SELECT j.job_id
+            FROM jobs AS j
+            JOIN job_analysis AS ja
+              ON ja.job_id = j.job_id AND ja.is_current = 1
+            WHERE (
+                    COALESCE(TRIM(j.skills), '') NOT IN ('', '[]', '{}', 'null')
+                 OR COALESCE(TRIM(j.languages), '') NOT IN ('', '[]', '{}', 'null')
+               )
+              AND NOT EXISTS (
+                    SELECT 1
+                    FROM job_requirements AS r
+                    WHERE r.analysis_id = ja.analysis_id
+                      AND r.origin = 'source_field'
+                  )
+            ORDER BY j.job_id
+            """
+        ).fetchall()
+    return [row["job_id"] for row in rows]
+
+
+def cuenta_analisis_obsoletos(repository: Repository, *, exacto: bool = True) -> int:
+    """Cuántos avisos tienen el análisis REALMENTE obsoleto (badge de la UI).
+
+    ``exacto=True`` (por defecto) confirma cada candidato calculando el
+    análisis en seco (``analisis_refleja_campos``). **La SQL sola SOBRE-cuenta**:
+    un aviso cuyos ``skills``/``languages`` no resuelven a ningún concepto de la
+    taxonomía no aporta requisitos nuevos y su análisis ya es correcto (medido
+    en la BD real: la SQL daba 67 y el re-análisis 0 actualizados / 67 sin
+    cambio). Contar los candidatos como "obsoletos" dejaría el badge mintiendo
+    para siempre y pediría un re-análisis que no cambia nada.
+    """
+    candidatos = avisos_con_campos_sin_integrar(repository)
+    if not exacto:
+        return len(candidatos)
+    return sum(
+        1
+        for job_id in candidatos
+        if not analisis_refleja_campos(repository, job_id)
+    )
+
+
+def _firma_requisitos(requisitos) -> tuple:
+    """Firma comparable de un conjunto de requisitos.
+
+    Se comparan categoría + código canónico + texto (sin distinguir mayúsculas
+    ni espacios): lo que el MOTOR ve, no el detalle de la escritura.
+    """
+    return tuple(
+        sorted(
+            (
+                str(r.get("category") or ""),
+                str(r.get("codigo_canonico") or ""),
+                str(r.get("value_text") or "").strip().lower(),
+                str(r.get("origin") or ""),
+            )
+            for r in requisitos
+        )
+    )
+
+
+def analisis_refleja_campos(repository: Repository, job_id: str) -> bool:
+    """True si el análisis vigente ya refleja los campos estructurados actuales.
+
+    Calcula el análisis en seco (`preparar_analisis`, SIN guardar) y lo
+    compara con el guardado: así no se toca (ni se reescribe) un análisis
+    cuyo resultado sería el mismo.
+
+    La comparación se hace **con los códigos canónicos ya resueltos** (igual
+    que al guardar): el motor solo ve el código, no el texto escrito.
+    """
+    job = repository.get_job(job_id)
+    if job is None:
+        return True
+    actual = repository.get_current_analysis(job_id)
+    if actual is None:
+        return False
+    try:
+        with repository.database.connection() as connection:
+            prepared = preparar_analisis(job, connection)
+            resueltos, _sin_concepto = conceptos.resolver(
+                connection, prepared["requirements"]
+            )
+    except ValueError:
+        # Sin texto no hay análisis que hacer (lo trata el análisis normal).
+        return True
+    return _firma_requisitos(resueltos) == _firma_requisitos(
+        actual.get("requirements") or []
+    )
+
+
+def reananalizar_con_campos_fuente(
+    repository: Repository,
+    on_progress: Any = None,
+    dry_run: bool = False,
+) -> dict[str, Any]:
+    """Re-analiza los avisos cuyo análisis quedó obsoleto (Ola 1.1).
+
+    "Obsoleto" = el aviso tiene `skills`/`languages` y su análisis vigente
+    no los integró. Para cada candidato se calcula el análisis en seco y
+    solo se guarda si el resultado **cambia** (así no se infla el historial
+    de `job_analysis` con filas idénticas).
+
+    Idempotente: al terminar, el segundo llamado no encuentra candidatos.
+    """
+    candidatos = avisos_con_campos_sin_integrar(repository)
+    stats: dict[str, Any] = {
+        "candidatos": len(candidatos),
+        "reanalizados": 0,
+        "sin_cambio": 0,
+        "errores": 0,
+        "requisitos_fuente": 0,
+    }
+    for job_id in candidatos:
+        try:
+            if analisis_refleja_campos(repository, job_id):
+                stats["sin_cambio"] += 1
+                continue
+            if not dry_run:
+                resultado = extract_job_analysis(repository, job_id)
+                stats["requisitos_fuente"] += int(resultado.get("requisitos_fuente", 0))
+            stats["reanalizados"] += 1
+        except Exception as exc:  # noqa: BLE001 - un aviso malo no para el lote
+            stats["errores"] += 1
+            if on_progress:
+                on_progress(f"  error en {job_id}: {exc}")
+            continue
+        if on_progress:
+            on_progress(
+                f"  re-analizado {job_id} "
+                f"({stats['reanalizados']}/{len(candidatos)})"
+            )
+    return stats
+
+
 def extract_job_analysis(repository: Repository, job_id: str) -> dict[str, Any]:
     """Extrae requisitos (texto + campos estructurados) y guarda el analisis."""
     job = repository.get_job(job_id)

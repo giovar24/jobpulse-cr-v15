@@ -88,6 +88,11 @@ async def main() -> int:
     if "error" in r:
         print(f"\nABORTADO/ERROR: {r['error']}")
         return 2
+    # Los campos estructurados que la IA acaba de llenar (skills/languages)
+    # solo son requisitos comparables si el aviso se re-analiza (O12 · 1.1).
+    # Es idempotente: la segunda vez no hay nada que hacer.
+    print("\n=== RE-ANALISIS CON LOS CAMPOS DE LA IA ===")
+    iae.reananalizar_tras_ia(on_event=print)
     print(f"\nDURACIÓN: {time.time() - t0:.1f}s")
     return 0
 

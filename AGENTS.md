@@ -120,12 +120,13 @@ incompleta.
   credenciales.json` → `.env` (`ANE_USER`/`ANE_PASSWORD`); nunca en el repo.
   ANE republica vacantes con IDs nuevos → `quality duplicates`, dedupe manual,
   **nunca** automerge.
-  **Trampa (verificada 2026-11-05)**: `login_ane.py` cierra el Brave que abrió
-  → la cookie de sesión **no queda persistida** y el barrido siguiente dice
-  "ANE: sin sesión de detalle" con 0 avisos. Solución: hacer login **sobre la
-  instancia de Brave viva** y raspar sin cerrar el navegador:
-  `python -c "from jobpulse_v15.ane_login import login_ane; print(login_ane(9222))"`
-  y acto seguido `scrape ane --site ane-cr`.
+  **Trampa (verificada 2026-11-05, RESUELTA en O12 · Ola 1.5)**: antes
+  `login_ane.py` cerraba el Brave que abrió con `terminate()`/`kill()` → la
+  cookie de sesión **no quedaba persistida** y el barrido siguiente decía
+  "ANE: sin sesión de detalle" con 0 avisos. Ahora cierra **ordenado**
+  (`Browser.close` por CDP) y `--mantener-abierto` deja el navegador vivo para
+  raspar de inmediato. Flujo recomendado: `login_ane.py --mantener-abierto` y
+  acto seguido `scrape ane --site ane-cr` (sin cerrar el navegador).
 - **LinkedIn**: sesión primero, login **manual** (el auto-login dispara
   CAPTCHA/2FA). Rate-limit 429 en `jobs-guest` → bajar `pages`.
 - **Indeed**: SSO Google; el popup de alertas intercepta clics (ya resuelto en

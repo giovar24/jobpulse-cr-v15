@@ -7,8 +7,11 @@ El **tope de avisos** (`IA_MAX_VACANTES`) es **opt‑in y ajustable** (vacío =
 sin tope; nada de valores fijos). **Metas replanteadas** (O11–O14): la
 prioridad real pasa a **O12 (paridad CLI/UI)** y **O13 (cobertura de
 fuentes)**; el plan está en `docs/PLAN_MEJORAS.md` (5 olas, con criterio de
-aceptación). Suite: **961 passed + 241 subtests** (base 922 → +39).
-**Commits pusheados** a `origin/main` (`caf486d`, `49f3827`).
+aceptación). **Al cierre se ejecutó la Ola 1 completa (O12)**: re-análisis
+incremental, badge de obsoletos, guarda antes del Paso 5, evidencia como
+módulo y login ANE con cierre ordenado. **Medición en copia de la BD real:
+`sin_requisitos` 231 → 11 (−220).** Suite: **1003 passed + 241 subtests**
+(base 922 → +81). **Commits pusheados** a `origin/main` (`caf486d`, `49f3827`).
 
 > ℹ️ Esta sesión continúa el trabajo de la **noche del 2026-11-04** (sin
 > handoff propio): limpieza total + proceso completo sobre la BD real, que
@@ -104,7 +107,7 @@ Suite completa: **961 passed + 241 subtests** (~3:30 min).
 | Postulaciones (correo + Workday) | — | ✅ Hecho en código; falta validación en vivo |
 | Bloque de ALINEACIÓN (campos estructurados) | — | ✅ Hecho **y aplicado en la BD real** (esquema 21, corrida `20261104_231932`) |
 | **O11 IA externa / motor intercambiable** | Ollama Cloud, Ollama local, LM Studio, gateways | ✅ **Hecho (2026-11-05)** |
-| **O12 Paridad CLI/UI** | La UI debe dar los mismos números que la CLI | 🔴 **ABIERTO — meta #1** (231 `sin_requisitos` vs 11) |
+| **O12 Paridad CLI/UI** | La UI debe dar los mismos números que la CLI | 🟡 **Ola 1 hecha (2026-11-05)**: 231 → 11 `sin_requisitos` en la medición; falta la Ola 2 (orquestador) |
 | **O13 Cobertura de fuentes** | LinkedIn y Elempleo dan 0 avisos; ANE pierde la cookie de sesión | 🔴 **ABIERTO — meta #2** |
 | **O14 Control del coste de la IA** | Límites opt-in y ajustables (nunca fijos) | ✅ **Hecho (2026-11-05)** |
 | `educacion_no_confirmada` | 31 casos | ⏳ **ABIERTO** (firma de una 2ª persona) |
@@ -130,6 +133,14 @@ python -m pytest tests/ -q
 python -m pytest tests/test_ia_externa.py tests/test_ia_enrichment.py `
   tests/test_ia_servidor.py tests/test_ui_v2.py -q
 
+# Ola 1 de O12 (re-análisis, evidencia, login ANE)
+python -m pytest tests/test_reanalisis.py tests/test_evidencia.py `
+  tests/test_ane_login.py -q
+
+# Evidencia (exit 0 = todo cuadra) y estado de la BD
+.\.venv\Scripts\python.exe -X utf8 verificar_evidencia.py
+.\.venv\Scripts\python.exe -X utf8 tools\estado_bd.py
+
 # Probar la IA externa con otro proveedor (cambia SOLO el .env)
 # IA_PROVEEDOR=ollama
 # IA_BASE_URL=https://ollama.com/v1
@@ -152,6 +163,10 @@ python -m pytest tests/test_ia_externa.py tests/test_ia_enrichment.py `
 | `src/jobpulse_v15/ui_v2/tabs/configuracion.py` | Tarjeta IA externa: "Máx. avisos" + estado de proveedor externo |
 | `src/jobpulse_v15/configuration_window.py` | UI clásica: "Máx. avisos por corrida" + presets desde `ia_api.PRESETS` |
 | `tests/test_ia_externa.py` | **NUEVO** — 39 tests del soporte de IA externa |
+| `src/jobpulse_v15/evidencia.py` | **NUEVO (Ola 1.4)** — generar/verificar/estado de la evidencia del Paso 5 (los scripts son envoltorios) |
+| `src/jobpulse_v15/analysis_flow.py` | **Ola 1.1/1.2** — `reananalizar_con_campos_fuente`, `avisos_con_campos_sin_integrar`, `cuenta_analisis_obsoletos`, `analisis_refleja_campos` |
+| `tests/test_reanalisis.py` | **NUEVO** — 14 tests de 1.1/1.2 (idempotencia, no infla `job_analysis`) |
+| `tests/test_evidencia.py` | **NUEVO** — 19 tests de 1.4 |
 | `docs/PLAN_MEJORAS.md` | **NUEVO** — 5 olas con criterio de aceptación |
 | `docs/IA_ENRIQUECIMIENTO.md` | Sección "IA externa: Ollama, LM Studio y cloud gratis" |
 | `DESARROLLO_v15.md` | Metas O11–O14 + §5 "próxima acción" + §8 historial del 2026-11-05 |
@@ -177,37 +192,51 @@ python -m pytest tests/test_ia_externa.py tests/test_ia_enrichment.py `
 - **`.env` actual**: `IA_PROVEEDOR=custom`, `IA_BASE_URL=http://127.0.0.1:8081/v1`,
   `IA_MODEL=gemma4-e2b-qat` (Gemma local) · `GEMINI_API_KEY` ya existe ·
   `BRAVE_CDP_PORT=9222`. **No hay `IA_MAX_VACANTES`** → sin tope.
-- **Trampa ANE verificada**: `login_ane.py` cierra el Brave que abrió → la
-  cookie no persiste → "ANE: sin sesión de detalle" y 0 avisos. Login
-  **sobre la instancia viva**:
-  `python -c "from jobpulse_v15.ane_login import login_ane; print(login_ane(9222))"`
-  y raspar sin cerrar el navegador (así se obtuvieron 120 avisos).
+- **Trampa ANE (RESUELTA en O12 · 1.5)**: `login_ane.py` cerraba el Brave que
+  abrió con `terminate()`/`kill()` → la cookie no persistía → "ANE: sin sesión
+  de detalle" y 0 avisos. Ahora el cierre es **ordenado** (`Browser.close` por
+  CDP) y `--mantener-abierto` deja el navegador vivo:
+  `login_ane.py --mantener-abierto` + `scrape ane --site ane-cr` seguido.
+  Falta verificarlo en vivo con **dos barridos seguidos** (O13).
 
 ---
 
-## 8. Pendiente inmediato (Ola 1 del plan — meta O12)
+## 8. Ola 1 de O12 — hecha (2026-11-05, al cierre)
 
-1. **1.1 Re-análisis incremental** tras la IA: re-analizar solo los avisos con
-   campos estructurados y **sin** requisitos `origin='source_field'`.
-2. **1.2 Detección de análisis obsoleto**: contador + badge en las UIs.
-3. **1.3 Guarda en el Paso 5**: avisar si hay análisis obsoletos antes de
-   evaluar.
-4. **1.4 Evidencia como módulo**: `src/jobpulse_v15/evidencia.py` (los scripts
-   quedan como envoltorios) + indicador "evidencia al día".
-5. **1.5 Login ANE sin cerrar el navegador** (la cookie se pierde hoy).
-6. Después: **Ola 3** (selectores de LinkedIn y Elempleo + estado
-   `requiere_login`) y **Ola 2** (orquestador `pipeline.py` + botones de UI v2).
-7. `educacion_no_confirmada` (31 casos): **NO** actualizar estados hasta que
+| Paso | Qué quedó | Dónde |
+|---|---|---|
+| **1.1** | `reananalizar_con_campos_fuente(repository, on_progress, dry_run)`: re-analiza **solo** los avisos con `skills`/`languages` cuyo análisis vigente no los integró; calcula en seco y **solo guarda si cambia** (firma con `codigo_canonico` resuelto) | `analysis_flow.py` |
+| **1.1** | Cableado como paso explícito en CLI (`run_enriquecimiento.py` → `iae.reananalizar_tras_ia`), UI clásica (paso 3.5 y tras "Enriquecer") y UI v2 (worker de `ejecutar_paso5`) | `run_enriquecimiento.py`, `ui.py`, `ui_v2/tabs/vacantes.py` |
+| **1.2** | `cuenta_analisis_obsoletos` **exacto**: la SQL sola daba 67 candidatos y el re-análisis 0 cambios → confirma en seco (`analisis_refleja_campos`). Badge en ambas UIs + `tools/estado_bd.py` | `analysis_flow.py`, `ui.py`, `ui_v2`, `tools/estado_bd.py` |
+| **1.3** | Guarda antes del Paso 5 (`askyesnocancel`): re-analizar y evaluar / evaluar igual / abortar | `ui_v2/tabs/vacantes.py` |
+| **1.4** | `jobpulse_v15.evidencia` (`generar_evidencia`, `verificar_evidencia`, `estado_evidencia`, `docs_dir_para`); `generar_evidencia_paso5.py` y `verificar_evidencia.py` son **envoltorios** (mismo CLI y exit codes; el documento generado es **idéntico** byte a byte al anterior). UI v2: botón **"Evidencia"** + indicador "evidencia al día / desactualizada" sin subprocess | `evidencia.py` (NUEVO), scripts, `ui_v2/tabs/vacantes.py`, `i18n.py` |
+| **1.5** | `cerrar_brave_ordenado()` (`Browser.close` por CDP) + `login_ane.py --mantener-abierto`; la UI clásica usa el cierre ordenado | `ane_login.py`, `login_ane.py`, `ui.py` |
+| **Tests** | `tests/test_evidencia.py` (19) + `tests/test_reanalisis.py` (14) + `tests/test_ane_login.py` (12) | `tests/` |
+| **Medición** | Copia de la BD real en `%TEMP%\opencode\medicion_ola1.db`: se borran los 1333 `source_field` (estado "UI antes"), matching → **231 `sin_requisitos`**; re-análisis (638 actualizados, 67 sin cambio, 0 errores) + matching → **11** | (no toca la BD real) |
+
+**Pendiente inmediato**:
+
+1. **Ola 2 de O12** (`docs/PLAN_MEJORAS.md`): orquestador único `pipeline.py`
+   + botones "Procesar"/"Enriquecer IA" en UI v2 + test de paridad CLI/UI
+   comparando `job_match`.
+2. **Ola 3 de O13**: selectores de LinkedIn y Elempleo + estado
+   `requiere_login`; verificar ANE con **dos barridos seguidos**.
+3. `educacion_no_confirmada` (31 casos): **NO** actualizar estados hasta que
    una **segunda persona** firme `docs/PASO5_REVISION_PENDIENTES.md`.
 
 ---
 
 ## 9. Commits de esta sesión
 
+- **HEAD** — `feat(o12): Ola 1 - paridad CLI/UI (re-análisis, evidencia,
+  login ANE)` — 20 archivos; +10 tests de ANE, 19 de evidencia, 14 de
+  re-análisis. Suite: **1003 passed + 241 subtests**.
 - `caf486d` — `feat(ia-externa): Ollama, LM Studio y cloud como alternativa a la
   IA local` (código + 39 tests + `docs/IA_ENRIQUECIMIENTO.md` + `AGENTS.md`).
 - `49f3827` — `docs(metas): O11-O14, plan de 5 olas y evidencia de la corrida
   20261104_231932` (`DESARROLLO_v15.md`, `docs/PLAN_MEJORAS.md`, evidencia y
   hoja de revisión regenerada).
 
-**Pusheados** a `origin/main` (2026-11-05).
+`caf486d` y `49f3827` están **pusheados** a `origin/main` (2026-11-05).
+El commit de la Ola 1 (HEAD) queda **local**: pendiente de confirmación para
+pushear.

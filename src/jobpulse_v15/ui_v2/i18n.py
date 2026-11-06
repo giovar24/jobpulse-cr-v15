@@ -116,6 +116,28 @@ _EN: dict[str, str] = {
     "No hay avisos guardados para rankear.":
         "There are no saved postings to rank.",
     "Calculando el ranking ATS…": "Computing the ATS ranking…",
+    "{} análisis obsoleto(s)": "{} stale analysis",
+    "Evidencia": "Evidence",
+    "Evidencia OK": "Evidence OK",
+    "Evidencia con fallos": "Evidence with failures",
+    "Generada {} ({}) y verificada: {} con frase literal.":
+        "Generated {} ({}) and verified: {} with literal wording.",
+    ("Generada {}, pero la verificación tiene {} discrepancia(s):\n\n{}"):
+        ("Generated {}, but verification found {} discrepancy(ies):\n\n{}"),
+    "No se pudo generar la evidencia:\n{}":
+        "Could not generate the evidence:\n{}",
+    ("Hay {} aviso(s) con análisis obsoleto: la IA ya llenó sus "
+     "skills/idiomas, pero el análisis no los integró (así quedan "
+     "«sin requisitos» en el matching).\n\n"
+     "¿Re-analizarlos ahora antes de evaluar?"):
+        ("There are {} posting(s) with a stale analysis: the AI already "
+         "filled their skills/languages, but the analysis did not integrate "
+         "them (so they end up “without requirements” in the matching).\n\n"
+         "Re-analyze them now before evaluating?"),
+    ("Se evaluará con los análisis actuales: esos avisos pueden "
+     "salir «sin_requisitos» aunque el perfil sí califique."):
+        ("It will run with the current analyses: those postings may come out "
+         "“without requirements” even if the profile does qualify."),
     # --- scraping (tabs/scraping.py) ---
     "Grupo:": "Group:",
     "Páginas:": "Pages:",

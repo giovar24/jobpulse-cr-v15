@@ -1,5 +1,8 @@
 """Consulta rapida del estado de la BD."""
+from jobpulse_v15 import evidencia
+from jobpulse_v15.analysis_flow import cuenta_analisis_obsoletos
 from jobpulse_v15.db import Database
+from jobpulse_v15.repository import Repository
 
 db = Database()
 db.initialize()
@@ -37,3 +40,18 @@ with db.connection() as conn:
         "SELECT COUNT(*) FROM jobs WHERE work_mode IS NULL OR TRIM(COALESCE(work_mode,''))=''"
     ).fetchone()[0]
     print("faltan city:", faltan_city, "| faltan work_mode:", faltan_wm)
+
+# O12 · Ola 1.2: avisos con skills/idiomas (los produce la IA) cuyo analisis
+# vigente NO los integro. Si no es 0, el Paso 5 ve menos requisitos de los que
+# el aviso tiene: la UI daba 231 'sin_requisitos' frente a 11 de la CLI.
+print()
+print("analisis obsoletos (campos de la IA sin integrar):",
+      cuenta_analisis_obsoletos(Repository(db)))
+
+# O12 · Ola 1.4: la evidencia del Paso 5 se puede consultar sin subprocess.
+estado = evidencia.estado_evidencia(
+    db_path=db.path, docs_dir=evidencia.docs_dir_para(db.path)
+)
+print("evidencia:",
+      "al dia" if estado["al_dia"] else "DESACTUALIZADA (%s)" % estado["motivo"],
+      "| corrida:", estado["corrida"], "| doc:", estado["documento"])

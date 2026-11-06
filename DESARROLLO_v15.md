@@ -148,8 +148,8 @@ def fetch(self, site: dict, *, pages: int, search_text: str | None,
 | **O9** Optimización de UI | Ajustes de interfaz pedidos por el usuario y siempre pospuestos — alcances por definir (después de O2-redefinido) | ⏳ placeholder |
 | **O10** Mejorar filtros de búsqueda y compatibilidad | El paso 4 del flujo filtraba `matched` a ciegas → grilla vacía (0 jobs cuando 370/447 análisis son `partial`). `ui.elegir_filtro_compatibilidad()` usa `matched` si existe y si no muestra todos los vigentes, explicando por qué. **Filtro por ÁREA ✅ (2026-10-30)**: combo "Área" + casilla "Solo áreas de mi perfil" + columna "Área" en la UI principal, y filtro en el MOTOR del Paso 5 (estado `fuera_de_area`, motivo `fuera_de_area_del_perfil`; "evaluar todo" = `run_paso5.py --evaluar-todo`). Pendiente: refinar `solo_vigentes` (uso `date_published` vs `last_seen_at`), visibilidad opt-in de recurrentes/aplicadas (O8.2). La columna "Req." (O2.2) ya no está pendiente: **✅ 2026-11-04**. | 🟡 `elegir_filtro_compatibilidad` (28-10) + filtro por área (30-10) + columna/filtro "Req." (04-11) implementados |
 | **O11** IA externa / motor intercambiable | Que el enriquecimiento (y las tareas futuras) funcionen con **cualquier** motor OpenAI-compatible, no solo con llama.cpp en esta máquina: Ollama **Cloud** (acceso gratis), Ollama local, LM Studio, OpenRouter, NVIDIA, Gemini o `custom`. Mismo cliente, mismo pase, sin código duplicado | ✅ **COMPLETO (2026-11-05)**: `ia_servidor.es_endpoint_local()` (con endpoint externo no se arranca nada local) · degradación `json_schema` → `json_object` → sin `response_format` ante el rechazo del proveedor (400/422) · `IA_MODEL=auto` autodetecta el modelo con `GET /models` · presets **unificados** (`ia_api.PRESETS` es la fuente única que ven las dos UIs) · aviso de privacidad + confirmación (UI) y `--confirmar-externo` (CLI) · preflight con mensaje según local/externo. **39 tests nuevos** (`tests/test_ia_externa.py`, incl. end-to-end por HTTP) |
-| **O12** Paridad CLI/UI (una sola implementación del pipeline) | La UI debe dar **los mismos números** que la CLI. Hoy NO: la UI analysis **antes** de la IA y nunca re-analiza, así que los campos estructurados (`jobs.skills`/`languages`) nunca se convierten en requisitos → 231 avisos `sin_requisitos` (vs 11) y 32 calificadas de menos | 🔴 **ABIERTO — es la meta #1** (2026-11-05). Plan en `docs/PLAN_MEJORAS.md`: Ola 1 (re-análisis incremental, detección de obsoletos, guarda en el Paso 5, evidencia como módulo) + Ola 2 (orquestador `pipeline.py`, botones "Procesar" y "Enriquecer IA" en UI v2, paso 3.5 en el flujo clásico) |
-| **O13** Cobertura de fuentes (que el barrido traiga los avisos que existen) | **LinkedIn** da 0 avisos (DOM nuevo: `/jobs/search-results/` con clases ofuscadas, sin `div.base-card` ni `/jobs/view/`) · **Elempleo** da 0 avisos (ahora `.ee_list-item`, no `.result-item`) · **ANE** pierde la cookie de sesión porque `login_ane.py` cierra el Brave que abrió (el login debe hacerse sobre la instancia viva) · la salud de sitios no distingue "login-wall" de "selector roto" | 🔴 **ABIERTO** (2026-11-05). Ola 3 del plan: selectores + test por fetcher, login ANE sin cerrar el navegador, estado `requiere_login` en la salud |
+| **O12** Paridad CLI/UI (una sola implementación del pipeline) | La UI debe dar **los mismos números** que la CLI. Hoy NO: la UI analysis **antes** de la IA y nunca re-analiza, así que los campos estructurados (`jobs.skills`/`languages`) nunca se convierten en requisitos → 231 avisos `sin_requisitos` (vs 11) y 32 calificadas de menos | 🟡 **OLA 1 COMPLETA (2026-11-05)** · Ola 2 pendiente: **1.1** re-análisis incremental (`analysis_flow.reananalizar_con_campos_fuente`, cableado en CLI/UI clásica/UI v2) · **1.2** badge + contador exacto (`cuenta_analisis_obsoletos` confirma en seco: 67 candidatos SQL = **0 obsoletos reales**) · **1.3** guarda `askyesnocancel` antes del Paso 5 · **1.4** evidencia como módulo (`jobpulse_v15.evidencia`, scripts = envoltorios, UI v2 con botón "Evidencia" e indicador "al día") · **1.5** login ANE con cierre ordenado (`Browser.close` por CDP) y `--mantener-abierto`. **Medición sobre copia de la BD real: `sin_requisitos` 231 → 11 (−220)**. Falta la Ola 2 (orquestador `pipeline.py`, botones "Procesar"/"Enriquecer IA" en UI v2) |
+| **O13** Cobertura de fuentes (que el barrido traiga los avisos que existen) | **LinkedIn** da 0 avisos (DOM nuevo: `/jobs/search-results/` con clases ofuscadas, sin `div.base-card` ni `/jobs/view/`) · **Elempleo** da 0 avisos (ahora `.ee_list-item`, no `.result-item`) · **ANE** perdía la cookie de sesión porque `login_ane.py` cerraba el Brave que abrió (**arreglado en O12 · 1.5**: cierre ordenado + `--mantener-abierto`) · la salud de sitios no distingue "login-wall" de "selector roto" | 🔴 **ABIERTO** (2026-11-05). Ola 3 del plan: selectores + test por fetcher, estado `requiere_login` en la salud. Falta verificar ANE con **dos barridos seguidos** |
 | **O14** Control del coste de la IA (límites opt-in, nunca fijos) | Que el usuario pueda poner y **quitar** límites: `IA_MAX_LLAMADAS` (llamadas por corrida), `IA_RPM` (requests por minuto) y `IA_MAX_VACANTES` (**avisos por corrida**). Vacío = sin tope. El tope de avisos **no puede ser un valor fijo**: subirlo o bajarlo según el presupuesto y la cuota | ✅ **COMPLETO (2026-11-05)**: los tres límites son opt‑in y ajustables desde `.env` **y** desde "Configuración → IA externa" en las dos UIs; el presupuesto por corrida se consume a lo largo de los ciclos (no se reinicia); `0` o un valor no numérico = sin tope (con aviso, no con crash) |
 
 **O7 — sub-objetivos (implementados 2026-10-27, tras el barrido fallido desde la UI):**
@@ -472,21 +472,21 @@ python -m pytest tests/ -q    # pytest vive en el python del sistema (el venv no
 Pendientes vivos (handoff vigente `docs/HANDOFF_SESION_2026-11-05.md`; plan
 completo en `docs/PLAN_MEJORAS.md`):
 
-0. **O12 — paridad CLI/UI** (meta #1): ejecutar la **Ola 1** del plan —
-   re-análisis incremental de los avisos con campos estructurados sin
-   integrar (1.1) · detección/badge de análisis obsoleto (1.2) · guarda antes
-   del Paso 5 (1.3) · evidencia como módulo, sin subprocess (1.4) · login ANE
-   sin cerrar el navegador (1.5). Criterio: la UI deja de dejar avisos
-   `sin_requisitos` que la CLI sí resuelve.
+0. **O12 — paridad CLI/UI** (meta #1): la **Ola 1 YA ESTÁ** (2026-11-05:
+   re-análisis incremental, badge de obsoletos, guarda en el Paso 5, evidencia
+   como módulo y login ANE sin cerrar Brave; medición 231 → 11). Lo siguiente
+   es la **Ola 2** del plan (`docs/PLAN_MEJORAS.md`): orquestador único
+   `pipeline.py`, botones "Procesar" y "Enriquecer IA" en UI v2, y paridad
+   verificada con un test que compare `job_match` entre CLI y UI.
    El bloque de ALINEACIÓN **ya está aplicado en la BD real** (esquema 21,
    705 avisos, corrida `20261104_231932`): lo pendiente es que las UIs lo
    repitan, no volver a aplicarlo.
 1. **O13 — cobertura de fuentes**: selectores de **LinkedIn**
    (`/jobs/search-results/` con clases ofuscadas) y **Elempleo**
-   (`.ee_list-item`) con su test por fetcher · login de **ANE** sobre la
-   instancia viva de Brave (la cookie se pierde si el login cierra el
-   navegador) · estado `requiere_login` en la salud de sitios (distinguir
-   login-wall de selector roto).
+   (`.ee_list-item`) con su test por fetcher · estado `requiere_login` en la
+   salud de sitios (distinguir login-wall de selector roto). El login de ANE
+   ya no pierde la cookie (O12 · 1.5) pero falta verificarlo con **dos
+   barridos seguidos**.
 2. **El usuario marca sus áreas en la UI** (perfil → pestaña **"Áreas de
    empleo"**): hasta entonces el filtro está INACTIVO (sin áreas marcadas se
    evalúa todo, que es lo que hoy ocurre). Después, la próxima corrida del
@@ -650,6 +650,34 @@ completo en `docs/PLAN_MEJORAS.md`):
 ---
 
 ## 8. HISTORIAL DE CAMBIOS RECIENTES
+
+### 2026-11-05 — OLA 1 DE O12: PARIDAD CLI/UI (re-análisis, evidencia, ANE)
+
+**Pedido del usuario**: cerrar la divergencia CLI/UI (`docs/PLAN_MEJORAS.md`,
+Ola 1). Medición sobre copia de la BD real: la UI dejaba **231** avisos
+`sin_requisitos` frente a **11** de la CLI.
+
+**Causa**: el análisis se hace ANTES del pase IA, así que `jobs.skills` /
+`jobs.languages` (que produce la IA) nunca se convertían en requisitos. La CLI
+lo resolvía con `enrich requirements-source --apply`; las UIs no tenían ese
+paso.
+
+**Implementado** (detalle en `docs/HANDOFF_SESION_2026-11-05.md` §8):
+- **1.1** `analysis_flow.reananalizar_con_campos_fuente()` (solo candidatos,
+  calcula en seco y **guarda solo si cambia**; idempotente) cableado en CLI,
+  UI clásica y UI v2.
+- **1.2** `cuenta_analisis_obsoletos()` **exacto** (confirma en seco: la SQL
+  sola sobrecontaba 67 → 0 reales) + badge en ambas UIs + `tools/estado_bd.py`.
+- **1.3** guarda `askyesnocancel` antes del Paso 5 en UI v2.
+- **1.4** `jobpulse_v15.evidencia` (generar/verificar/estado); los scripts
+  quedan como **envoltorios** (documento generado idéntico, `exit 0`); UI v2
+  con botón "Evidencia" e indicador "al día" sin subprocess.
+- **1.5** `cerrar_brave_ordenado()` (`Browser.close` por CDP) + `login_ane.py
+  --mantener-abierto`: la cookie de ANE ya no se pierde al cerrar.
+
+**Medición final**: 231 → **11** `sin_requisitos` (−220) sobre la copia.
+**Suite**: 1003 passed + 241 subtests. `verificar_evidencia.py` exit 0
+(130 verificaciones). **Sin cambios en la BD real.**
 
 ### 2026-11-05 — IA EXTERNA (Ollama/LM Studio/cloud) + METAS REPLANTEADAS (O11–O14)
 

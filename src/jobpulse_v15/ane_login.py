@@ -98,3 +98,35 @@ def login_ane(port: int = 9222) -> Dict[str, str]:
             return {"estado": "incierto", "detalle": f"Título: {page.title()} — URL: {page.url}"}
         finally:
             page.close()
+
+
+def cerrar_brave_ordenado(port: int = 9222) -> bool:
+    """Cierra Brave por CDP (``Browser.close``) para que Chromium grabe el perfil.
+
+    Trampa verificada (2026-11-05): el script ``login_ane.py`` cerraba el Brave
+    que había abierto con ``process.terminate()``/``kill()``; Chromium **no
+    alcanzaba a volcar las cookies** al perfil en disco y el barrido siguiente
+    decía "ANE: sin sesión de detalle" con **0 avisos** (la cookie de sesión no
+    persistía, aunque el login hubiera dado ``ok``).
+
+    ``Browser.close`` es el cierre ORDENADO del navegador: Chromium vacía sus
+    stores (cookies, localStorage) y sale solo. Si el proceso no termina en
+    ``espera`` segundos, el caller puede forzar (aquí no se mata nada).
+
+    Devuelve True si se envió la orden de cierre.
+    """
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.connect_over_cdp(f"http://127.0.0.1:{port}")
+            contexts = browser.contexts
+            page = contexts[0].pages[0] if contexts and contexts[0].pages else None
+            if page is None and contexts:
+                page = contexts[0].new_page()
+            if page is None:
+                return False
+            sesion = page.context.new_cdp_session(page)
+            sesion.send("Browser.close")
+        return True
+    except Exception:
+        # El navegador ya no está (o el CDP murió): no hay nada que cerrar.
+        return False

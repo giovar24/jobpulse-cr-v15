@@ -62,6 +62,14 @@ de código en el pipeline cuando se cambie de motor.
 
 > Objetivo: que la UI produzca **los mismos números** que la CLI.
 > Es la ola con mejor relación impacto/esfuerzo.
+>
+> **✅ COMPLETA (2026-11-05)** — 1.1 `reananalizar_con_campos_fuente` +
+> cableado en CLI/UI clásica/UI v2 · 1.2 `cuenta_analisis_obsoletos` (exacto:
+> confirma en seco; la SQL sola daba 67 y el re-análisis 0) + badge en ambas
+> UIs + `tools/estado_bd.py` · 1.3 guarda `askyesnocancel` · 1.4
+> `jobpulse_v15.evidencia` (scripts = envoltorios; botón/indicador en UI v2) ·
+> 1.5 login ANE con cierre ordenado. **Medición sobre copia de la BD real
+> (705 avisos): `sin_requisitos` 231 → 11 (−220).**
 
 ### 1.1 Re-análisis incremental tras la IA — `Ola 1 / paso 1`
 - **Qué**: función nueva `reananalizar_con_campos_fuente(repository)` que

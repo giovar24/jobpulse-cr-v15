@@ -548,6 +548,53 @@ def tope_vacantes(explicito: Optional[int] = None) -> Optional[int]:
     return opt_int(None, os.getenv("IA_MAX_VACANTES"))
 
 
+def reananalizar_tras_ia(
+    db_path: str = "data/jobpulse_v15.db",
+    on_event=None,
+) -> Dict[str, Any]:
+    """Re-analiza los avisos con campos estructurados sin integrar (O12 · 1.1).
+
+    Es el paso que le faltaba a las UIs: la IA llena ``jobs.skills`` y
+    ``jobs.languages``, pero esos campos SOLO se vuelven requisitos
+    comparables si el aviso se re-analiza. Sin este paso el aviso queda
+    ``sin_requisitos`` (la UI: 231; la CLI, que si lo hacia con
+    ``enrich requirements-source --apply``: 11).
+
+    La implementacion es UNA (``analysis_flow.reananalizar_con_campos_fuente``):
+    aqui solo se le pasa la base y el log. Es idempotente (la segunda llamada
+    no encuentra candidatos) y solo guarda si el resultado cambia.
+    """
+    from jobpulse_v15.analysis_flow import reananalizar_con_campos_fuente
+    from jobpulse_v15.db import Database
+    from jobpulse_v15.repository import Repository
+
+    def _log(texto: str) -> None:
+        if on_event:
+            try:
+                on_event(texto)
+            except Exception:  # el log nunca debe romper el pase
+                pass
+
+    try:
+        repositorio = Repository(Database(db_path))
+        stats = reananalizar_con_campos_fuente(repositorio, on_progress=_log)
+    except Exception as exc:  # noqa: BLE001 - no rompe el pase de la IA
+        _log(f"⚠️ Re-analisis omitido: {exc}")
+        return {
+            "candidatos": 0,
+            "reanalizados": 0,
+            "sin_cambio": 0,
+            "errores": 0,
+            "error": str(exc),
+        }
+    _log(
+        f"Re-analisis: {stats.get('reanalizados', 0)} aviso(s) actualizado(s), "
+        f"{stats.get('sin_cambio', 0)} sin cambio, "
+        f"{stats.get('errores', 0)} con error."
+    )
+    return stats
+
+
 def get_ia_client() -> Optional[IAClient]:
     """Crea cliente IA si está configurado.
 

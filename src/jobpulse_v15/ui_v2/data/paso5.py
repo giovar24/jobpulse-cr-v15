@@ -58,6 +58,18 @@ class Paso5Store:
         self.repository = repository
 
     # -- consultas --
+    def analisis_obsoletos(self) -> int:
+        """Avisos cuyo análisis vigente NO integró los campos estructurados.
+
+        "Obsoleto" = el aviso tiene skills/idiomas (los produjo la IA) pero su
+        análisis no los convirtió en requisitos: el aviso queda
+        ``sin_requisitos`` en el matching (la UI veía 231 frente a 11 de la
+        CLI por esto). Es el aviso que dispara la guarda antes del Paso 5.
+        """
+        from jobpulse_v15.analysis_flow import cuenta_analisis_obsoletos
+
+        return cuenta_analisis_obsoletos(self.repository)
+
     def corrida_vigente(self) -> str:
         """Identificador de la corrida vigente ("" si no hay ninguna)."""
         with self.repository.database.connection() as connection:

@@ -127,6 +127,7 @@ class VacantesTab(BaseTab):
         self._widgets: dict[str, Any] = {}
         self._calculando = False
         self._corriendo_paso5 = False
+        self._generando_evidencia = False
         self._areas_perfil: set[str] = set()
 
     # -- construcción --
@@ -221,6 +222,10 @@ class VacantesTab(BaseTab):
         FlatButton(barra, theme, "Exportar CSV", command=self.exportar, variant="flat").grid(
             row=0, column=9, padx=(8, 0)
         )
+        self._widgets["evidencia"] = FlatButton(
+            barra, theme, "Evidencia", command=self.generar_evidencia, variant="flat"
+        )
+        self._widgets["evidencia"].grid(row=0, column=10, padx=(8, 0))
 
     def _build_resumen(self, parent: tk.Misc) -> None:
         theme = self.theme
@@ -382,6 +387,8 @@ class VacantesTab(BaseTab):
             font=theme.font(9), anchor="w",
         )
         self._widgets["estado"].pack(side="left")
+        self._widgets["badge_obsoleto"] = Badge(marco, theme, "", "warning")
+        self._widgets["badge_obsoleto"].pack(side="right", padx=(0, 8))
         self._widgets["badge"] = Badge(marco, theme, "", "neutral")
         self._widgets["badge"].pack(side="right")
 
@@ -394,12 +401,40 @@ class VacantesTab(BaseTab):
             self._areas_perfil = set()
         if not self.filas and not self._calculando:
             self.recalcular()
+        self._pintar_badge_obsoleto()
 
     def refresh(self) -> None:
         """Repinta la vista con los filtros actuales (no recalcula el score)."""
         self._pintar_tabla()
         self._pintar_resumen()
         self._pintar_estado()
+        self._pintar_badge_obsoleto()
+
+    def _pintar_badge_obsoleto(self) -> int:
+        """Badge de análisis obsoletos (O12 · Ola 1.2).
+
+        Aviso para el usuario: hay avisos cuyas skills/idiomas (los produjo la
+        IA) todavía no son requisitos comparables → saldrán ``sin_requisitos``
+        aunque el perfil sí califique.
+        """
+        badge = self._widgets.get("badge_obsoleto")
+        if badge is None:
+            return 0
+        try:
+            obsoletos = self.paso5.analisis_obsoletos()
+        except Exception:  # pragma: no cover - defensivo
+            obsoletos = 0
+        if obsoletos:
+            badge.set_text(t("{} análisis obsoleto(s)").format(obsoletos))
+            badge.set_tone("warning")
+            if not badge.winfo_ismapped():
+                badge.pack(side="right", padx=(0, 8))
+        else:
+            badge.set_text("")
+            badge.set_tone("neutral")
+            if badge.winfo_ismapped():
+                badge.pack_forget()
+        return obsoletos
 
     def recalcular(self) -> None:
         """Lanza el cálculo en segundo plano (nunca bloquea la UI)."""
@@ -554,6 +589,7 @@ class VacantesTab(BaseTab):
         if total:
             self._widgets["estado"].configure(
                 text=f"{total} aviso(s) rankeados · {visibles} en la vista"
+                + self._texto_evidencia()
             )
         else:
             self._widgets["estado"].configure(
@@ -647,6 +683,12 @@ class VacantesTab(BaseTab):
         if self._corriendo_paso5:
             self._pintar_progreso("Ya hay un Paso 5 en marcha…")
             return
+        # GUARDA (O12 · Ola 1.3): si hay avisos con análisis obsoleto, el
+        # Paso 5 los evaluaría con requisitos VIEJOS (las skills/idiomas que
+        # produjo la IA todavía no son requisitos) y saldrían "sin_requisitos".
+        reanalizar = self._guarda_analisis_obsoleto()
+        if reanalizar is None:
+            return  # el usuario canceló
         evaluar_todo = bool(self._widgets["evaluar_todo"].get())
         self._corriendo_paso5 = True
         self._widgets["paso5"].configure(state="disabled")
@@ -656,6 +698,27 @@ class VacantesTab(BaseTab):
 
         def trabajo() -> None:
             try:
+                if reanalizar:
+                    self._programar(
+                        lambda: self._pintar_progreso(
+                            "Re-analizando avisos con campos obsoletos…"
+                        )
+                    )
+                    from jobpulse_v15.analysis_flow import reananalizar_con_campos_fuente
+
+                    stats = reananalizar_con_campos_fuente(
+                        self.context.repository,
+                        on_progress=lambda texto: self._programar(
+                            lambda t=texto: self._pintar_progreso(str(t))
+                        ),
+                    )
+                    self._programar(
+                        lambda: self._pintar_progreso(
+                            "Re-analisis: {} aviso(s) actualizado(s).".format(
+                                stats.get("reanalizados", 0)
+                            )
+                        )
+                    )
                 resumen = self.paso5.ejecutar(
                     aplicar_filtro_areas=not evaluar_todo,
                     progreso=lambda texto: self._programar(
@@ -668,6 +731,41 @@ class VacantesTab(BaseTab):
             self._programar(lambda: self._fin_paso5(resumen))
 
         self._lanzar_hilo(trabajo)
+
+    def _guarda_analisis_obsoleto(self) -> bool | None:
+        """Pregunta qué hacer si hay análisis obsoletos (O12 · Ola 1.3).
+
+        Devuelve ``True`` (re-analizar y seguir), ``False`` (seguir con los
+        análisis actuales) o ``None`` (cancelar). Sin aviso previo, el
+        matching daba números que no cuadraban con la CLI (231 avisos
+        ``sin_requisitos`` frente a 11).
+        """
+        try:
+            obsoletos = self.paso5.analisis_obsoletos()
+        except Exception:  # pragma: no cover - defensivo
+            return False
+        if not obsoletos:
+            return False
+        respuesta = messagebox.askyesnocancel(
+            t("Paso 5"),
+            t(
+                "Hay {} aviso(s) con análisis obsoleto: la IA ya llenó sus "
+                "skills/idiomas, pero el análisis no los integró (así quedan "
+                "«sin requisitos» en el matching).\n\n"
+                "¿Re-analizarlos ahora antes de evaluar?"
+            ).format(obsoletos),
+        )
+        if respuesta is None:
+            return None
+        if not respuesta:
+            messagebox.showwarning(
+                t("Paso 5"),
+                t(
+                    "Se evaluará con los análisis actuales: esos avisos pueden "
+                    "salir «sin_requisitos» aunque el perfil sí califique."
+                ),
+            )
+        return bool(respuesta)
 
     def _error_paso5(self, mensaje: str) -> None:
         self._corriendo_paso5 = False
@@ -694,13 +792,101 @@ class VacantesTab(BaseTab):
                              sorted(por_estado.items())) or "sin evaluables"
         self._widgets["estado"].configure(
             text=t("Paso 5 · corrida {} · {} evaluada(s) · {}").format(
-                resumen.corrida_id, resumen.evaluadas, detalle))
+                resumen.corrida_id, resumen.evaluadas, detalle)
+            + self._texto_evidencia()
+        )
         self._widgets["badge"].set_text(t("Paso 5 listo"))
         self._widgets["badge"].set_tone("success")
+        self._pintar_badge_obsoleto()
         messagebox.showinfo(
             t("Paso 5"),
             t("Corrida {} guardada.\n{} vacante(s) evaluada(s).\n\n{}").format(
                 resumen.corrida_id, resumen.evaluadas, resumen.texto()),
+        )
+
+    # -- evidencia (O12 · Ola 1.4) --
+    def _texto_evidencia(self) -> str:
+        """Sufijo "· evidencia al día / desactualizada" para la línea de estado."""
+        try:
+            from jobpulse_v15 import evidencia
+
+            db = self.context.repository.database.path
+            estado = evidencia.estado_evidencia(
+                db_path=db, docs_dir=evidencia.docs_dir_para(db)
+            )
+        except Exception:  # pragma: no cover - defensivo
+            return ""
+        if estado.get("al_dia"):
+            return " · evidencia al día"
+        return " · evidencia: %s" % estado.get("motivo", "desactualizada")
+
+    def generar_evidencia(self) -> None:
+        """Genera y verifica la evidencia de la corrida vigente, sin subprocess."""
+        if self._generando_evidencia:
+            return
+        self._generando_evidencia = True
+        boton = self._widgets.get("evidencia")
+        if boton is not None:
+            boton.configure(state="disabled")
+        self._pintar_progreso("Evidencia: generando el documento de la corrida vigente…")
+
+        def trabajo() -> None:
+            try:
+                from jobpulse_v15 import evidencia
+
+                db = self.context.repository.database.path
+                docs = evidencia.docs_dir_para(db)
+                generado = evidencia.generar_evidencia(
+                    db_path=db, docs_dir=docs, log=lambda _t: None
+                )
+                verificado = evidencia.verificar_evidencia(
+                    db_path=db, docs_dir=docs, log=lambda _t: None
+                )
+            except Exception as error:  # pragma: no cover - defensivo
+                mensaje = str(error)
+                self._programar(lambda: self._error_evidencia(mensaje))
+                return
+            self._programar(lambda: self._fin_evidencia(generado, verificado))
+
+        self._lanzar_hilo(trabajo)
+
+    def _fin_evidencia(self, generado: dict, verificado: dict) -> None:
+        self._generando_evidencia = False
+        boton = self._widgets.get("evidencia")
+        if boton is not None:
+            boton.configure(state="normal")
+        self._pintar_estado()
+        if verificado.get("ok"):
+            self._widgets["badge"].set_text(t("Evidencia OK"))
+            self._widgets["badge"].set_tone("success")
+            messagebox.showinfo(
+                t("Evidencia"),
+                t("Generada {} ({}) y verificada: {} con frase literal.").format(
+                    generado.get("ruta"), generado.get("corrida"),
+                    verificado.get("verificaciones", 0),
+                ),
+            )
+        else:
+            self._widgets["badge"].set_text(t("Evidencia con fallos"))
+            self._widgets["badge"].set_tone("danger")
+            messagebox.showwarning(
+                t("Evidencia"),
+                t("Generada {}, pero la verificación tiene {} discrepancia(s):\n\n{}").format(
+                    generado.get("ruta"),
+                    len(verificado.get("fallos") or []),
+                    "\n".join((verificado.get("fallos") or [])[:10]),
+                ),
+            )
+
+    def _error_evidencia(self, mensaje: str) -> None:
+        self._generando_evidencia = False
+        boton = self._widgets.get("evidencia")
+        if boton is not None:
+            boton.configure(state="normal")
+        self._widgets["badge"].set_text(t("Error"))
+        self._widgets["badge"].set_tone("danger")
+        messagebox.showerror(
+            t("Evidencia"), t("No se pudo generar la evidencia:\n{}").format(mensaje)
         )
 
     def _actualizar_estados_paso5(self) -> None:

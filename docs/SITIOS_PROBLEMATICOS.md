@@ -100,8 +100,14 @@ script de login contra CDP — completa usuario/contraseña en `/Cuenta/Login`
 y verifica el resultado:
 
 ```
-python <raíz del proyecto>/login_ane.py     # imprime "LOGIN ANE: OK"
+python <raíz del proyecto>/login_ane.py --mantener-abierto   # imprime "LOGIN ANE: OK"
 ```
+
+`--mantener-abierto` deja el Brave vivo: la cookie está en la instancia con la
+que vas a raspar (es el flujo que evita el "sin sesión de detalle"). Sin ese
+flag, el script cierra Brave de forma **ordenada** (`Browser.close` por CDP):
+Chromium vuelca las cookies al perfil, así que el barrido siguiente también
+reutiliza la sesión (el antiguo `terminate()`/`kill()` las perdía — O12 · 1.5).
 
 Después de un login OK, reejecutar el barrido:
 

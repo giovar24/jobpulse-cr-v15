@@ -415,6 +415,9 @@ class JobPulseWindow:
         self.area_var = tk.StringVar(value="Cualquiera")
         self.solo_areas_perfil_var = tk.BooleanVar(value=False)
         self.status_var = tk.StringVar(value="Preparando busqueda...")
+        # Badge de análisis obsoleto (O12 · Ola 1.2): avisos con campos
+        # estructurados (skills/idiomas de la IA) que su análisis NO integró.
+        self.analisis_obsoleto_var = tk.StringVar(value="")
 
     def _build_layout(self) -> None:
         outer = ttk.Frame(self.root, padding=16)
@@ -792,9 +795,18 @@ class JobPulseWindow:
         detail_frame.columnconfigure(0, weight=1)
         detail_frame.rowconfigure(1, weight=1)
 
-        ttk.Label(outer, textvariable=self.status_var, anchor="w").grid(
-            row=3, column=0, sticky="ew", pady=(8, 0)
+        pie = ttk.Frame(outer)
+        pie.grid(row=3, column=0, sticky="ew", pady=(8, 0))
+        pie.columnconfigure(0, weight=1)
+        ttk.Label(pie, textvariable=self.status_var, anchor="w").grid(
+            row=0, column=0, sticky="ew"
         )
+        ttk.Label(
+            pie,
+            textvariable=self.analisis_obsoleto_var,
+            anchor="e",
+            foreground="#b45309",
+        ).grid(row=0, column=1, sticky="e", padx=(10, 0))
         self._set_detail("Selecciona una vacante para ver sus datos y analisis.")
 
     @staticmethod
@@ -984,6 +996,31 @@ class JobPulseWindow:
             f"{len(filtered_jobs)} vacante(s) encontradas "
             f"de {len(jobs)} evaluadas con los filtros actuales."
         )
+        self._actualizar_badge_analisis()
+
+    def _actualizar_badge_analisis(self) -> int:
+        """Badge de análisis obsoletos (O12 · Ola 1.2).
+
+        "Obsoleto" = el aviso tiene skills/idiomas (los produjo la IA) pero su
+        análisis vigente NO los integró: esos campos todavía no son
+        requisitos comparables, así que el aviso queda ``sin_requisitos``.
+        Sin este aviso el usuario no tiene forma de saber por qué la UI ve
+        menos que la CLI.
+        """
+        from jobpulse_v15.analysis_flow import cuenta_analisis_obsoletos
+
+        try:
+            obsoletos = cuenta_analisis_obsoletos(self.repository)
+        except Exception:  # noqa: BLE001 - el badge nunca rompe la UI
+            obsoletos = 0
+        if obsoletos:
+            self.analisis_obsoleto_var.set(
+                f"⚠️ {obsoletos} aviso(s) con análisis obsoleto "
+                "(pulsa «Enriquecer» y re-analiza)"
+            )
+        else:
+            self.analisis_obsoleto_var.set("")
+        return obsoletos
 
     def export_search_results(self) -> None:
         if not self.current_results:
@@ -2028,7 +2065,7 @@ class JobPulseWindow:
         """
         import time
 
-        from jobpulse_v15.ane_login import login_ane
+        from jobpulse_v15.ane_login import cerrar_brave_ordenado, login_ane
 
         try:
             port = int(port_var.get())
@@ -2041,16 +2078,18 @@ class JobPulseWindow:
 
         def _run() -> None:
             mgr = None
+            lo_abrimos = False
             try:
                 dialog.after(0, lambda: status_var.set("Login ANE..."))
                 if not cdp_vivo(port):
-                    _log("Abriendo Brave con CDP (se cerrará al terminar)...\n")
+                    _log("Abriendo Brave con CDP (se cerrará de forma ordenada)...\n")
                     mgr = asegurar_brave(port)
+                    lo_abrimos = mgr is not None
                 _log("Llenando el login de ANE con la credencial del almacén...\n")
                 resultado = login_ane(port)
                 if resultado["estado"] == "ok":
                     # Margen para que Chromium persista la cookie de sesión
-                    # en el perfil antes de un cierre forzado del proceso.
+                    # antes del cierre (O12 · 1.5).
                     time.sleep(3)
                 _log(
                     f"LOGIN ANE: {resultado['estado'].upper()} — "
@@ -2063,12 +2102,17 @@ class JobPulseWindow:
                 _log(f"LOGIN ANE: ERROR — {e}\n\n")
                 dialog.after(0, lambda: status_var.set("Login ANE: error"))
             finally:
-                if mgr is not None:
-                    try:
-                        mgr.stop_brave_sync()
-                        _log("Brave cerrado (lo abrió el login).\n")
-                    except Exception:
-                        pass
+                if lo_abrimos:
+                    # Cierre ORDENADO: con terminate()/kill() Chromium no
+                    # volcaba las cookies y el barrido siguiente daba 0 avisos.
+                    if cerrar_brave_ordenado(port):
+                        _log("Brave cerrado de forma ordenada (sesión persistida).\n")
+                    else:
+                        try:
+                            mgr.stop_brave_sync()
+                            _log("Brave cerrado por proceso (no respondió a Browser.close).\n")
+                        except Exception:
+                            pass
 
         threading.Thread(target=_run, daemon=True).start()
 
@@ -2142,6 +2186,25 @@ class JobPulseWindow:
                             "⚠️ El enriquecimiento NO completó su trabajo "
                             "(ver motivo arriba).\n"
                         )
+
+                # Paso 3.5: los campos estructurados que la IA acaba de llenar
+                # todavia NO son requisitos comparables: sin este re-analisis
+                # el aviso queda `sin_requisitos` (la CLI lo hacia con
+                # `enrich requirements-source --apply`). Es el paso que
+                # separaba la UI de la CLI (O12 · Ola 1.1).
+                _log("\n=== PASO 3.5: re-analisis con los campos de la IA ===\n")
+                dialog.after(
+                    0, lambda: status_var.set("Re-analizando (campos de la IA)...")
+                )
+                stats_re = self._reananalizar_con_campos_fuente(
+                    lambda texto: _log(texto + "\n")
+                )
+                _log(
+                    f"Re-analisis: {stats_re.get('reanalizados', 0)} aviso(s) "
+                    f"actualizados, {stats_re.get('sin_cambio', 0)} sin cambio, "
+                    f"{stats_re.get('errores', 0)} con error.\n"
+                )
+                dialog.after(0, self._actualizar_badge_analisis)
 
                 # Paso 4: comparar con el perfil y mostrar vacantes vigentes.
                 # El filtro NO se hardcodea: hoy 'matched' exige análisis
@@ -2239,6 +2302,30 @@ class JobPulseWindow:
                         pass
 
         threading.Thread(target=_run, daemon=True).start()
+
+    def _reananalizar_con_campos_fuente(self, log=None) -> dict:
+        """Re-analiza los avisos con campos estructurados sin integrar (O12).
+
+        El pase IA llena ``jobs.skills`` / ``jobs.languages``; esos campos
+        solo se vuelven requisitos comparables si el aviso se re-analiza.
+        La UI no lo hacia (la CLI si, con ``enrich requirements-source
+        --apply``): por eso la UI dejaba 231 avisos ``sin_requisitos``
+        frente a 11 de la CLI.
+
+        La implementacion es UNA (``analysis_flow``): aqui solo se le pasa
+        el repositorio de la UI y el log.
+        """
+        from jobpulse_v15.analysis_flow import reananalizar_con_campos_fuente
+
+        try:
+            return reananalizar_con_campos_fuente(
+                self.repository,
+                on_progress=log,
+            )
+        except Exception as exc:  # noqa: BLE001 - no rompe el flujo principal
+            if log:
+                log(f"⚠️ Re-analisis omitido: {exc}")
+            return {"candidatos": 0, "reanalizados": 0, "sin_cambio": 0, "errores": 0}
 
     def _confirmar_ia_externa(self, parent=None) -> bool:
         """Pide confirmación si la IA configurada NO es local.
@@ -2350,6 +2437,15 @@ class JobPulseWindow:
                 despues = ie.snapshot_enriquecimiento()
                 veredicto = ie.evaluar_ia(antes, despues, r)
                 _log(ie.resumen_linea(veredicto))
+                # Los campos que la IA acaba de llenar (skills/languages) solo
+                # son requisitos comparables si el aviso se re-analiza (O12).
+                stats_re = self._reananalizar_con_campos_fuente(_log)
+                _log(
+                    f"Re-analisis: {stats_re.get('reanalizados', 0)} aviso(s) "
+                    f"actualizados, {stats_re.get('sin_cambio', 0)} sin cambio, "
+                    f"{stats_re.get('errores', 0)} con error."
+                )
+                dialog.after(0, self._actualizar_badge_analisis)
                 if veredicto["ok"]:
                     dialog.after(
                         0,
