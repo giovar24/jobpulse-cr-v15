@@ -23,12 +23,23 @@ from typing import Any, Dict, List
 from playwright.async_api import BrowserContext, Page
 
 from jobpulse_v15.location_utils import normalize_cr_location
+from jobpulse_v15.requiere_login import RequiereLoginError, mensaje_requiere_login
+from jobpulse_v15.sesion_navegador import (
+    borrar_sesion,
+    hay_sesion,
+    restaurar_sesion_async,
+)
 
 logger = logging.getLogger("jobpulse.ane")
 
 BASE = "https://www.ane.cr"
 CONOCIDOS_SEGUIDOS = int(os.getenv("ANE_KNOWN_STREAK", "15"))
 MAX_PAGES = 50
+
+# Clave con la que se guarda la sesión en data/usuario/sesiones/ y el
+# dominio del que se guardan las cookies (O13).
+SESION_ANE = "ane"
+DOMINIO_ANE = "ane.cr"
 
 
 class AneFetchError(RuntimeError):
@@ -194,8 +205,13 @@ class AneFetcher:
         skip_source_job_ids: set[str] | None,
     ) -> AneOffers:
         if not await self._asegurar_sesion(ctx):
-            logger.warning("ANE: sin sesión de detalle; barrido omitido.")
-            return AneOffers([], jobs_skipped=0)
+            # Sin sesion NO es "el sitio esta roto": es "falta iniciar
+            # sesion" (O13 · Ola 3.3). Antes esto devolvia 0 avisos y
+            # llenaba la racha de ceros del sitio.
+            logger.warning("ANE: sin sesion de detalle; barrido omitido.")
+            raise RequiereLoginError(
+                mensaje_requiere_login(str(site.get("site_id") or "ANE"))
+            )
 
         cutoff_date = date.today() - timedelta(days=dias)
         conocidos = self._conocidos(site.get("db_path"))
@@ -301,7 +317,26 @@ class AneFetcher:
             return set()
 
     async def _asegurar_sesion(self, ctx: BrowserContext) -> bool:
-        """True si hay sesión activa (verifica que el listado muestra enlaces a /Puesto/Detalles)."""
+        """True si hay sesión activa (verifica que el listado muestra enlaces a /Puesto/Detalles).
+
+        Si no hay sesión, se intenta RESTAURAR la sesión guardada tras el
+        último login (`data/usuario/sesiones/ane.json`): la cookie de ANE es
+        de sesión (`expires = -1`) y Chromium no la escribe en disco, así que
+        al reabrir el navegador se había perdido (medido 2026-11-06).
+        """
+        if await self._sesion_activa(ctx):
+            return True
+        if hay_sesion(SESION_ANE) and await restaurar_sesion_async(ctx, SESION_ANE):
+            if await self._sesion_activa(ctx):
+                logger.info("ANE: sesión restaurada desde la sesión guardada.")
+                return True
+            # La sesión del servidor caducó: la guardada ya no sirve.
+            borrar_sesion(SESION_ANE)
+            logger.info("ANE: la sesión guardada caducó; hay que iniciar sesión.")
+        return False
+
+    async def _sesion_activa(self, ctx: BrowserContext) -> bool:
+        """True si el listado de ANE muestra los enlaces a /Puesto/Detalles."""
         page = await ctx.new_page()
         try:
             await page.goto(f"{BASE}/Puesto", wait_until="domcontentloaded", timeout=self.timeout * 1000)

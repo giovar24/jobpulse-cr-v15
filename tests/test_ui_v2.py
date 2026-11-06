@@ -823,6 +823,24 @@ class TestFuentesStore(unittest.TestCase):
         self.assertEqual(self.store.alternar(["no-existe"], False), 0)
         self.assertEqual(self.store.conteo(), (2, 2))
 
+    def test_el_sitio_que_pide_login_se_marca(self):
+        """O13 · 3.3: salud `requiere_login` → la fila lo avisa con 🔑."""
+        filas = {f.site_id: f for f in self.store.sitios()}
+        self.assertFalse(filas["intel-cr"].requiere_login)
+        self.assertEqual(filas["intel-cr"].salud, "unknown")
+
+        self.repository.record_site_result(
+            self.repository.start_site_run("intel-cr", "workday"),
+            "intel-cr",
+            jobs_found=0, jobs_valid=0, jobs_new=0, jobs_duplicate=0,
+            status="requires_login",
+        )
+        filas = {f.site_id: f for f in self.store.sitios()}
+        self.assertTrue(filas["intel-cr"].requiere_login)
+        self.assertEqual(filas["intel-cr"].salud, "requiere_login")
+        # El otro sitio no se toca.
+        self.assertFalse(filas["acme-cr"].requiere_login)
+
 
 class TestConfiguracionTab(unittest.TestCase):
     """La pestaña de Configuración monta, pausa sondas y cambia esquemas."""
@@ -977,6 +995,22 @@ class TestConfiguracionTab(unittest.TestCase):
         self.root.update()
         hijos = self.pestana._widgets["tabla"].get_children()
         self.assertEqual(hijos, ("intel-cr",))
+
+    def test_el_sitio_que_pide_login_muestra_la_llave(self):
+        """O13 · 3.3: la tabla de sondas marca 🔑 a quien pide iniciar sesión."""
+        self.repository.record_site_result(
+            self.repository.start_site_run("intel-cr", "workday"),
+            "intel-cr",
+            jobs_found=0, jobs_valid=0, jobs_new=0, jobs_duplicate=0,
+            status="requires_login",
+        )
+        self.pestana.refresh()
+        self.root.update()
+        tabla = self.pestana._widgets["tabla"]
+        estado_intel = tabla.item("intel-cr", "values")[0]
+        estado_acme = tabla.item("acme-cr", "values")[0]
+        self.assertIn("🔑", estado_intel)
+        self.assertNotIn("🔑", estado_acme)
 
     def test_guardar_ia_escribe_el_env_y_valida_los_limites(self):
         self.root.update()

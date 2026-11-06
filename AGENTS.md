@@ -54,7 +54,11 @@ caro de descubrir**; lo puntual vive en los handoffs.
   migraciones N-M`). `init-db`, `backup` y `db check` **no** migran.
 - Esquema por migraciones: `src/jobpulse_v15/migrations/0NN_*.sql`. Cambio de
   esquema = **archivo nuevo**; nunca `ALTER` manual ni editar una migración ya
-  aplicada. Versionado con `PRAGMA user_version` (actual: **21**).
+  aplicada. Versionado con `PRAGMA user_version` (actual: **22**).
+- Si una migración tiene que **recrear una tabla** (cambiar un `CHECK`), SQLite
+  no lo permite con `ALTER` y `PRAGMA foreign_keys` no se puede cambiar dentro
+  de una transacción: la migración gestiona su propia transacción y lo marca
+  con el comentario `-- jobpulse:transaccion-propia` (ver `db.py` y la 022).
 - `clean_run.py SI` = borrado total de lo scrapeado (jobs, análisis, runs,
   `job_match`); conserva perfil, sitios, taxonomías y reinicia la salud de los
   sitios. **Destructivo**: solo con pedido explícito del usuario.
@@ -141,29 +145,55 @@ incompleta.
   credenciales.json` → `.env` (`ANE_USER`/`ANE_PASSWORD`); nunca en el repo.
   ANE republica vacantes con IDs nuevos → `quality duplicates`, dedupe manual,
   **nunca** automerge.
-  **Trampa (verificada 2026-11-05, RESUELTA en O12 · Ola 1.5)**: antes
+  **Trampa 1 (verificada 2026-11-05, RESUELTA en O12 · Ola 1.5)**: antes
   `login_ane.py` cerraba el Brave que abrió con `terminate()`/`kill()` → la
   cookie de sesión **no quedaba persistida** y el barrido siguiente decía
   "ANE: sin sesión de detalle" con 0 avisos. Ahora cierra **ordenado**
   (`Browser.close` por CDP) y `--mantener-abierto` deja el navegador vivo para
   raspar de inmediato. Flujo recomendado: `login_ane.py --mantener-abierto` y
   acto seguido `scrape ane --site ane-cr` (sin cerrar el navegador).
-- **LinkedIn**: sesión primero, login **manual** (el auto-login dispara
-  CAPTCHA/2FA). Rate-limit 429 en `jobs-guest` → bajar `pages`.
+  **Trampa 2 (verificada 2026-11-06, RESUELTA en O13 · Ola 3.4)**: la cookie de
+  ANE (`ASP.NET_SessionId`) es de **sesión** (`expires = -1`): Chromium **no**
+  la escribe en disco, así que al reabrir Brave se pierde (el cierre ordenado
+  NO la salva). `jobpulse_v15.sesion_navegador` la guarda aparte en
+  `data/usuario/sesiones/ane.json` (fuera del repo: es un secret) tras el
+  login y la restaura cuando falta la sesión. Si el servidor la caducó, el
+  archivo se borra.
+- **LinkedIn**: el listado público se pide por **HTTP simple**
+  (`/jobs/search/?keywords=…&location=…` → `div.base-card` + JSON-LD
+  `ItemList`); `/jobs/search-results/` responde **999** y el navegador sin
+  sesión recibe authwall. El navegador (CDP) queda como refuerzo que fusiona
+  resultados. **Rate-limit (medido 2026-11-05)**: `jobs-guest` aguanta ~10
+  peticiones seguidas y luego da **429**; con **1,5 s** entre peticiones: 19 OK
+  / 0 429 → `request_delay` = 1,5 s por defecto y ante 429 se espera y se
+  reintenta (sin probar la URL alternativa). Sesión: login **manual**
+  (el auto-login dispara CAPTCHA/2FA).
 - **Indeed**: SSO Google; el popup de alertas intercepta clics (ya resuelto en
   `_cerrar_popups`; si aparece uno nuevo, añadir su selector).
-- **Selectores desactualizados (verificado 2026-11-05, ambos dan 0 avisos)**:
-  - **LinkedIn** sirve ahora `/jobs/search-results/` con clases ofuscadas
-    (`fa4afe…`), sin `div.base-card` ni `li[data-occludable-job-id]` y sin
-    enlaces `/jobs/view/` → hay que actualizar `linkedin.py` (no es login-wall:
-    no hay authwall).
-  - **Elempleo** ahora usa `.ee_list-item` en vez de `.result-item` /
-    `.js-area-bind.area-bind` → actualizar `elempleo.py`.
+- **Selectores verificados en vivo (2026-11-05/06) —LinkedIn 60 avisos,
+  Elempleo 3 avisos (antes 0 en ambos)**:
+  - **LinkedIn**: `div.base-card` + `data-entity-urn="urn:li:jobPosting:<id>"`,
+    `h3.base-search-card__title`, `h4.base-search-card__subtitle`,
+    `span.job-search-card__location`, `time.job-search-card__listdate`,
+    `a.base-card__full-link`.
+  - **Elempleo**: las ofertas siguen en **`.result-item`** +
+    `.js-area-bind.area-bind` (`.ee_list-item` es el MENÚ LATERAL, no el
+    listado); la empresa está en `.js-offer-company` (ya no en
+    `datalayertag`); el filtro de país mira **país + cantón** (la ubicación es
+    el cantón: "San José"); el botón "Inicia sesión" del encabezado **NO** es
+    un muro de login (solo lo es un formulario de acceso); descripción en
+    `.description-block` y requisitos en las etiquetas
+    `.requirements-content li .info-tag-not-select`.
+    `site_config["max_ofertas"]` acota el barrido (cada oferta abre su ficha).
   Al tocar un scraper: actualizar también su test en `tests/test_<nombre>.py`.
 - **Salud de sitios**: 3 corridas seguidas con 0 avisos → `review_required=1`
   (NO se desactiva solo). `site list --needs-review` y
   `site mark-reviewed --id <id>` (reinicia el racho). `clean_run.py` también
   reinicia la salud (si se borran las corridas, se borra su veredicto).
+- **`requires_login` (O13 · Ola 3.3)**: un sitio que pide iniciar sesión NO
+  está roto: salud `requiere_login` (esquema 22), corrida `requires_login`,
+  **no** suma a la racha de ceros, sí queda `review_required=1` y la UI v2
+  muestra 🔑. Lo lanza `jobpulse_v15.requiere_login.RequiereLoginError`.
 - **Dedupe conservador**: duplicado EXACTO → `dup_of` automático; lo dudoso →
   `quality duplicates` para revisión manual. **Nunca se borra ni se funde.**
 - Config declarativa en BD (`source_sites.site_config_json`), no en código.

@@ -1,6 +1,6 @@
 # Plan de mejoras — orden por impacto y esfuerzo
 
-> Actualizado 2026-11-05. El orden va de **lo que más duele hoy** (y se
+> Actualizado 2026-11-06. El orden va de **lo que más duele hoy** (y se
 > arregla con poco código) a **lo que puede esperar** (mucho esfuerzo, poco
 > efecto inmediato). Cada bloque dice qué se toca, por qué y cómo se sabe que
 > quedó bien.
@@ -10,9 +10,9 @@
 | Ola | Meta | Qué cierra |
 |---|---|---|
 | 0 (hecha) | **O11** IA externa · **O14** límites opt-in | La IA no está atada a la máquina del usuario |
-| 1 | **O12** paridad CLI/UI | La UI da los mismos números que la CLI (231 `sin_requisitos` → 11) |
-| 2 | **O12** paridad CLI/UI | Una sola implementación del pipeline (orquestador + botones) |
-| 3 | **O13** cobertura de fuentes | LinkedIn/Elempleo (0 avisos) + login-wall de ANE |
+| 1 (hecha) | **O12** paridad CLI/UI | La UI da los mismos números que la CLI (231 `sin_requisitos` → 11) |
+| 2 (hecha) | **O12** paridad CLI/UI | Una sola implementación del pipeline (orquestador + botones) |
+| 3 (hecha 2026-11-06) | **O13** cobertura de fuentes | LinkedIn 0 → 60 avisos · Elempleo 0 → 3 · `requires_login` · sesión de ANE entre arranques |
 | 4 | O5.3 / taxonomía / métricas | Calidad del dato |
 | 5 | O4, upsert, embeddings | Se pueden dejar de último |
 
@@ -161,26 +161,50 @@ de código en el pipeline cuando se cambie de motor.
 
 ---
 
-## Ola 3 — Recuperar plataformas (impacto ALTO, esfuerzo MEDIO, riesgo MEDIO)
+## Ola 3 — Recuperar plataformas (impacto ALTO, esfuerzo MEDIO, riesgo MEDIO) — **COMPLETADA 2026-11-06**
 
-### 3.1 Selectores de LinkedIn — `Ola 3 / paso 1`
-- **Qué**: LinkedIn sirve `/jobs/search-results/` con clases ofuscadas
-  (`fa4afe…`), sin `div.base-card` ni `li[data-occludable-job-id]` ni enlaces
-  `/jobs/view/`. No es login-wall. Actualizar `linkedin.py` **y** su test.
-- **Criterio**: el barrido de LinkedIn deja de dar 0 avisos.
-- **Riesgo**: medio (rate-limit 429 → bajar `pages`).
+### 3.1 Selectores de LinkedIn — `Ola 3 / paso 1` — **HECHO**
+- **Qué**: el listado que funciona es `/jobs/search/` (no `/jobs/search-results/`,
+  que responde **999**) y sus tarjetas son `div.base-card` +
+  `data-entity-urn="urn:li:jobPosting:<id>"`. Se reescribió `linkedin.py`:
+  listado por **HTTP simple** (BeautifulSoup) con el JSON-LD `ItemList` como
+  respaldo, y el navegador (Brave/CDP) como refuerzo que fusiona resultados.
+- **Criterio**: ✅ **60 avisos en vivo** (antes 0).
+- **Riesgo**: medio → mitigado: `jobs-guest` aguanta ~10 peticiones seguidas y
+  luego da 429; con `request_delay` = **1,5 s** (medido: 19 OK / 0 429) y
+  reintento con espera ante 429.
 
-### 3.2 Selectores de Elempleo — `Ola 3 / paso 2`
-- **Qué**: ahora usa `.ee_list-item` en vez de `.result-item` /
-  `.js-area-bind.area-bind`. Actualizar `elempleo.py` + test.
-- **Criterio**: idem (0 → >0 avisos).
+### 3.2 Selectores de Elempleo — `Ola 3 / paso 2` — **HECHO**
+- **Qué**: `.ee_list-item` NO son las ofertas (es el menú lateral). Los 3 bugs
+  reales eran: (1) `_es_login_wall` veía el botón "Inicia sesión" del
+  encabezado y cortaba en la página 1; (2) la empresa ya no viene en
+  `datalayertag` sino en `.js-offer-company`; (3) el filtro de país miraba solo
+  el cantón ("San José") y no "Costa Rica" → descartaba todas. Se añade
+  `site_config["max_ofertas"]` (cada oferta abre su ficha).
+- **Criterio**: ✅ **3 avisos en vivo** (antes 0), con descripción, empresa,
+  ubicación y fecha.
 
-### 3.3 Estado `requiere_login` en la salud de sitios — `Ola 3 / paso 3`
+### 3.3 Estado `requiere_login` en la salud de sitios — `Ola 3 / paso 3` — **HECHO**
 - **Qué**: hoy un login-wall (ANE dio 0) se contabiliza como `zero_results` y
   genera una racha de "sitio muerto" que el usuario tiene que revisar a mano.
   Distinguir "0 avisos porque exige login" de "0 avisos porque el selector
   está roto".
-- **Esfuerzo**: bajo-medio. **Riesgo**: bajo.
+- **Cómo**: migración **022** (`health_status='requiere_login'`,
+  `source_run_sites.status='requires_login'`), `RequiereLoginError`
+  (`jobpulse_v15.requiere_login`), `repository.record_site_result(status=…)`
+  (no suma a la racha de ceros), UI v2 con 🔑 y lista de sitios que piden login.
+- **Criterio**: ✅ la corrida queda `requires_login` (no `error`) y la salud del
+  sitio lo dice.
+
+### 3.4 Sesión de ANE entre arranques del navegador — `Ola 3 / paso 4` — **HECHO**
+- **Qué**: la cookie de ANE (`ASP.NET_SessionId`) es de **sesión**
+  (`expires = -1`): Chromium no la escribe en disco, así que al reabrir Brave
+  se perdía (medido: login → 24 avisos; cerrar → reabrir → "sin sesión de
+  detalle" → 0 avisos). El cierre ordenado de O12 · 1.5 no arregla esto.
+- **Cómo**: `jobpulse_v15.sesion_navegador` guarda las cookies del sitio en
+  `data/usuario/sesiones/<sitio>.json` (fuera del repo) tras un login
+  exitoso y las restaura en el contexto cuando falta la sesión.
+- **Criterio**: ✅ **24 avisos con Brave recién abierto** (antes `requires_login`).
 
 ---
 

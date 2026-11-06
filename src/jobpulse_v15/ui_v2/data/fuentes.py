@@ -25,6 +25,8 @@ class SitioFila:
     grupos: str      # "directos, cr-gov"
     activo: bool
     revision: bool   # needs_review (racha de corridas sin ofertas)
+    requiere_login: bool = False  # el sitio pide iniciar sesión (O13 · 3.3)
+    salud: str = ""  # health_status crudo del sitio
 
 
 class FuentesStore:
@@ -36,6 +38,7 @@ class FuentesStore:
     def sitios(self) -> list[SitioFila]:
         filas: list[SitioFila] = []
         for sitio in self.repository.list_sites():
+            salud = str(sitio.get("health_status") or "unknown")
             filas.append(
                 SitioFila(
                     site_id=sitio["site_id"],
@@ -45,6 +48,8 @@ class FuentesStore:
                     grupos=", ".join(sitio.get("run_groups") or []) or "—",
                     activo=bool(sitio["enabled"]),
                     revision=bool(sitio.get("review_required")),
+                    requiere_login=salud == "requiere_login",
+                    salud=salud,
                 )
             )
         return filas

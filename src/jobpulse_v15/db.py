@@ -9,6 +9,14 @@ from typing import Iterator
 
 _MIGRATION_NAME = re.compile(r"^(\d{3})_[a-z0-9_]+\.sql$")
 
+# Marcador de una migracion que NO puede correr dentro de la transaccion
+# automatica: las que recrean una tabla con un CHECK nuevo necesitan apagar
+# `PRAGMA foreign_keys` (SQLite no deja cambiarlo con una transaccion
+# abierta) y por eso gestionan su propio BEGIN/COMMIT.
+_MIGRATION_PROPIA_TRANSACCION = re.compile(
+    r"^\s*--\s*jobpulse:transaccion-propia", re.MULTILINE
+)
+
 
 class MigrationError(RuntimeError):
     """La secuencia de migraciones no es valida para esta base."""
@@ -125,16 +133,22 @@ class Database:
                     continue
                 sql = migration.read_text(encoding="utf-8")
                 try:
-                    connection.executescript(
-                        "BEGIN IMMEDIATE;\n"
-                        f"{sql}\n"
-                        f"PRAGMA user_version = {expected_version};\n"
-                        "COMMIT;\n"
-                    )
+                    if _MIGRATION_PROPIA_TRANSACCION.search(sql):
+                        # La migracion se encarga de su transaccion (y de
+                        # apagar/encender las claves foraneas si hace falta).
+                        connection.executescript(sql)
+                    else:
+                        connection.executescript(
+                            "BEGIN IMMEDIATE;\n"
+                            f"{sql}\n"
+                            f"PRAGMA user_version = {expected_version};\n"
+                            "COMMIT;\n"
+                        )
                 except sqlite3.Error:
                     if connection.in_transaction:
                         connection.rollback()
                     raise
+                connection.execute(f"PRAGMA user_version = {expected_version}")
 
         return len(migrations)
 

@@ -85,6 +85,64 @@ def _browser_falso(sesion):
     return SimpleNamespace(contexts=[SimpleNamespace(pages=[pagina])])
 
 
+class TestGuardaLaSesion(unittest.TestCase):
+    """Tras un login OK se guarda la sesión (la cookie de ANE es de sesión).
+
+    Medido 2026-11-06: ``ASP.NET_SessionId`` es una cookie de SESIÓN
+    (``expires = -1``): Chromium no la escribe en disco ni con cierre
+    ordenado. Sin guardarla aparte, al reabrir Brave el barrido decía
+    "sin sesión de detalle" → 0 avisos.
+    """
+
+    def test_un_login_ok_guarda_la_sesion(self):
+        elemento = SimpleNamespace(fill=lambda _v: None, click=lambda: None)
+        pagina = SimpleNamespace(
+            goto=lambda *a, **k: None,
+            wait_for_timeout=lambda _ms: None,
+            query_selector=lambda _sel: elemento,
+            content=lambda: "<html>Puesto/Detalles</html>",
+            close=lambda: None,
+            title=lambda: "ANE",
+            url="https://www.ane.cr/Puesto",
+        )
+        contexto = SimpleNamespace(new_page=lambda: pagina)
+        browser = SimpleNamespace(contexts=[contexto])
+        falso = _PlaywrightFalso(browser)
+
+        with patch.object(ane_login, "sync_playwright", falso), \
+             patch.object(ane_login, "credencial",
+                          lambda _e: {"usuario": "u", "password": "p"}), \
+             patch.object(ane_login, "guardar_sesion_sync") as guarda:
+            resultado = ane_login.login_ane(9222)
+
+        self.assertEqual(resultado["estado"], "ok")
+        guarda.assert_called_once_with(contexto, "ane", "ane.cr")
+
+    def test_un_login_fallido_NO_guarda_la_sesion(self):
+        elemento = SimpleNamespace(fill=lambda _v: None, click=lambda: None)
+        pagina = SimpleNamespace(
+            goto=lambda *a, **k: None,
+            wait_for_timeout=lambda _ms: None,
+            query_selector=lambda _sel: elemento,
+            content=lambda: "<html>loginForm</html>",
+            close=lambda: None,
+            title=lambda: "Login",
+            url="https://www.ane.cr/Cuenta/Login",
+        )
+        contexto = SimpleNamespace(new_page=lambda: pagina)
+        browser = SimpleNamespace(contexts=[contexto])
+        falso = _PlaywrightFalso(browser)
+
+        with patch.object(ane_login, "sync_playwright", falso), \
+             patch.object(ane_login, "credencial",
+                          lambda _e: {"usuario": "u", "password": "p"}), \
+             patch.object(ane_login, "guardar_sesion_sync") as guarda:
+            resultado = ane_login.login_ane(9222)
+
+        self.assertEqual(resultado["estado"], "fallo")
+        guarda.assert_not_called()
+
+
 class TestCierreOrdenado(unittest.TestCase):
     def test_envia_browser_close_por_cdp(self):
         sesion = _Sesion()

@@ -26,7 +26,9 @@ from typing import Any, Dict
 
 from playwright.sync_api import sync_playwright
 
+from jobpulse_v15.ane import DOMINIO_ANE, SESION_ANE
 from jobpulse_v15.credenciales import credencial
+from jobpulse_v15.sesion_navegador import guardar_sesion_sync
 
 LOGIN_URL = "https://www.ane.cr/Cuenta/Login"
 
@@ -86,6 +88,10 @@ def login_ane(port: int = 9222) -> Dict[str, str]:
 
             html = page.content()
             if "Puesto/Detalles" in html or "dashboard" in html.lower():
+                # La cookie de ANE es de SESIÓN: Chromium no la escribe en
+                # disco, así que se guarda aparte para poder raspar aunque
+                # el navegador se cierre y se vuelva a abrir (O13).
+                guardar_sesion_sync(ctx, SESION_ANE, DOMINIO_ANE)
                 return {"estado": "ok", "detalle": "Sesión ANE activa"}
             if "loginForm" in html or "Cuenta/RegistroUsuario" in html:
                 return {
@@ -106,12 +112,18 @@ def cerrar_brave_ordenado(port: int = 9222) -> bool:
     Trampa verificada (2026-11-05): el script ``login_ane.py`` cerraba el Brave
     que había abierto con ``process.terminate()``/``kill()``; Chromium **no
     alcanzaba a volcar las cookies** al perfil en disco y el barrido siguiente
-    decía "ANE: sin sesión de detalle" con **0 avisos** (la cookie de sesión no
-    persistía, aunque el login hubiera dado ``ok``).
+    decía "ANE: sin sesión de detalle" con **0 avisos**.
+
+    OJO (medido 2026-11-06): el cierre ordenado **no** arregla el caso "se
+    raspa en un arranque nuevo". La cookie de ANE (``ASP.NET_SessionId``) es de
+    SESIÓN (``expires = -1``) y Chromium nunca la escribe en disco: se pierde
+    aunque el cierre sea perfecto. Para eso está ``sesion_navegador``: la
+    sesión se guarda aparte tras el login y se restaura al raspar.
 
     ``Browser.close`` es el cierre ORDENADO del navegador: Chromium vacía sus
-    stores (cookies, localStorage) y sale solo. Si el proceso no termina en
-    ``espera`` segundos, el caller puede forzar (aquí no se mata nada).
+    stores (cookies persistentes, localStorage) y sale solo. Si el proceso no
+    termina en ``espera`` segundos, el caller puede forzar (aquí no se mata
+    nada).
 
     Devuelve True si se envió la orden de cierre.
     """

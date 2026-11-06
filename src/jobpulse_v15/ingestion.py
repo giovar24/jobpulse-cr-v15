@@ -11,6 +11,7 @@ from typing import Any
 
 from jobpulse_v15 import ciclo_vida
 from jobpulse_v15.repository import Repository
+from jobpulse_v15.requiere_login import RequiereLoginError
 
 logger = logging.getLogger("jobpulse_v15.ingestion")
 
@@ -45,8 +46,16 @@ class IngestionService:
         fetch_offers: Callable[[], Sequence[Mapping[str, Any]]],
         *,
         run_kind: str,
-    ) -> dict[str, int | str]:
-        """Registra la corrida antes de fetch para no perder errores de proveedor."""
+    ) -> dict[str, int | str | bool]:
+        """Registra la corrida antes de fetch para no perder errores de proveedor.
+
+        Si el adaptador detecta un MURO DE LOGIN lanza
+        :class:`RequiereLoginError`: la corrida queda con estado
+        ``requires_login`` (NO ``error`` ni ``zero_results``) y el sitio
+        queda con salud ``requiere_login``. No es una excepcion: el
+        resultado se devuelve con ``requires_login=True`` para que el
+        llamador lo muestre como lo que es ("hay que iniciar sesion").
+        """
         run_id = self.repository.start_site_run(site_id, run_kind)
         try:
             offers = fetch_offers()
@@ -56,6 +65,29 @@ class IngestionService:
             if isinstance(skipped, bool) or not isinstance(skipped, int) or skipped < 0:
                 raise ValueError("jobs_skipped debe ser un entero no negativo.")
             normalized = self._validate_offers(site_id, offers)
+        except RequiereLoginError as exc:
+            self.repository.record_site_result(
+                run_id,
+                site_id,
+                jobs_found=0,
+                jobs_valid=0,
+                jobs_new=0,
+                jobs_duplicate=0,
+                status="requires_login",
+            )
+            self.repository.finish_run(run_id, "El sitio requiere iniciar sesion.")
+            return {
+                "run_id": run_id,
+                "status": "requires_login",
+                "site_status": "requires_login",
+                "jobs_found": 0,
+                "jobs_valid": 0,
+                "jobs_new": 0,
+                "jobs_duplicate": 0,
+                "jobs_skipped": 0,
+                "requires_login": True,
+                "mensaje": str(exc),
+            }
         except Exception as exc:
             self.repository.record_site_result(
                 run_id,

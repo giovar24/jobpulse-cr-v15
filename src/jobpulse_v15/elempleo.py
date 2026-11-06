@@ -111,13 +111,20 @@ class ElempleoFetcher:
         skipped_ids = skip_source_job_ids or set()
         cfg = site.get("site_config") or {}
         country_query = cfg.get("country_query") or "Costa Rica"
+        # Cada oferta del listado abre su detalle (una navegacion por
+        # oferta): con 50 avisos por pagina el barrido tardaria minutos.
+        # `site_config["max_ofertas"]` lo acota (sin tope por defecto).
+        max_ofertas = cfg.get("max_ofertas")
+        max_ofertas = int(max_ofertas) if max_ofertas else 0
 
         async def _run() -> ElempleoOffers:
             from playwright.async_api import async_playwright
             async with async_playwright() as p:
                 browser = await p.chromium.connect_over_cdp(f"http://localhost:{port}")
                 ctx = browser.contexts[0]
-                return await self._fetch_dom(ctx, site, cfg, pages, skipped_ids, country_query)
+                return await self._fetch_dom(
+                    ctx, site, cfg, pages, skipped_ids, country_query, max_ofertas
+                )
 
         # `fetch` ya es una corrutina: await directo. Un `asyncio.run()`
         # aqui fallaba con "asyncio.run() cannot be called from a running
@@ -132,6 +139,7 @@ class ElempleoFetcher:
         pages: int,
         skipped_ids: set[str],
         country_query: str,
+        max_ofertas: int = 0,
     ) -> ElempleoOffers:
         offers = []
         skipped = 0
@@ -151,18 +159,32 @@ class ElempleoFetcher:
                     logger.warning("Elempleo %s: login-wall detectado en %s", site.get("site_id"), url)
                     break
 
-                # Extraer tarjetas de resultados
+                # Extraer tarjetas de resultados.
+                # OJO (verificado 2026-11-05): `.ee_list-item` NO son las
+                # ofertas: es el menu lateral ("Todos los anuncios de
+                # empleo", filtros...). Las ofertas siguen en
+                # `.result-item` con `.js-area-bind.area-bind` dentro.
                 cards = await page.query_selector_all(".result-item")
+                if not cards:
+                    cards = await page.query_selector_all(
+                        ".js-area-bind.area-bind, [data-url*='/ofertas-trabajo/']"
+                    )
                 if not cards:
                     logger.info("Elempleo %s: sin tarjetas en pagina %d", site.get("site_id"), page_num)
                     break
 
                 for card in cards:
+                    if max_ofertas and len(offers) >= max_ofertas:
+                        logger.info(
+                            "Elempleo %s: tope de %d oferta(s) alcanzado.",
+                            site.get("site_id"), max_ofertas,
+                        )
+                        break
                     try:
                         # El data-url está en el div interno .js-area-bind.area-bind
                         inner = await card.query_selector(".js-area-bind.area-bind")
-                        if not inner:
-                            continue
+                        if inner is None:
+                            inner = card
                         data_url = await inner.get_attribute("data-url")
                         if not data_url:
                             continue
@@ -188,15 +210,37 @@ class ElempleoFetcher:
                                 pass
 
                         # Fallback: extraer del DOM si datalayer falló
+                        # (hoy el listado ya NO trae `datalayertag`).
                         if not title:
-                            title_el = await card.query_selector("h2.item-title.ee-mod a.js-offer-title")
+                            title_el = await card.query_selector(
+                                "h2.item-title.ee-mod a.js-offer-title, "
+                                "h2.item-title a, .js-offer-title"
+                            )
                             title = _limpiar(await title_el.inner_text()) if title_el else ""
                         if not title:
                             continue
 
                         if not company:
-                            company_el = await card.query_selector(".item-company a")
-                            company = _limpiar(await company_el.inner_text()) if company_el else ""
+                            for selector in (
+                                ".js-offer-company",
+                                ".company-name-text",
+                                ".item-company a",
+                            ):
+                                company_el = await card.query_selector(selector)
+                                if company_el:
+                                    company = _limpiar(await company_el.inner_text())
+                                    if company:
+                                        break
+
+                        # Ciudad de la ficha (`.js-offer-city`): es mas
+                        # precisa que la primera ciudad que aparezca en el
+                        # texto del detalle (que puede ser otra).
+                        ciudad_ficha = ""
+                        ciudad_el = await card.query_selector(
+                            ".js-offer-city, .info-city"
+                        )
+                        if ciudad_el is not None:
+                            ciudad_ficha = _limpiar(await ciudad_el.inner_text())
 
                         # source_job_id desde la URL
                         source_job_id = self._extract_job_id(detail_url)
@@ -211,9 +255,17 @@ class ElempleoFetcher:
                         # Navegar a detalle para extraer ubicación, descripción, etc.
                         detail_data = await self._fetch_detail(ctx, detail_url)
 
-                        location_raw = detail_data.get("location", "")
-                        searchable = " ".join(filter(None, [title, company, location_raw]))
-                        if country_query.casefold() not in searchable.casefold():
+                        location_raw = detail_data.get("location", "") or ciudad_ficha
+                        if ciudad_ficha and ciudad_ficha != location_raw:
+                            location_raw = ciudad_ficha
+                        # El filtro de pais mira el PAIS del aviso: la
+                        # ubicacion es el canton ("San Jose") y el pais
+                        # ("Costa Rica") va aparte (verificado 2026-11-05:
+                        # sin esto se descartaban TODAS las ofertas).
+                        if not self._pasa_filtro_pais(
+                            title, company, location_raw,
+                            detail_data.get("country", ""), country_query,
+                        ):
                             continue
 
                         # Normalizar campos estándar
@@ -257,6 +309,9 @@ class ElempleoFetcher:
                     except Exception as e:
                         logger.warning("Elempleo error extrayendo tarjeta: %s", e)
 
+                if max_ofertas and len(offers) >= max_ofertas:
+                    break
+
                 # Paginación: elempleo usa ?page=N
                 if page_num >= pages:
                     break
@@ -277,29 +332,80 @@ class ElempleoFetcher:
         return m.group(1) if m else None
 
     @staticmethod
+    def _pasa_filtro_pais(
+        title: str,
+        company: str,
+        location: str,
+        country: str,
+        country_query: str,
+    ) -> bool:
+        """¿El aviso es del pais buscado?
+
+        La ubicacion es el CANTON ("San Jose") y el pais ("Costa Rica")
+        va aparte: mirar solo la ubicacion descartaba todas las ofertas
+        (verificado 2026-11-05).
+        """
+        if not country_query:
+            return True
+        searchable = " ".join(
+            filter(None, [title, company, location, country])
+        )
+        return country_query.casefold() in searchable.casefold()
+
+    @staticmethod
     async def _es_login_wall(page: Page) -> bool:
-        """Detecta login-wall o interstitial."""
-        # Buscar formularios de login
+        """Detecta un MURO DE LOGIN real (no el boton del encabezado).
+
+        OJO (verificado 2026-11-05): el encabezado de elempleo.com SIEMPRE
+        trae el enlace "Inicia sesion" (el boton de entrar). Antes se
+        buscaba esa palabra en el texto de la pagina, asi que el barrido
+        se cortaba en la pagina 1 y el sitio daba 0 avisos SIEMPRE.
+
+        Un muro de login de verdad es un FORMULARIO de acceso (o la
+        pagina de "Iniciar sesion" sin avisos). Si la pagina trae
+        tarjetas de avisos, NO hay muro.
+        """
         try:
-            if await page.query_selector('input[type="email"]') \
-               and await page.query_selector('input[type="password"]'):
+            if await page.query_selector('input[type="password"]'):
                 return True
         except Exception:
             pass
-        # Textos típicos
+        try:
+            if await page.query_selector("form[action*='iniciar-sesion']"):
+                return True
+        except Exception:
+            pass
+        # Si hay resultados, no hay muro (los avisos son la prueba).
+        try:
+            if await page.query_selector(
+                ".result-item, .ee_list-oferta, [data-url*='/ofertas-trabajo/']"
+            ):
+                return False
+        except Exception:
+            pass
+        try:
+            url = (page.url or "").lower()
+            if "/iniciar-sesion" in url or "/cross/iniciar" in url:
+                return True
+        except Exception:
+            pass
         try:
             body = (await page.inner_text("body"))[:2000].lower()
-            if any(x in body for x in ("inicia sesion", "iniciar sesion", "sign in", "log in", "acceder")):
-                return True
         except Exception:
-            pass
-        return False
+            return False
+        return (
+            "inicia sesion" in body
+            or "iniciar sesion" in body
+            or "sign in" in body
+            or "log in" in body
+        ) and "resultado" not in body and "oferta" not in body
 
     async def _fetch_detail(self, ctx: BrowserContext, detail_url: str) -> Dict[str, Any]:
         """Navega a la página de detalle y extrae información completa del body text."""
         page = await ctx.new_page()
         data = {
             "location": "",
+            "country": "",
             "work_mode": "unknown",
             "employment_type": None,
             "date": None,
@@ -324,6 +430,19 @@ class ElempleoFetcher:
                 if m:
                     data["location"] = m.group(1).title()
                     break
+
+            # 1.b País - el aviso dice "CRC Costa Rica" (verificado
+            # 2026-11-05). El filtro de país lo necesita: la ubicación
+            # es el cantón, no el país.
+            country_match = re.search(
+                r"\b(Costa Rica|Panam[áa]|Nicaragua|Honduras|Guatemala|"
+                r"El Salvador|Rep[úu]blica Dominicana|Espa[ñn]a|"
+                r"Estados Unidos|Colombia|M[ée]xico)\b",
+                body_text,
+                re.IGNORECASE,
+            )
+            if country_match:
+                data["country"] = country_match.group(1)
 
             # 2. Salario - buscar patrón monetario costarricense
             salary_match = re.search(r"[¢$]\s*[\d\.,]+\s*(?:a|hasta)\s*[\d\.,]+\s*(?:mil|millón|millones)?", body_text)
@@ -356,15 +475,52 @@ class ElempleoFetcher:
             elif "tiempo completo" in body_lower or "full time" in body_lower or "full-time" in body_lower:
                 data["employment_type"] = "Full-time"
 
-            # 6. Descripción - buscar entre "Descripción general" y siguiente sección
-            desc_match = re.search(r"Descripción general\s*(.*?)(?:\n\s*(?:Habilidades|Requisitos|Competencias|Datos|$))", body_text, re.DOTALL | re.IGNORECASE)
-            if desc_match:
-                data["description"] = _limpiar(desc_match.group(1))
+            # 6. Descripción - el bloque del aviso (`.description-block`)
+            #    es mas fiable que el texto plano (verificado 2026-11-05).
+            for selector in (
+                ".description-block p span",
+                ".description-block p",
+                ".js-description p span",
+                ".js-description",
+            ):
+                desc_el = await page.query_selector(selector)
+                if desc_el is not None:
+                    texto = _limpiar(await desc_el.inner_text())
+                    if texto:
+                        data["description"] = texto
+                        break
+            if not data["description"]:
+                desc_match = re.search(
+                    r"Descripción general\s*(.*?)(?:\n\s*(?:Habilidades|Requisitos|Competencias|Datos|$))",
+                    body_text, re.DOTALL | re.IGNORECASE,
+                )
+                if desc_match:
+                    data["description"] = _limpiar(desc_match.group(1))
 
-            # 7. Requisitos - buscar entre "Requisitos" y siguiente sección
-            req_match = re.search(r"Requisitos\s*(.*?)(?:\n\s*(?:Competencias|Datos|Habilidades|Descripción|$))", body_text, re.DOTALL | re.IGNORECASE)
-            if req_match:
-                data["requirements"] = _limpiar(req_match.group(1))
+            # 7. Requisitos - el aviso no tiene seccion "Requisitos": los
+            #    requisitos son las ETIQUETAS de `.requirements-content`
+            #    (competencias, educacion, experiencia).
+            etiquetas = await page.query_selector_all(
+                ".requirements-content li .info-tag-not-select"
+            )
+            if etiquetas:
+                textos = []
+                for etiqueta in etiquetas:
+                    try:
+                        texto = _limpiar(await etiqueta.inner_text())
+                    except Exception:
+                        texto = ""
+                    if texto and texto not in textos:
+                        textos.append(texto)
+                if textos:
+                    data["requirements"] = "; ".join(textos)
+            if not data["requirements"]:
+                req_match = re.search(
+                    r"Requisitos\s*(.*?)(?:\n\s*(?:Competencias|Datos|Habilidades|Descripción|$))",
+                    body_text, re.DOTALL | re.IGNORECASE,
+                )
+                if req_match:
+                    data["requirements"] = _limpiar(req_match.group(1))
 
         except Exception as e:
             logger.warning("Elempleo error en detalle %s: %s", detail_url, e)

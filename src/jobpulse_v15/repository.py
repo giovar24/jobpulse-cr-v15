@@ -39,6 +39,17 @@ REQUIREMENT_CATEGORIES = {
 FIELD_STATUSES = {"found", "not_mentioned", "unknown", "ambiguous"}
 ANALYSIS_STATUSES = {"complete", "partial", "error"}
 
+# Estados posibles de un sitio dentro de una corrida (O13 · Ola 3.3):
+# `requires_login` = "pide iniciar sesion" (NO es un selector roto).
+_ESTADOS_SITIO = {
+    "ok",
+    "zero_results",
+    "error",
+    "requires_login",
+    "skipped",
+    "unsupported",
+}
+
 # Categorias extra SOLO para facts del perfil del candidato (no para
 # requisitos de vacantes): datos personales, resumen y proyectos del CV
 # (secciones harvard-ats-v1). Inertes para el matching job<->perfil.
@@ -254,6 +265,10 @@ class Repository:
         corridas seguidas. Sin reiniciar el rache, un sitio con 12 ceros
         volveria a marcarse en la siguiente corrida con 0 (y la revision
         manual no serviria de nada).
+
+        Un sitio en ``requiere_login`` mantiene esa salud (la sesion sigue
+        haciendo falta) pero ya no queda pendiente de revision: el usuario
+        ya lo vio.
         """
         with self.database.connection() as connection:
             cursor = connection.execute(
@@ -400,8 +415,17 @@ class Repository:
         jobs_duplicate: int,
         error_message: str | None = None,
         review_after_zero_runs: int = 3,
+        status: str | None = None,
     ) -> str:
-        """Registra el resultado por sitio y actualiza su salud sin auto-pausar."""
+        """Registra el resultado por sitio y actualiza su salud sin auto-pausar.
+
+        ``status`` fuerza el estado de la corrida. El único que se puede
+        pedir a mano es ``requires_login``: "este sitio pide iniciar
+        sesion" NO es lo mismo que "este sitio no dio avisos" (y NO suma a
+        la racha de ceros). Sin ``status`` se deduce como antes: error si
+        hay mensaje de error, ``zero_results`` si no salio nada, ``ok`` si
+        hubo ofertas.
+        """
         counts = {
             "jobs_found": self._nonnegative_int(jobs_found, "jobs_found"),
             "jobs_valid": self._nonnegative_int(jobs_valid, "jobs_valid"),
@@ -421,12 +445,17 @@ class Repository:
             raise ValueError("jobs_new + jobs_duplicate no puede superar jobs_valid.")
         error_message = self._optional_text(error_message)
 
-        if error_message:
-            status = "error"
-        elif counts["jobs_found"] == 0:
-            status = "zero_results"
-        else:
-            status = "ok"
+        if status is None:
+            if error_message:
+                status = "error"
+            elif counts["jobs_found"] == 0:
+                status = "zero_results"
+            else:
+                status = "ok"
+        elif status not in _ESTADOS_SITIO:
+            raise ValueError(
+                "status debe ser uno de: %s." % ", ".join(sorted(_ESTADOS_SITIO))
+            )
 
         with self.database.connection() as connection:
             run = connection.execute(
@@ -468,7 +497,7 @@ class Repository:
                     counts["jobs_new"],
                     counts["jobs_duplicate"],
                     error_message,
-                    int(status == "error"),
+                    int(status in ("error", "requires_login")),
                     run_id,
                     site_id,
                 ),
@@ -487,6 +516,20 @@ class Repository:
                     """
                     UPDATE source_sites
                     SET health_status = 'error', review_required = 1,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE site_id = ?
+                    """,
+                    (site_id,),
+                )
+            elif status == "requires_login":
+                # "Pide iniciar sesion" NO es un sitio roto: NO suma a la
+                # racha de ceros (esa racha es la de "el selector esta
+                # roto"), pero si queda marcado para revision: el usuario
+                # tiene que iniciar sesion.
+                connection.execute(
+                    """
+                    UPDATE source_sites
+                    SET health_status = 'requiere_login', review_required = 1,
                         updated_at = CURRENT_TIMESTAMP
                     WHERE site_id = ?
                     """,
@@ -555,6 +598,8 @@ class Repository:
                 )
 
             successful = {"ok", "zero_results"}
+            # 'requires_login' NO es 'successful': la corrida no trajo los
+            # avisos de ese sitio (le falta la sesion al usuario).
             if all(status in successful for status in statuses):
                 status = "ok"
             elif all(item == "error" for item in statuses):

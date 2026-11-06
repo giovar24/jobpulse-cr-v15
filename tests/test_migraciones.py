@@ -46,15 +46,15 @@ class TestVersionDelEsquema(unittest.TestCase):
     def test_la_base_nueva_llega_a_la_ultima_migracion(self):
         version = self.database.initialize()
 
-        self.assertEqual(version, 21)
+        self.assertEqual(version, 22)
         with self.database.connection() as connection:
             actual = connection.execute("PRAGMA user_version").fetchone()[0]
-        self.assertEqual(actual, 21)
+        self.assertEqual(actual, 22)
 
     def test_inicializar_de_nuevo_no_cambia_nada(self):
         self.database.initialize()
 
-        self.assertEqual(self.database.initialize(), 21)
+        self.assertEqual(self.database.initialize(), 22)
 
 
 class TestMigracion017(unittest.TestCase):
@@ -346,7 +346,7 @@ class TestMigracion020(unittest.TestCase):
     def test_la_base_nueva_llega_a_la_ultima_migracion(self):
         with self.database.connection() as connection:
             version = connection.execute("PRAGMA user_version").fetchone()[0]
-        self.assertEqual(version, 21)
+        self.assertEqual(version, 22)
 
     def test_las_skills_que_pedia_el_corpus(self):
         for variante in (
@@ -488,6 +488,98 @@ class TestMigracion021(unittest.TestCase):
             variante = fila["variante"]
             self.assertEqual(variante, variante.lower(), variante)
             self.assertNotIn("  ", variante, variante)
+
+
+class TestMigracion022(unittest.TestCase):
+    """022: el estado `requiere_login` de la salud de los sitios.
+
+    SQLite no deja cambiar un CHECK con ALTER TABLE: la migracion recrea
+    `source_sites` y `source_run_sites`. Estos tests comprueban que:
+      * los datos sobreviven (sitios, avisos, corridas);
+      * las claves foraneas siguen bien;
+      * el estado nuevo se acepta y los viejos tambien.
+    """
+
+    def setUp(self):
+        self.temp_dir = tempfile.TemporaryDirectory()
+        self.database = Database(Path(self.temp_dir.name) / "test.db")
+        self.database.initialize()
+        self.repository = Repository(self.database)
+        self.repository.register_platform("ane", "ANE/Brete", "browser")
+        self.repository.register_site(
+            "ane-cr", "ane", "ANE Costa Rica", "https://www.ane.cr"
+        )
+        self.repository.save_job(
+            {
+                "job_id": "job-1",
+                "title": "Puesto",
+                "company": "Example",
+                "country": "CR",
+                "posting_language": "es",
+                "description_raw": "Descripcion.",
+            },
+            site_id="ane-cr",
+            source_job_id="J-1",
+        )
+
+    def tearDown(self):
+        self.temp_dir.cleanup()
+
+    def test_los_datos_surviven_a_la_migracion(self):
+        with self.database.connection() as connection:
+            sitios = connection.execute("SELECT COUNT(*) FROM source_sites").fetchone()[0]
+            avisos = connection.execute("SELECT COUNT(*) FROM jobs").fetchone()[0]
+        self.assertEqual(sitios, 1)
+        self.assertEqual(avisos, 1)
+
+    def test_las_claves_foraneas_siguen_validas(self):
+        with self.database.connection() as connection:
+            violaciones = connection.execute("PRAGMA foreign_key_check").fetchall()
+            integridad = connection.execute("PRAGMA integrity_check").fetchone()[0]
+        self.assertEqual(violaciones, [])
+        self.assertEqual(integridad, "ok")
+
+    def test_el_estado_requiere_login_se_acepta(self):
+        with self.database.connection() as connection:
+            connection.execute(
+                "UPDATE source_sites SET health_status='requiere_login' "
+                "WHERE site_id='ane-cr'"
+            )
+            estado = connection.execute(
+                "SELECT health_status FROM source_sites WHERE site_id='ane-cr'"
+            ).fetchone()[0]
+        self.assertEqual(estado, "requiere_login")
+
+    def test_los_estados_viejos_siguen_aceptados(self):
+        with self.database.connection() as connection:
+            for estado in ("unknown", "healthy", "zero_results",
+                           "needs_review", "error", "unsupported"):
+                with self.subTest(estado=estado):
+                    connection.execute(
+                        "UPDATE source_sites SET health_status=? WHERE site_id='ane-cr'",
+                        (estado,),
+                    )
+
+    def test_la_corrida_tambien_distingue_requires_login(self):
+        run_id = self.repository.start_site_run("ane-cr", "ane")
+        with self.database.connection() as connection:
+            connection.execute(
+                "UPDATE source_run_sites SET status='requires_login' "
+                "WHERE site_id='ane-cr' AND run_id=?",
+                (run_id,),
+            )
+            estado = connection.execute(
+                "SELECT status FROM source_run_sites WHERE site_id='ane-cr'"
+            ).fetchone()[0]
+        self.assertEqual(estado, "requires_login")
+
+    def test_un_estado_invalido_sigue_rechazado(self):
+        with self.database.connection() as connection:
+            with self.assertRaises(sqlite3.IntegrityError):
+                connection.execute(
+                    "UPDATE source_sites SET health_status='inventado' "
+                    "WHERE site_id='ane-cr'"
+                )
 
 
 if __name__ == "__main__":

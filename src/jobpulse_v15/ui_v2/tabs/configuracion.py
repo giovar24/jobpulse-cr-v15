@@ -1365,7 +1365,10 @@ class ConfiguracionTab(BaseTab):
             filas = [f for f in filas if f.plataforma == filtro]
         for fila in filas:
             estado = "Activo" if fila.activo else "Pausado"
-            if fila.revision:
+            if fila.requiere_login:
+                # El sitio pide iniciar sesión: NO está roto (O13 · 3.3).
+                estado += " 🔑"
+            elif fila.revision:
                 estado += " ⚠"
             tree.insert(
                 "", "end", iid=fila.site_id,

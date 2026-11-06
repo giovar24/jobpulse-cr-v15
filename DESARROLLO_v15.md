@@ -149,7 +149,7 @@ def fetch(self, site: dict, *, pages: int, search_text: str | None,
 | **O10** Mejorar filtros de búsqueda y compatibilidad | El paso 4 del flujo filtraba `matched` a ciegas → grilla vacía (0 jobs cuando 370/447 análisis son `partial`). `ui.elegir_filtro_compatibilidad()` usa `matched` si existe y si no muestra todos los vigentes, explicando por qué. **Filtro por ÁREA ✅ (2026-10-30)**: combo "Área" + casilla "Solo áreas de mi perfil" + columna "Área" en la UI principal, y filtro en el MOTOR del Paso 5 (estado `fuera_de_area`, motivo `fuera_de_area_del_perfil`; "evaluar todo" = `run_paso5.py --evaluar-todo`). Pendiente: refinar `solo_vigentes` (uso `date_published` vs `last_seen_at`), visibilidad opt-in de recurrentes/aplicadas (O8.2). La columna "Req." (O2.2) ya no está pendiente: **✅ 2026-11-04**. | 🟡 `elegir_filtro_compatibilidad` (28-10) + filtro por área (30-10) + columna/filtro "Req." (04-11) implementados |
 | **O11** IA externa / motor intercambiable | Que el enriquecimiento (y las tareas futuras) funcionen con **cualquier** motor OpenAI-compatible, no solo con llama.cpp en esta máquina: Ollama **Cloud** (acceso gratis), Ollama local, LM Studio, OpenRouter, NVIDIA, Gemini o `custom`. Mismo cliente, mismo pase, sin código duplicado | ✅ **COMPLETO (2026-11-05)**: `ia_servidor.es_endpoint_local()` (con endpoint externo no se arranca nada local) · degradación `json_schema` → `json_object` → sin `response_format` ante el rechazo del proveedor (400/422) · `IA_MODEL=auto` autodetecta el modelo con `GET /models` · presets **unificados** (`ia_api.PRESETS` es la fuente única que ven las dos UIs) · aviso de privacidad + confirmación (UI) y `--confirmar-externo` (CLI) · preflight con mensaje según local/externo. **39 tests nuevos** (`tests/test_ia_externa.py`, incl. end-to-end por HTTP) |
 | **O12** Paridad CLI/UI (una sola implementación del pipeline) | La UI debe dar **los mismos números** que la CLI. Hoy NO: la UI analysis **antes** de la IA y nunca re-analiza, así que los campos estructurados (`jobs.skills`/`languages`) nunca se convierten en requisitos → 231 avisos `sin_requisitos` (vs 11) y 32 calificadas de menos | 🟡 **OLAS 1 Y 2 COMPLETAS (2026-11-05)** · Ola 1: **1.1** re-análisis incremental (`analysis_flow.reananalizar_con_campos_fuente`, cableado en CLI/UI clásica/UI v2) · **1.2** badge + contador exacto (`cuenta_analisis_obsoletos` confirma en seco: 67 candidatos SQL = **0 obsoletos reales**) · **1.3** guarda `askyesnocancel` antes del Paso 5 · **1.4** evidencia como módulo (`jobpulse_v15.evidencia`, scripts = envoltorios, UI v2 con botón "Evidencia" e indicador "al día") · **1.5** login ANE con cierre ordenado (`Browser.close` por CDP) y `--mantener-abierto`. Ola 2: **2.1** orquestador `jobpulse_v15.pipeline` (una implementación por etapa; `run_full_flow.py` = envoltorio) · **2.2** botón "Procesar" (UI v2) · **2.3** botón "Enriquecer IA" (UI v2, con confirmación de privacidad) · **2.4** paso 3.5 en la UI clásica. **Medición sobre copia de la BD real: `sin_requisitos` 231 → 11 (−220)**; test de paridad UI/CLI sobre dos bases idénticas |
-| **O13** Cobertura de fuentes (que el barrido traiga los avisos que existen) | **LinkedIn** da 0 avisos (DOM nuevo: `/jobs/search-results/` con clases ofuscadas, sin `div.base-card` ni `/jobs/view/`) · **Elempleo** da 0 avisos (ahora `.ee_list-item`, no `.result-item`) · **ANE** perdía la cookie de sesión porque `login_ane.py` cerraba el Brave que abrió (**arreglado en O12 · 1.5**: cierre ordenado + `--mantener-abierto`) · la salud de sitios no distingue "login-wall" de "selector roto" | 🔴 **ABIERTO** (2026-11-05). Ola 3 del plan: selectores + test por fetcher, estado `requiere_login` en la salud. Falta verificar ANE con **dos barridos seguidos** |
+| **O13** Cobertura de fuentes (que el barrido traiga los avisos que existen) | **LinkedIn** daba 0 avisos (DOM nuevo: `/jobs/search-results/` con clases ofuscadas, sin `div.base-card` ni `/jobs/view/`) · **Elempleo** daba 0 avisos (falso muro de login del encabezado, empresa fuera de `datalayertag`, filtro de país mirando el cantón) · **ANE** perdía la cookie de sesión porque `login_ane.py` cerraba el Brave que abrió (**arreglado en O12 · 1.5**: cierre ordenado + `--mantener-abierto`; **y en O13**: la cookie es de sesión y Chromium no la persiste → se guarda aparte) · la salud de sitios no distingue "login-wall" de "selector roto" | 🟢 **OLA 3 COMPLETA (2026-11-06)**: LinkedIn reescrito (HTTP + `div.base-card` + JSON-LD, rate-limit 1,5 s) → **60 avisos**; Elempleo → **3 avisos**; `requires_login` (migración **022**, 🔑 en la UI v2, no cuenta en la racha de ceros); `jobpulse_v15.sesion_navegador` guarda/restaura la sesión de ANE en `data/usuario/sesiones/`; **verificado con dos barridos seguidos** (24 avisos cada uno) y con Brave cerrado y reabierto |
 | **O14** Control del coste de la IA (límites opt-in, nunca fijos) | Que el usuario pueda poner y **quitar** límites: `IA_MAX_LLAMADAS` (llamadas por corrida), `IA_RPM` (requests por minuto) y `IA_MAX_VACANTES` (**avisos por corrida**). Vacío = sin tope. El tope de avisos **no puede ser un valor fijo**: subirlo o bajarlo según el presupuesto y la cuota | ✅ **COMPLETO (2026-11-05)**: los tres límites son opt‑in y ajustables desde `.env` **y** desde "Configuración → IA externa" en las dos UIs; el presupuesto por corrida se consume a lo largo de los ciclos (no se reinicia); `0` o un valor no numérico = sin tope (con aviso, no con crash) |
 
 **O7 — sub-objetivos (implementados 2026-10-27, tras el barrido fallido desde la UI):**
@@ -475,18 +475,18 @@ completo en `docs/PLAN_MEJORAS.md`):
 0. **O12 — paridad CLI/UI** (meta #1): **Olas 1 y 2 YA ESTÁN** (2026-11-05:
    re-análisis incremental, badge, guarda, evidencia como módulo, login ANE
    con cierre ordenado y orquestador `pipeline.py` con los botones "Procesar"
-   y "Enriquecer IA" en la UI v2; medición 231 → 11). Lo siguiente es la
-   **Ola 3** (O13: selectores de LinkedIn/Elempleo, estado `requiere_login`,
-   verificar ANE con dos barridos seguidos).
+   y "Enriquecer IA" en la UI v2; medición 231 → 11).
    El bloque de ALINEACIÓN **ya está aplicado en la BD real** (esquema 21,
    705 avisos, corrida `20261104_231932`): lo pendiente es que las UIs lo
    repitan, no volver a aplicarlo.
-1. **O13 — cobertura de fuentes**: selectores de **LinkedIn**
-   (`/jobs/search-results/` con clases ofuscadas) y **Elempleo**
-   (`.ee_list-item`) con su test por fetcher · estado `requiere_login` en la
-   salud de sitios (distinguir login-wall de selector roto). El login de ANE
-   ya no pierde la cookie (O12 · 1.5) pero falta verificarlo con **dos
-   barridos seguidos**.
+1. **O13 — cobertura de fuentes**: **OLA 3 COMPLETA (2026-11-06)**: LinkedIn
+   reescrito (listado por HTTP + `div.base-card` + JSON-LD) → **60 avisos**;
+   Elempleo (falso muro de login, empresa, filtro de país) → **3 avisos**;
+   estado `requires_login` en la salud de sitios (migración **022**, 🔑 en la
+   UI v2); y la **sesión de ANE entre arranques del navegador**
+   (`jobpulse_v15.sesion_navegador` → `data/usuario/sesiones/ane.json`),
+   verificada con **dos barridos seguidos** (24 avisos cada uno) y también
+   con Brave cerrado y reabierto.
 2. **El usuario marca sus áreas en la UI** (perfil → pestaña **"Áreas de
    empleo"**): hasta entonces el filtro está INACTIVO (sin áreas marcadas se
    evalúa todo, que es lo que hoy ocurre). Después, la próxima corrida del
@@ -650,6 +650,50 @@ completo en `docs/PLAN_MEJORAS.md`):
 ---
 
 ## 8. HISTORIAL DE CAMBIOS RECIENTES
+
+### 2026-11-06 — OLA 3 DE O13: COBERTURA DE FUENTES (LinkedIn, Elempleo, `requires_login`, sesión de ANE)
+
+**Qué**: cuatro cosas, todas medidas **en vivo** (no en teoría):
+
+1. **LinkedIn** (`linkedin.py`, reescrito): el listado público que funciona es
+   `https://www.linkedin.com/jobs/search/?keywords=…&location=…` por **HTTP
+   simple** (`/jobs/search-results/` responde 999 y el navegador sin sesión
+   recibe authwall). Las tarjetas son `div.base-card` +
+   `data-entity-urn="urn:li:jobPosting:<id>"`; el JSON-LD `ItemList` es el
+   respaldo y el navegador (CDP) el refuerzo que fusiona resultados.
+   **60 avisos** (antes 0). Rate-limit medido: `jobs-guest` aguanta ~10
+   peticiones seguidas y luego da 429 → `request_delay` = **1,5 s** (19 OK /
+   0 429 medidos) y reintento con espera ante 429.
+2. **Elempleo** (`elempleo.py`): `.ee_list-item` es el **menú lateral**, no el
+   listado (las ofertas siguen en `.result-item` + `.js-area-bind.area-bind`);
+   el botón "Inicia sesión" del encabezado **no** es un muro de login (solo un
+   formulario de acceso lo es); la empresa está en `.js-offer-company`; y el
+   filtro de país mira país + cantón (la ubicación es el cantón). **3 avisos**
+   (antes 0). `site_config["max_ofertas"]` acota el barrido.
+3. **`requires_login`** (migración **022**): un sitio que pide iniciar sesión
+   no está roto. Salud `requiere_login`, corrida `requires_login`, **no** suma
+   a la racha de ceros, sí queda `review_required=1`, la UI v2 muestra 🔑 y el
+   barrido lista los sitios que piden login.
+4. **Sesión de ANE entre arranques** (`jobpulse_v15.sesion_navegador`): la
+   cookie `ASP.NET_SessionId` es de **sesión** (`expires = -1`) y Chromium no
+   la escribe en disco → al reabrir Brave se perdía (el cierre ordenado de
+   O12 · 1.5 no la salva). Ahora el login guarda las cookies del sitio en
+   `data/usuario/sesiones/ane.json` (fuera del repo) y el scraper las restaura
+   cuando falta la sesión; si el servidor la caducó, el archivo se borra.
+
+**Criterio de aceptación**: ANE con **dos barridos seguidos** → 24 avisos y
+24 avisos (0 nuevos, 24 duplicados) y salud `healthy`; con Brave **cerrado y
+reabierto** → 24 avisos restaurando la sesión (antes `requires_login`, 0).
+LinkedIn 60 avisos · Elempleo 3 avisos. Tests nuevos: `test_linkedin.py` (16),
+`test_elempleo.py` (10), `test_requiere_login.py` (8),
+`test_sesion_navegador.py` (18) + 2 en `test_ane_login.py` + 2 de UI v2.
+
+**Nota de esquema**: la 022 **recrea** `source_sites` y `source_run_sites`
+(SQLite no deja cambiar un `CHECK` con `ALTER` y `PRAGMA foreign_keys` no se
+puede cambiar dentro de una transacción) → `db.py` reconoce el marcador
+`-- jobpulse:transaccion-propia` y deja que la migración gestione su propia
+transacción. Probada sobre una **copia** de la BD real: 129 sitios, 705 avisos
+y 134 corridas intactos, `integrity_check ok`, 0 violaciones de FK.
 
 ### 2026-11-05 — OLA 2 DE O12: ORQUESTADOR ÚNICO (`pipeline.py`) + BOTONES EN UI v2
 

@@ -47,6 +47,8 @@ ESTADO_PAUSADO = "pausado"
 ESTADO_SIN_FETCHER = "sin_fetcher"
 ESTADO_NO_EXISTE = "no_existe"
 ESTADO_CANCELADO = "cancelado"
+# O13 · Ola 3.3: el sitio pide iniciar sesion (NO esta roto).
+ESTADO_REQUIERE_LOGIN = "requiere_login"
 
 
 @dataclass(frozen=True)
@@ -243,10 +245,20 @@ def ejecutar_barrido(
                 jobs_duplicate=int(crudo.get("jobs_duplicate", 0) or 0),
                 jobs_skipped=int(crudo.get("jobs_skipped", 0) or 0),
             )
+            if crudo.get("requires_login"):
+                # El sitio pide sesion: no es un error ni un sitio roto.
+                resultado = ResultadoSitio(
+                    site_id,
+                    plataforma,
+                    ESTADO_REQUIERE_LOGIN,
+                    mensaje=str(crudo.get("mensaje") or "El sitio exige iniciar sesion."),
+                )
             resumen.resultados.append(resultado)
             _avanzar(on_progress, Progreso(
                 indice, total, site_id, plataforma, "fin",
-                f"{resultado.jobs_found} encontradas · {resultado.jobs_new} nuevas",
+                f"{resultado.jobs_found} encontradas · {resultado.jobs_new} nuevas"
+                if resultado.estado == ESTADO_OK
+                else resultado.mensaje,
             ))
     finally:
         # O7.2: solo se cierra el Brave que ESTA corrida abrió.
@@ -274,4 +286,5 @@ def _mensaje_estado(estado: str) -> str:
         ESTADO_NO_EXISTE: "El sitio no existe en la BD.",
         ESTADO_SIN_FETCHER: "No hay adaptador para esta plataforma.",
         ESTADO_CANCELADO: "Cancelado.",
+        ESTADO_REQUIERE_LOGIN: "El sitio exige iniciar sesion.",
     }.get(estado, estado)

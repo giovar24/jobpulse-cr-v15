@@ -380,6 +380,14 @@ class ScrapingTab(BaseTab):
         self._estado(texto)
         self._log(f"— {texto} Encontradas: {resumen.jobs_found} · "
                   f"Nuevas: {resumen.jobs_new} · Duplicadas: {resumen.jobs_duplicate}")
+        # O13 · Ola 3.3: "pide iniciar sesión" NO es un error.
+        piden_login = [
+            r for r in resumen.resultados
+            if r.estado == scraper.ESTADO_REQUIERE_LOGIN
+        ]
+        if piden_login:
+            self._log("— Requieren iniciar sesión: %s"
+                      % ", ".join(r.site_id for r in piden_login))
 
     def cancelar(self) -> None:
         """Pide terminar: el barrido corta **después** del sitio en curso."""

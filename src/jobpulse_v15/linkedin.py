@@ -1,14 +1,33 @@
 """Adaptador LinkedIn (linkedin.com) para v1.5 — versión probada del proyecto principal.
 
-Usa endpoint público 'jobs-guest' para descripción sin sesión + HTTP con cookies.
-REGLA DE ORO: SESIÓN PRIMERO — se reusa la sesión de tu Brave (login manual una vez
-con `hacer_login.py`). El SSO Google queda como RECURSO opt-in solo si la sesión
-se cae (LinkedIn es agresivo con logins automatizados).
+DÓNDE ESTÁN LOS AVISOS (verificado 2026-11-05 en vivo):
+
+- El listado público ``https://www.linkedin.com/jobs/search/?keywords=..&location=..``
+  responde 200 por HTTP simple y trae las tarjetas en ``div.base-card``
+  (``data-entity-urn="urn:li:jobPosting:<id>"``) con
+  ``h3.base-search-card__title``, ``h4.base-search-card__subtitle``,
+  ``span.job-search-card__location``, ``time.job-search-card__listdate``
+  y ``a.base-card__full-link`` (enlace ``/jobs/view/<slug>-<id>``).
+- La misma página trae un ``script[type="application/ld+json"]`` de tipo
+  ``ItemList`` con título, empresa, ubicación y URL de cada aviso: es la
+  vía de respaldo cuando el HTML cambia de clases.
+- ``/jobs/search-results/`` ya NO sirve el listado (devuelve 999) y el
+  navegador sin sesión recibe un ``authwall``: por eso el listado se
+  pide por HTTP y el navegador queda como REFUERZO (si hay sesión de
+  Brave, se fusiona lo que traiga encima).
+
+REGLAS:
+- El detalle se saca del endpoint público ``jobs-guest`` (sin sesión) y,
+  si hace falta, de la página del aviso con las cookies de Brave.
+- La sesión de Brave se reusa (login manual una vez); el SSO Google queda
+  como RECURSO opt-in solo si la sesión se cae (LinkedIn es agresivo con
+  logins automatizados).
 """
 
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import re
 from typing import Any, Dict, List, Tuple
@@ -18,6 +37,7 @@ import httpx
 from playwright.async_api import Page
 
 from jobpulse_v15.location_utils import normalize_cr_location
+from jobpulse_v15.requiere_login import RequiereLoginError, mensaje_requiere_login
 
 logger = logging.getLogger("jobpulse.linkedin")
 
@@ -28,6 +48,22 @@ DATE_RE = re.compile(
 )
 
 _MAX_PAGES = 10
+
+# Listado publico de vacantes (NO `jobs-guest`, NO `search-results`).
+LISTADO_URL = "https://www.linkedin.com/jobs/search/"
+# Resultados por pagina en el listado publico.
+RESULTADOS_POR_PAGINA = 25
+
+# Selectores de tarjeta, del mas estable al mas especifico. LinkedIn cambia
+# las clases de vez en cuando: por eso se aceptan varias.
+_SELECTORES_TARJETA = (
+    "div.base-card",
+    "li[data-occludable-job-id]",
+    "li[data-job-id]",
+    "div[data-job-id]",
+    ".job-card-container",
+    "[data-entity-urn*='jobPosting']",
+)
 
 
 class LinkedInFetchError(RuntimeError):
@@ -103,6 +139,165 @@ def _split_requirements(text: str) -> tuple[str, str]:
     return text, ""
 
 
+# --------------------------------------------------------------------- parseo
+# Funciones PURAS (sin red y sin navegador): se pueden testear con el HTML
+# real que devolvio LinkedIn el 2026-11-05.
+
+
+def _texto(elemento: Any) -> str:
+    """Texto de un elemento de BeautifulSoup, con espacios normalizados."""
+    if elemento is None:
+        return ""
+    texto = elemento.get_text(" ", strip=True) if hasattr(elemento, "get_text") else str(elemento)
+    return " ".join(texto.split())
+
+
+def _id_de_urn(urn: str | None) -> str:
+    """``urn:li:jobPosting:4474290121`` -> ``4474290121``."""
+    match = re.search(r"jobPosting:(\d+)", urn or "")
+    return match.group(1) if match else ""
+
+
+def _id_de_url(url: str | None) -> str:
+    """ID numerico del aviso a partir de ``/jobs/view/<slug>-<id>``.
+
+    El slug puede traer numeros (``ref%23258081``): el ID es SIEMPRE el
+    ULTIMO grupo de 6+ digitos de la URL.
+    """
+    if not url:
+        return ""
+    limpio = url.split("?")[0].split("#")[0]
+    grupos = re.findall(r"(\d{6,})", limpio)
+    return grupos[-1] if grupos else ""
+
+
+def _item_de_tarjeta(tarjeta: Any) -> Dict[str, Any] | None:
+    """Convierte una tarjeta del listado en el diccionario que usa el fetch."""
+    enlace = tarjeta.select_one("a.base-card__full-link[href*='/jobs/view/']")
+    if enlace is None:
+        enlace = tarjeta.select_one("a[href*='/jobs/view/']")
+    href = str(enlace.get("href") or "") if enlace is not None else ""
+    link = href.split("?")[0]
+
+    job_id = _id_de_urn(tarjeta.get("data-entity-urn")) or _id_de_url(link)
+
+    titulo = (
+        _texto(tarjeta.select_one("h3.base-search-card__title"))
+        or _texto(tarjeta.select_one(".base-search-card__title"))
+        or _texto(tarjeta.select_one("h3"))
+        or _texto(tarjeta.select_one("a.base-card__full-link span.sr-only"))
+    )
+    empresa = (
+        _texto(tarjeta.select_one("h4.base-search-card__subtitle"))
+        or _texto(tarjeta.select_one(".base-search-card__subtitle"))
+        or _texto(tarjeta.select_one(".artdeco-entity-lockup__subtitle"))
+    )
+    ubicacion = (
+        _texto(tarjeta.select_one("span.job-search-card__location"))
+        or _texto(tarjeta.select_one(".job-search-card__location"))
+    )
+    if not ubicacion:
+        metadatos = tarjeta.select_one(".base-search-card__metadata")
+        if metadatos is not None:
+            fecha_texto = _texto(metadatos.select_one("time"))
+            ubicacion = _texto(metadatos).replace(fecha_texto, "").strip(" ·,")
+
+    fecha = ""
+    momento = tarjeta.select_one("time")
+    if momento is not None:
+        fecha = str(momento.get("datetime") or "").strip() or _texto(momento)
+
+    if not titulo or not link:
+        return None
+    return {
+        "job_id": job_id,
+        "titulo": titulo,
+        "empresa": empresa,
+        "ubicacion_oferta": ubicacion,
+        "fecha_publicacion": fecha,
+        "link": link,
+    }
+
+
+def _tarjetas_html(html: str) -> List[Dict[str, Any]]:
+    """Tarjetas del listado (`div.base-card` y familia)."""
+    if not html:
+        return []
+    from bs4 import BeautifulSoup
+
+    soup = BeautifulSoup(html, "html.parser")
+    tarjetas: List[Dict[str, Any]] = []
+    vistas: set[str] = set()
+    for selector in _SELECTORES_TARJETA:
+        for tarjeta in soup.select(selector):
+            item = _item_de_tarjeta(tarjeta)
+            if item is None:
+                continue
+            clave = item["job_id"] or item["link"]
+            if clave in vistas:
+                continue
+            vistas.add(clave)
+            tarjetas.append(item)
+    return tarjetas
+
+
+def _json_ld(html: str) -> List[Dict[str, Any]]:
+    """Listado desde el JSON-LD `ItemList` (respaldo si cambian las clases)."""
+    if not html:
+        return []
+    from bs4 import BeautifulSoup
+
+    soup = BeautifulSoup(html, "html.parser")
+    items: List[Dict[str, Any]] = []
+    for script in soup.select("script[type='application/ld+json']"):
+        try:
+            datos = json.loads(script.string or script.get_text() or "{}")
+        except (TypeError, ValueError):
+            continue
+        bloques = datos if isinstance(datos, list) else [datos]
+        for bloque in bloques:
+            if not isinstance(bloque, dict):
+                continue
+            candidatos = [bloque]
+            grafo = bloque.get("@graph")
+            if isinstance(grafo, list):
+                candidatos.extend(grafo)
+            for candidato in candidatos:
+                if not isinstance(candidato, dict):
+                    continue
+                if candidato.get("@type") != "ItemList":
+                    continue
+                for elemento in candidato.get("itemListElement") or []:
+                    if not isinstance(elemento, dict):
+                        continue
+                    url = str(elemento.get("url") or "").split("?")[0]
+                    titulo = str(elemento.get("name") or "").strip()
+                    if not url or not titulo:
+                        continue
+                    items.append({
+                        "job_id": _id_de_url(url),
+                        "titulo": titulo,
+                        "empresa": str(
+                            elemento.get("disambiguatingDescription") or ""
+                        ).strip(),
+                        "ubicacion_oferta": str(
+                            elemento.get("description") or ""
+                        ).strip(),
+                        "fecha_publicacion": "",
+                        "link": url,
+                    })
+    return items
+
+
+def _listado_desde_html(html: str) -> List[Dict[str, Any]]:
+    """Listado de avisos: primero el DOM, luego el JSON-LD."""
+    tarjetas = _tarjetas_html(html)
+    if tarjetas:
+        return tarjetas
+    return _json_ld(html)
+
+
+
 class LinkedInFetcher:
     """Scraper LinkedIn con sesión Brave + enriquecimiento HTTP."""
 
@@ -110,7 +305,7 @@ class LinkedInFetcher:
         self,
         *,
         timeout: float = 30.0,
-        request_delay: float = 0.5,
+        request_delay: float = 1.5,
         brave_bin: str | None = None,
         brave_perfil: str | None = None,
     ) -> None:
@@ -134,22 +329,35 @@ class LinkedInFetcher:
             return False
         return "authwall" in url or "/login" in url
 
-    def _registrar_requiere_login(self, url: str):
-        try:
-            # En v1.5 usamos Repository para registrar
-            from jobpulse_v15.repository import Repository
-            # Se hace desde el caller pasando repository
-            pass
-        except Exception as e:
-            logger.debug("registrar_requerimiento LinkedIn fallo: %s", e)
+    async def _fetch_details_guest(
+        self, client: httpx.AsyncClient, job_id: str
+    ) -> Tuple[Dict[str, Any], bool]:
+        """Endpoint público 'jobs-guest' suele devolver descripción sin sesión.
 
-    async def _fetch_details_guest(self, client: httpx.AsyncClient, job_id: str) -> Dict[str, Any]:
-        """Endpoint público 'jobs-guest' suele devolver descripción sin sesión."""
+        Devuelve ``(detalles, limitado)``: ``limitado`` dice que LinkedIn
+        respondió 429 (rate limit). Medido 2026-11-05: sin espera el
+        endpoint aguanta ~10 peticiones seguidas y despues da 429; con
+        1,5 s entre peticiones aguanta todas. Con un 429 NO se prueba
+        enseguida la otra URL (seria el doble de trafico y otro 429):
+        se espera y se reintenta.
+        """
         url = f"https://www.linkedin.com/jobs-guest/jobs/api/jobPosting/{job_id}"
-        try:
-            response = await client.get(url)
+        for intento in range(2):
+            try:
+                response = await client.get(url)
+            except Exception as e:
+                logger.warning(f"LinkedIn guest detail failed for {job_id}: {e}")
+                return {}, False
+            if response.status_code == 429:
+                espera = 8.0 * (intento + 1)
+                logger.warning(
+                    "LinkedIn: 429 en el detalle de %s; esperando %.0fs.",
+                    job_id, espera,
+                )
+                await asyncio.sleep(espera)
+                continue
             if response.status_code != 200:
-                return {}
+                return {}, False
             html = response.text
             patterns = [
                 r'<div class="[^"]*show-more-less-html__markup[^"]*"[^>]*>(.*?)</div>',
@@ -166,11 +374,9 @@ class LinkedInFetcher:
                             "salary": "",
                             "requirements": "",
                             "date": _extract_date(html),
-                        }
-            return {}
-        except Exception as e:
-            logger.warning(f"LinkedIn guest detail failed for {job_id}: {e}")
-            return {}
+                        }, False
+            return {}, False
+        return {}, True
 
     async def _fetch_details_http(self, client: httpx.AsyncClient, url: str) -> Dict[str, Any]:
         """Fetch detalles usando HTTP con cookies reales."""
@@ -253,28 +459,46 @@ class LinkedInFetcher:
         search_term = search_text or site.get("site_config", {}).get("search_text") or "Soporte Técnico"
         location = site.get("country") or "Costa Rica"
         skipped_ids = skip_source_job_ids or set()
+        site_id = str(site.get("site_id") or "linkedin")
 
-        # Conectar a Brave via CDP usando el puerto pasado por el caller
-        from playwright.async_api import async_playwright
-        async with async_playwright() as p:
-            browser = await p.chromium.connect_over_cdp(f"http://localhost:{port}")
-            ctx = browser.contexts[0]
-            basic_jobs, cookies = await self._run_sync_scraping(
-                ctx, search_term, location, pages, skipped_ids
-            )
-        if not basic_jobs:
-            return LinkedInOffers([], jobs_skipped=0)
-
-        # Enriquecer con HTTP (guest + cookies)
-        enriched_jobs = []
+        cookies: Dict[str, str] = {}
         async with httpx.AsyncClient(
-            headers=self.headers, cookies=cookies, timeout=15.0, follow_redirects=True
+            headers=self.headers, timeout=20.0, follow_redirects=True
         ) as client:
-            for job in basic_jobs:
+            # 1) Listado por HTTP (el que hoy funciona: `div.base-card` +
+            #    JSON-LD `ItemList`).
+            tarjetas = await self._listar_http(client, search_term, location, pages)
+
+            # 2) El navegador con la sesion de Brave suma lo que traiga
+            #    encima (y es el unico que puede pasar un authwall). Si no
+            #    hay navegador, no pasa nada: el listado HTTP ya esta.
+            extra, cookies, muro_login = await self._listar_navegador(
+                port, search_term, location, pages
+            )
+            if cookies:
+                client.cookies.update(cookies)
+            tarjetas = self._fusiona(tarjetas, extra)
+
+            if not tarjetas:
+                if muro_login:
+                    raise RequiereLoginError(
+                        mensaje_requiere_login(site_id)
+                    )
+                logger.warning("LinkedIn: el listado no devolvio avisos.")
+                return LinkedInOffers([], jobs_skipped=0)
+
+            basic_jobs = self._a_ofertas(tarjetas, skipped_ids)
+
+            # Enriquecer con HTTP (guest + cookies)
+            enriched_jobs = []
+            for indice, job in enumerate(basic_jobs):
                 if job.get("source_url"):
                     jid = _numeric_id(job.get("source_job_id"), job.get("source_url"))
-                    details = await self._fetch_details_guest(client, jid) if jid else {}
-                    if not details.get("description"):
+                    details: Dict[str, Any] = {}
+                    limitado = False
+                    if jid:
+                        details, limitado = await self._fetch_details_guest(client, jid)
+                    if not details.get("description") and not limitado:
                         details = await self._fetch_details_http(client, job.get("source_url")) or details
 
                     job["job"]["description_raw"] = details.get("description") or job["job"]["description_raw"]
@@ -290,173 +514,179 @@ class LinkedInFetcher:
                     )
                 enriched_jobs.append(job)
 
+                # El endpoint de detalle aguanta ~10 peticiones seguidas:
+                # hay que espaciar las peticiones (medido 2026-11-05).
+                if self.request_delay and indice < len(basic_jobs) - 1:
+                    await asyncio.sleep(self.request_delay)
+
         logger.info("LinkedIn: %d ofertas enriquecidas", len(enriched_jobs))
         return LinkedInOffers(enriched_jobs, jobs_skipped=0)
 
-    async def _run_sync_scraping(
-        self, ctx: BrowserContext, search_term: str, location: str, pages: int,
-        skipped_ids: set[str] | None = None,
-    ) -> Tuple[List[Dict[str, Any]], Dict[str, str]]:
-        jobs: List[Dict[str, Any]] = []
+    # ------------------------------------------------------------- listado
+    @staticmethod
+    def _url_listado(search_term: str, location: str, pagina: int) -> str:
+        """URL del listado publico de la pagina ``pagina`` (1 = primera)."""
+        url = (
+            f"{LISTADO_URL}?keywords={quote_plus(search_term)}"
+            f"&location={quote_plus(location)}"
+        )
+        if pagina > 1:
+            url += f"&start={(pagina - 1) * RESULTADOS_POR_PAGINA}"
+        return url
+
+    async def _listar_http(
+        self,
+        client: httpx.AsyncClient,
+        search_term: str,
+        location: str,
+        pages: int,
+    ) -> List[Dict[str, Any]]:
+        """Listado por HTTP simple (sin sesion)."""
+        tarjetas: List[Dict[str, Any]] = []
+        vistos: set[str] = set()
+        for numero in range(1, pages + 1):
+            url = self._url_listado(search_term, location, numero)
+            try:
+                response = await client.get(url)
+            except Exception as exc:  # noqa: BLE001 - la red puede fallar
+                logger.warning("LinkedIn: fallo HTTP en %s: %s", url, exc)
+                break
+            if response.status_code != 200:
+                logger.warning(
+                    "LinkedIn: HTTP %s en el listado (pagina %d).",
+                    response.status_code, numero,
+                )
+                break
+            nuevas = _listado_desde_html(response.text)
+            filtradas = []
+            for item in nuevas:
+                clave = item.get("job_id") or item.get("link") or ""
+                if not clave or clave in vistos:
+                    continue
+                vistos.add(clave)
+                filtradas.append(item)
+            if not filtradas:
+                break
+            tarjetas.extend(filtradas)
+        return tarjetas
+
+    async def _listar_navegador(
+        self,
+        port: int,
+        search_term: str,
+        location: str,
+        pages: int,
+    ) -> Tuple[List[Dict[str, Any]], Dict[str, str], bool]:
+        """Listado con el navegador de Brave (sesion del usuario).
+
+        Devuelve ``(tarjetas, cookies, hubo_muro_de_login)``. Si el
+        navegador no esta disponible, NO es un error: el listado HTTP ya
+        trajo los avisos.
+        """
+        tarjetas: List[Dict[str, Any]] = []
         cookies: Dict[str, str] = {}
-        page = await ctx.new_page()
+        muro_login = False
         try:
-            await page.set_extra_http_headers({"Accept-Language": "es-ES,es;q=0.9,en;q=0.8"})
+            from playwright.async_api import async_playwright
 
-            url = (
-                f"https://www.linkedin.com/jobs/search/"
-                f"?keywords={quote_plus(search_term)}&location={quote_plus(location)}"
-            )
-            await page.goto(url, wait_until="domcontentloaded")
-            await page.wait_for_timeout(3000)
-
-            # Authwall: SESIÓN PRIMERO — reusa sesión de Brave (login manual con hacer_login.py)
-            if self._muro_login(page):
-                logger.warning("LinkedIn: authwall detectado. Se necesita sesión en Brave (ejecuta hacer_login.py).")
-                self._registrar_requiere_login(page.url)
-                # NO auto-login aquí; LinkedIn es agresivo con CAPTCHA/2FA
-                # El caller decidirá si intentar auto-login como recurso opt-in
-
-            seen: set = set()
-            for _ in range(pages):
-                # Scroll para cargar más tarjetas
-                await page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
-                await page.wait_for_timeout(2000)
-
-                extracted_data = await page.evaluate("""
-                () => {
-                    const jobs = [];
-                    const seen = new Set();
-                    let els = document.querySelectorAll('[data-occludable-job-id], li[data-job-id], div[data-job-id], .job-card-container');
-                    els.forEach(el => {
-                        let link = el.querySelector('a[href*="/jobs/view/"]');
-                        if (!link) link = el.querySelector('a[href*="/jobs/"]');
-
-                        const jobId = el.getAttribute('data-occludable-job-id') || el.getAttribute('data-job-id') || '';
-                        const lines = el.innerText.split('\\n').map(l => l.trim()).filter(Boolean);
-
-                        let titulo = '';
-                        if (link) {
-                            const sp = link.querySelector('span, h3');
-                            titulo = (sp ? sp.innerText : link.innerText || '').trim();
-                        }
-                        if (!titulo) titulo = lines[0] || '';
-
-                        let empresa = '';
-                        const subtitle = el.querySelector('.artdeco-entity-lockup__subtitle, .job-card-container__company-name, .job-card-list__company-name');
-                        if (subtitle) {
-                            empresa = subtitle.innerText.trim();
-                        } else {
-                            for (const l of lines) {
-                                if (l === titulo) continue;
-                                if (/^(promoted|destacado|patrocinado|easy\\s*apply|postulaci)/i.test(l)) continue;
-                                if (/^\\d+/i.test(l) && /ago|hace|min|hour|day|week|month/i.test(l)) continue;
-                                if (/^(presencial|remoto|h[ií]brido|hybrid|remote|on\\s*site)$/i.test(l)) continue;
-                                empresa = l;
-                                break;
-                            }
-                        }
-
-                        let ubicacionOferta = '';
-                        const caption = el.querySelector('.artdeco-entity-lockup__caption, .job-card-container__metadata, .job-card-list__location');
-                        if (caption) {
-                            ubicacionOferta = caption.innerText.trim();
-                        } else {
-                            for (const l of lines) {
-                                if (/\\b(Costa Rica|Heredia|San Jos[eé]|Alajuela|Lim[oó]n|Cartago|Puntarenas|Guanacaste|Remote|Remoto|Hybrid|H[ií]brido)\\b/i.test(l) && l !== titulo && l !== empresa) {
-                                    ubicacionOferta = l;
-                                    break;
-                                }
-                            }
-                        }
-
-                        let fecha = '';
-                        const timeEl = el.querySelector('time');
-                        if (timeEl) fecha = (timeEl.innerText || timeEl.getAttribute('datetime') || '').trim();
-                        if (!fecha) {
-                            for (const l of lines) {
-                                if (/^(hace\\s+\\d+|\\d+\\s*(min|minute|hour|day|week|month)s?\\s*ago)/i.test(l)) {
-                                    fecha = l;
-                                    break;
-                                }
-                            }
-                        }
-
-                        const linkHref = link ? link.href.split('?')[0] : '';
-                        const id = jobId || linkHref;
-                        if (!id || seen.has(id)) return;
-                        if (!titulo || !linkHref) return;
-                        seen.add(id);
-
-                        jobs.push({
-                            job_id: jobId || '',
-                            titulo,
-                            empresa,
-                            ubicacion_oferta: ubicacionOferta,
-                            fecha_publicacion: fecha,
-                            link: linkHref,
-                        });
-                    });
-                    return jobs;
-                }
-                """)
-
-                for item in extracted_data:
-                    job_id = item["job_id"] or item["link"]
-                    if job_id in seen:
-                        continue
-                    if job_id in skipped_ids:
-                        continue
-                    seen.add(job_id)
-
-                    date_pub = _parse_date_relative(item["fecha_publicacion"])
-
-                    location_raw = item["ubicacion_oferta"]
-                    jobs.append({
-                        "source_job_id": job_id,
-                        "source_url": item["link"],
-                        "source_updated_at": date_pub,
-                        "job": {
-                            "job_id": f"linkedin-{job_id}",
-                            "title": item["titulo"],
-                            "company": item["empresa"],
-                            "location_raw": location_raw,
-                            "country": "CR",
-                            **normalize_cr_location(location_raw),
-                            "work_mode": self._detect_work_mode(location_raw),
-                            "employment_type": None,
-                            "date_published": date_pub,
-                            "expires_at": None,
-                            "posting_language": "undetermined",
-                            "posting_language_origin": "unknown",
-                            "description_raw": "",
-                            "requirements_raw": "",
-                            "salary_raw": "",
-                        },
-                        "raw_payload": item,
-                    })
-
-                # Paginación
+            async with async_playwright() as p:
+                browser = await p.chromium.connect_over_cdp(f"http://localhost:{port}")
+                ctx = browser.contexts[0]
+                page = await ctx.new_page()
                 try:
-                    next_btn = await page.query_selector('button[aria-label*="next"], .artdeco-pagination__button--next')
-                    if next_btn and await next_btn.is_enabled():
-                        await next_btn.click()
-                        await page.wait_for_timeout(4000)
-                    else:
-                        break
-                except Exception:
-                    break
+                    await page.set_extra_http_headers(
+                        {"Accept-Language": "es-ES,es;q=0.9,en;q=0.8"}
+                    )
+                    for numero in range(1, pages + 1):
+                        url = self._url_listado(search_term, location, numero)
+                        await page.goto(url, wait_until="domcontentloaded")
+                        await page.wait_for_timeout(2500)
+                        if self._muro_login(page):
+                            logger.warning(
+                                "LinkedIn: authwall en el navegador (falta sesion)."
+                            )
+                            muro_login = True
+                            break
+                        nuevas = _listado_desde_html(await page.content())
+                        if not nuevas:
+                            break
+                        tarjetas.extend(nuevas)
+                finally:
+                    await page.close()
+                todas = await ctx.cookies()
+                cookies = {
+                    c["name"]: c["value"]
+                    for c in todas
+                    if "linkedin.com" in (c.get("domain") or "")
+                }
+        except Exception as exc:  # noqa: BLE001 - sin navegador, sin problema
+            logger.warning(
+                "LinkedIn: no se pudo usar el navegador (CDP %s): %s", port, exc
+            )
+        return tarjetas, cookies, muro_login
 
-            all_cookies = await ctx.cookies()
-            cookies = {
-                c["name"]: c["value"]
-                for c in all_cookies
-                if "linkedin.com" in (c.get("domain") or "")
-            }
-        finally:
-            await page.close()
+    @staticmethod
+    def _fusiona(
+        primera: List[Dict[str, Any]], segunda: List[Dict[str, Any]]
+    ) -> List[Dict[str, Any]]:
+        """Fusiona dos listados sin repetir aviso (mismo id o mismo enlace)."""
+        resultado = list(primera)
+        vistos = {
+            item.get("job_id") or item.get("link")
+            for item in primera
+            if item.get("job_id") or item.get("link")
+        }
+        for item in segunda:
+            clave = item.get("job_id") or item.get("link")
+            if not clave or clave in vistos:
+                continue
+            vistos.add(clave)
+            resultado.append(item)
+        return resultado
 
-        return jobs, cookies
+    @staticmethod
+    def _a_ofertas(
+        tarjetas: List[Dict[str, Any]], skipped_ids: set[str]
+    ) -> List[Dict[str, Any]]:
+        """Tarjetas -> ofertas (respetando lo que el usuario descarto)."""
+        ofertas: List[Dict[str, Any]] = []
+        vistos: set[str] = set()
+        for item in tarjetas:
+            job_id = str(item.get("job_id") or item.get("link") or "")
+            if not job_id or job_id in vistos:
+                continue
+            if job_id in skipped_ids:
+                continue
+            vistos.add(job_id)
+
+            fecha = str(item.get("fecha_publicacion") or "")
+            date_pub = fecha if re.match(r"^\d{4}-\d{2}-\d{2}", fecha) else _parse_date_relative(fecha)
+            ubicacion = item.get("ubicacion_oferta") or ""
+            ofertas.append({
+                "source_job_id": job_id,
+                "source_url": item.get("link"),
+                "source_updated_at": date_pub,
+                "job": {
+                    "job_id": f"linkedin-{job_id}",
+                    "title": item.get("titulo") or "",
+                    "company": item.get("empresa") or "",
+                    "location_raw": ubicacion,
+                    "country": "CR",
+                    **normalize_cr_location(ubicacion),
+                    "work_mode": LinkedInFetcher._detect_work_mode(ubicacion),
+                    "employment_type": None,
+                    "date_published": date_pub,
+                    "expires_at": None,
+                    "posting_language": "undetermined",
+                    "posting_language_origin": "unknown",
+                    "description_raw": "",
+                    "requirements_raw": "",
+                    "salary_raw": "",
+                },
+                "raw_payload": item,
+            })
+        return ofertas
+
 
     @staticmethod
     def _detect_work_mode(location: str | None) -> str:
