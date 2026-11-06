@@ -50,9 +50,13 @@ class TestUtilidades(unittest.TestCase):
                 evidencia.docs_dir_para(raiz / "data" / "x.db"), raiz / "docs"
             )
 
-    def test_docs_dir_para_sin_docs_cae_a_relativo(self):
-        self.assertEqual(evidencia.docs_dir_para(Path("no") / "existe" / "x.db"),
-                         Path("docs"))
+    def test_docs_dir_para_una_copia_no_toca_el_repo(self):
+        """Una copia en otra carpeta escribe su evidencia junto a ella."""
+        with tempfile.TemporaryDirectory() as tmp:
+            raiz = Path(tmp)
+            copia = raiz / "copia.db"
+            copia.write_bytes(b"")
+            self.assertEqual(evidencia.docs_dir_para(copia), raiz / "docs")
 
     def test_corrida_de_doc(self):
         with tempfile.TemporaryDirectory() as tmp:

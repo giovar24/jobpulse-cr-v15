@@ -12,8 +12,22 @@ diferencia con su consecuencia.
 > **Actualizado 2026-11-04.** Desde entonces: el Paso 5 **SÍ se ejecuta desde
 > la UI v2** (pestaña "Vacantes" → botón "Ejecutar Paso 5", que deja la
 > corrida PERSISTIDA en `job_match` con `corrida_id` + `valida`, igual que el
-> CLI). La UI clásica sigue sin ejecutarlo. La evidencia y la hoja de firma
-> siguen siendo **solo CLI**.
+> CLI). La UI clásica sigue sin ejecutarlo.
+
+> **Actualizado 2026-11-05 (Ola 1 + Ola 2 de O12).** Desde entonces:
+> - la UI v2 tiene **orquestador propio pero el mismo motor**: `jobpulse_v15.pipeline`
+>   (etapas `scrape → analisis → ia → reanalisis → backfill → paso5 → evidencia`)
+>   es la implementación ÚNICA y la usan la CLI (`run_full_flow.py`) y la UI v2
+>   (botones **"Procesar"** y **"Enriquecer IA"** de la pestaña "Scraping");
+> - el **re-análisis con los campos de la IA** (`analysis_flow.reananalizar_con_campos_fuente`)
+>   es el paso que faltaba: sin él la UI dejaba 231 avisos `sin_requisitos`
+>   frente a 11 de la CLI (medido 2026-11-05: **231 → 11**);
+> - la **evidencia** ya no es solo CLI: vive en `jobpulse_v15.evidencia` y la UI v2
+>   la genera y verifica desde la pestaña "Vacantes" (botón "Evidencia"), sin
+>   subprocess; los scripts de la raíz quedaron como envoltorios;
+> - la UI clásica mantiene su flujo (está **intacta por regla del repo**) pero
+>   ya incluye el re-análisis (paso 3.5) y el cierre ordenado de Brave en el
+>   login de ANE.
 
 ## 1. Tabla resumen
 
@@ -24,7 +38,8 @@ diferencia con su consecuencia.
 | 3. Enriquecimiento IA | `run_enriquecimiento.py` (servidor local bajo demanda) | **Enriquecer** (diálogo propio) | ✅ `ia_enrichment.pase_completo` + `ia_servidor` |
 | 4. Comparar con el perfil | **no lo hace** (imprime "abre la UI") | **Buscar** con filtro de compatibilidad + área | ⚠️ UI usa `repository.compare_jobs_to_candidate_profile` |
 | 5. Matching (Paso 5) | `run_paso5.py` → tabla `job_match` (corrida nueva) | UI v2: **Ejecutar Paso 5** → `job_match` (corrida nueva). UI clásica: no | ✅ (v2) `matching.ejecutar_paso5` vía `ui_v2/data/paso5.py` |
-| 6. Evidencia / firma | `generar_evidencia_paso5.py`, `verificar_evidencia.py`, `generar_revision_pendientes.py` | **no lo hace** | ❌ solo CLI |
+| 5.b Re-análisis con los campos de la IA | `enrich requirements-source --apply` (todo) o el paso `reanalisis` del orquestador | UI clásica: paso 3.5 del flujo completo. UI v2: etapa `reanalisis` del pipeline | ✅ `analysis_flow.reananalizar_con_campos_fuente` (incremental: solo lo que no está integrado) |
+| 6. Evidencia / firma | `generar_evidencia_paso5.py`, `verificar_evidencia.py`, `generar_revision_pendientes.py` | UI v2: **Evidencia** (genera + verifica, sin subprocess). La hoja de firma sigue siendo CLI | ✅ `jobpulse_v15.evidencia` (los scripts son envoltorios) |
 | 7. Brave/CDP | `run_scrape` lo abre y lo cierra **solo si lo abrió** (O7.2) | igual (barrido, re-login ANE, enriquecimiento) | ✅ `browser_manager.asegurar_brave` |
 | 8. Filtro "solo con requisitos obligatorios" (O2.2) | `search --solo-requisitos-obligatorios` | UI clásica + UI v2: columna **"Req."** + casilla | ✅ `Repository.search_jobs` (SQL; definición única) |
 | 9. Salud de los sitios (O3) | `site list --needs-review`, `site mark-reviewed [--all-needs-review]` | UI clásica: pestaña Fuentes (revisión manual) | ✅ `Repository.list_sites` / `mark_site_reviewed` |
@@ -111,8 +126,10 @@ existe por CLI** hoy.
 - `generar_revision_pendientes.py` produce la hoja
   `docs/PASO5_REVISION_PENDIENTES.md` (las `educacion_no_confirmada`), que
   **solo firma una segunda persona**.
-- Ni la UI clásica ni la v2 generan evidencia ni hoja de firma: si se quiere
-  la evidencia auditable, hay que correr el CLI después de usar la UI.
+- Ni la UI clásica ni la v2 generaban evidencia: había que correr el CLI
+  después de usar la UI. **Desde 2026-11-05 la UI v2 sí** (botón "Evidencia"
+  en "Vacantes"): la lógica vive en `jobpulse_v15.evidencia` y los scripts de
+  la raíz son envoltorios finos (mismo CLI, mismo exit code).
 
 ### 2.6 Filtro de requisitos obligatorios (O2.2) — compartido
 
@@ -164,6 +181,13 @@ salud se deriva de las corridas, y `clean_run` borra las corridas).
    estado del Paso 5, que es el veredicto auditable.)
 3. Que el CLI imprima al final el resumen `GROUP BY estado` de la corrida
    (hoy hay que leerlo en la BD).
-4. La evidencia y la hoja de firma siguen siendo solo CLI: se podría ofrecer
-   un botón "Generar evidencia" en la UI v2 para cerrar el ciclo sin cambiar
-   de terminal.
+4. ~~La evidencia y la hoja de firma siguen siendo solo CLI~~ → **la evidencia
+   ya está en la UI v2** (2026-11-05, botón "Evidencia"): se genera y verifica
+   desde `jobpulse_v15.evidencia`, sin subprocess. La **hoja de firma**
+   (`generar_revision_pendientes.py`) sigue siendo CLI a propósito: la firma
+   es de una segunda persona.
+5. **Migrar la UI clásica al orquestador** `jobpulse_v15.pipeline`: hoy mantiene
+   su propio flujo (por regla del repo, la UI clásica no se toca sin pedirlo),
+   aunque usa las mismas implementaciones por etapa (análisis, IA, re-análisis,
+   backfill). Con eso, CLI y UI clásica darían el mismo `job_match` por
+   construcción, no por convención.

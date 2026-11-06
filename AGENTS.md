@@ -88,6 +88,27 @@ la taxonomía queda sin cubrir. `analysis_flow.extract_job_analysis` es la
 **implementación única** del análisis (la usan CLI, UI clásica, UI v2 y
 `run_full_flow`): no dupliques la lógica.
 
+### Orquestador único (O12 · Ola 2)
+
+`src/jobpulse_v15/pipeline.py` encadena las etapas con **una sola
+implementación** cada una (`scrape` → `analisis` → `ia` → `reanalisis` →
+`backfill` → `paso5` → `evidencia`). Lo usan:
+
+- la CLI: `run_full_flow.py` (ya es un envoltorio del orquestador);
+- la UI v2: botones **"Procesar"** y **"Enriquecer IA"** (pestaña "Scraping");
+- la UI clásica: mantiene su flujo (intacta por regla) pero usa las mismas
+  implementaciones por etapa, incluido el re-análisis (paso 3.5).
+
+```python
+from jobpulse_v15 import pipeline
+resultado = pipeline.ejecutar(repository, etapas=("analisis", "reanalisis", "paso5"))
+print(pipeline.resumen_linea(resultado))
+```
+
+Reglas: una etapa desconocida es `ValueError`; el Paso 5 es siempre **corrida
+nueva**; la etapa `ia` con proveedor externo **no** arranca nada local y la
+confirmación de privacidad la hace el caller (UI) antes de invocar.
+
 ### Comprobar que el scrape llegó bien
 
 | Comprobación | Dónde | Señal de problema |

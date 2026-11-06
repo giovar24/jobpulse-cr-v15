@@ -146,10 +146,16 @@ _EN: dict[str, str] = {
     "Ejecutar seleccionados": "Run selected",
     ("Solo se barren los sitios activos. «Páginas» es el valor por defecto: "
      "cada sitio usa el suyo de site_config si lo tiene. El puerto CDP solo "
-     "afecta a ANE, Indeed, LinkedIn y Elempleo."):
+     "afecta a ANE, Indeed, LinkedIn y Elempleo. «Procesar» corre el pipeline "
+     "sobre lo que YA está en la base (análisis → IA → re-análisis → Paso 5 "
+     "→ evidencia) sin volver a raspar."):
         ("Only active sites are scanned. “Pages” is the default value: each "
          "site uses its own from site_config if it has one. The CDP port "
-         "only affects ANE, Indeed, LinkedIn and Elempleo."),
+         "only affects ANE, Indeed, LinkedIn and Elempleo. “Process” runs the "
+         "pipeline over what is ALREADY in the database (analysis → AI → "
+         "re-analysis → Step 5 → evidence) without scraping again."),
+    "Procesar": "Process",
+    "Enriquecer IA": "Enrich with AI",
     "seleccioná las que quieras barrer": "pick the ones you want to scan",
     "Listo.": "Done.",
     "Bitácora": "Log",

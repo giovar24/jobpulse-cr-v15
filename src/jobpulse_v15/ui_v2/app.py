@@ -70,6 +70,9 @@ class AppShell:
                 # Servicio que ConfiguracionTab usa para cambiar el
                 # esquema de color en caliente (reconstruye la app entera).
                 "reconstruir_ui": self.reconstruir_con_paleta,
+                # Refresca TODAS las pestañas (lo usa ScrapingTab al
+                # terminar el pipeline: el Paso 5 cambió `job_match`).
+                "refrescar_todo": self.refrescar,
             },
         )
         self.instancias: list[BaseTab] = []

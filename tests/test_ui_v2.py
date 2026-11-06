@@ -1419,6 +1419,80 @@ class TestScrapingTab(unittest.TestCase):
         self.pestana.cancelar()
         self.assertTrue(self.pestana._cancelar.is_set())
 
+    # -- pipeline (O12 · Ola 2.2 / 2.3) ---------------------------
+    def _pipeline_falso(self, llamadas):
+        def fake_ejecutar(repository, **kwargs):
+            llamadas.update(kwargs)
+            return {
+                "ok": True,
+                "corrida": "20261105_120000",
+                "detenido": False,
+                "etapas": {
+                    "analisis": {"ok": True, "analizados": 1},
+                    "reanalisis": {"ok": True, "reanalizados": 0},
+                    "paso5": {"ok": True, "corrida": "20261105_120000"},
+                },
+                "errores": [],
+            }
+
+        return fake_ejecutar
+
+    def test_procesar_llama_al_pipeline_con_las_etapas(self):
+        self.root.update()
+        llamadas = {}
+        from jobpulse_v15 import ia_enrichment as iae
+
+        with unittest.mock.patch.object(iae, "get_ia_client", lambda: None), \
+                unittest.mock.patch.object(
+                    scraping_mod.pipeline, "ejecutar",
+                    self._pipeline_falso(llamadas)):
+            self.pestana.procesar()
+            self.assertTrue(self._esperar(lambda: not self.pestana._procesando))
+
+        self.assertEqual(
+            llamadas["etapas"],
+            ("analisis", "ia", "reanalisis", "backfill", "paso5", "evidencia"),
+        )
+        log = self.pestana._widgets["log"].get("1.0", "end")
+        self.assertIn("PIPELINE", log)
+
+    def test_enriquecer_ia_solo_pide_ia_y_reanalisis(self):
+        self.root.update()
+        llamadas = {}
+        from jobpulse_v15 import ia_enrichment as iae
+
+        with unittest.mock.patch.object(iae, "get_ia_client", lambda: None), \
+                unittest.mock.patch.object(
+                    scraping_mod.pipeline, "ejecutar",
+                    self._pipeline_falso(llamadas)):
+            self.pestana.enriquecer_ia()
+            self.assertTrue(self._esperar(lambda: not self.pestana._procesando))
+
+        self.assertEqual(llamadas["etapas"], ("ia", "reanalisis"))
+
+    def test_ia_externa_pide_confirmacion_antes_de_enviar_texto(self):
+        """Con proveedor externo el texto sale de la máquina: se pregunta."""
+        self.root.update()
+        llamadas = {}
+        from jobpulse_v15 import ia_enrichment as iae
+
+        cliente = type("Cliente", (), {"es_local": False, "base_url": "https://x"})()
+
+        with unittest.mock.patch.object(iae, "get_ia_client", lambda: cliente), \
+                unittest.mock.patch.object(
+                    iae, "aviso_privacidad", lambda _c: "El texto sale de aquí"), \
+                unittest.mock.patch.object(
+                    scraping_mod, "confirmar", lambda *a, **k: False), \
+                unittest.mock.patch.object(
+                    scraping_mod.pipeline, "ejecutar",
+                    self._pipeline_falso(llamadas)):
+            self.pestana.enriquecer_ia()
+            self.root.update()
+
+        self.assertFalse(llamadas)  # no se envió nada
+        log = self.pestana._widgets["log"].get("1.0", "end")
+        self.assertIn("cancelado", log)
+
     def test_el_puerto_cdp_por_defecto_viene_de_la_configuracion(self):
         """El puerto CDP del barrido es el configurado (BRAVE_CDP_PORT)."""
         with unittest.mock.patch.object(config_ui, "ENV",

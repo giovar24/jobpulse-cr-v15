@@ -21,9 +21,10 @@ import tkinter as tk
 from tkinter import ttk
 from typing import Any
 
-from jobpulse_v15 import scraper
+from jobpulse_v15 import pipeline, scraper
 from jobpulse_v15.ui_v2 import configuracion
 from jobpulse_v15.ui_v2.data.scraping import TODOS, ScrapingStore
+from jobpulse_v15.ui_v2.dialogs import confirmar
 from jobpulse_v15.ui_v2.tabs.base import BaseTab
 from jobpulse_v15.ui_v2.widgets import Card, FlatButton, SectionTitle
 from jobpulse_v15.ui_v2.i18n import t
@@ -49,6 +50,7 @@ class ScrapingTab(BaseTab):
         self._widgets: dict[str, Any] = {}
         self._cancelar = threading.Event()
         self._corriendo = False
+        self._procesando = False
 
     # ================================================================
     # Construcción
@@ -115,13 +117,23 @@ class ScrapingTab(BaseTab):
             botones, theme, "Ejecutar seleccionados",
             command=self.ejecutar_seleccion, variant="accent")
         self._widgets["ejecutar"].pack(side="left", padx=(8, 0))
+        # O12 · Ola 2.2/2.3: el pipeline completo (análisis → IA → re-análisis
+        # → backfill → Paso 5 → evidencia) y el pase de IA suelto. Mismo
+        # orquestador que usa la CLI (`jobpulse_v15.pipeline`).
+        self._widgets["enriquecer"] = FlatButton(
+            botones, theme, "Enriquecer IA", command=self.enriquecer_ia,
+            variant="flat")
+        self._widgets["enriquecer"].pack(side="left", padx=(8, 0))
+        self._widgets["procesar"] = FlatButton(
+            botones, theme, "Procesar", command=self.procesar, variant="accent")
+        self._widgets["procesar"].pack(side="left", padx=(6, 0))
 
         tk.Label(
             card.body,
             text=(t("Solo se barren los sitios activos. «Páginas» es el valor "
                   "por defecto: cada sitio usa el suyo de site_config si lo "
                   "tiene. El puerto CDP solo afecta a ANE, Indeed, "
-                  "LinkedIn y Elempleo.")),
+                  "LinkedIn y Elempleo. «Procesar» corre el pipeline sobre lo que YA está en la base (análisis → IA → re-análisis → Paso 5 → evidencia) sin volver a raspar.")),
             bg=theme.color("surface"), fg=theme.color("text_faint"),
             font=theme.font(8), anchor="w",
         ).pack(fill="x", pady=(6, 0))
@@ -376,3 +388,87 @@ class ScrapingTab(BaseTab):
         self._cancelar.set()
         self._estado("Cancelando (termina el sitio en curso)…")
         self._log("— Cancelación solicitada.")
+
+    # ================================================================
+    # Pipeline (O12 · Ola 2.2 / 2.3)
+    # ================================================================
+    def procesar(self) -> None:
+        """Pipeline completo sobre lo que YA está en la base.
+
+        Etapas: análisis por reglas → IA → re-análisis con los campos de la
+        IA → backfill de códigos canónicos → Paso 5 → evidencia. **No** raspa
+        (para eso están "Ejecutar grupo"/"Ejecutar seleccionados").
+        """
+        self._ejecutar_pipeline(
+            ("analisis", "ia", "reanalisis", "backfill", "paso5", "evidencia"),
+            "Procesar",
+        )
+
+    def enriquecer_ia(self) -> None:
+        """Solo el pase de IA y el re-análisis de lo que la IA llenó."""
+        self._ejecutar_pipeline(("ia", "reanalisis"), "Enriquecer IA")
+
+    def _confirmar_ia_externa(self) -> bool:
+        """Con IA EXTERNA el texto de los avisos sale de la máquina: avisar."""
+        from jobpulse_v15 import ia_enrichment as iae
+
+        cliente = iae.get_ia_client()
+        if cliente is None:
+            return True
+        aviso = iae.aviso_privacidad(cliente)
+        if not aviso:
+            return True
+        return confirmar(
+            self.frame,
+            "IA externa: el texto sale de esta máquina",
+            aviso + "\n\n¿Continuar con el enriquecimiento?",
+        )
+
+    def _ejecutar_pipeline(self, etapas: tuple[str, ...], etiqueta: str) -> None:
+        if self._corriendo or self._procesando:
+            self._estado("Ya hay una operación en marcha.")
+            return
+        if "ia" in etapas and not self._confirmar_ia_externa():
+            self._estado("Enriquecimiento cancelado (privacidad).")
+            self._log("— Enriquecimiento cancelado por el usuario.")
+            return
+
+        # Las variables Tk se leen AQUÍ (hilo principal).
+        ruta_db = self.context.repository.database.path
+        repositorio = self.context.repository
+
+        self._procesando = True
+        self._cancelar.clear()
+        self._widgets["procesar"].configure(state="disabled")
+        self._widgets["enriquecer"].configure(state="disabled")
+        self._estado(f"{etiqueta} en marcha…")
+        self._log(f"— {etiqueta}: {', '.join(etapas)} —")
+
+        def trabajo() -> None:
+            def _log_linea(texto: str) -> None:
+                # El worker NUNCA toca Tk: encola.
+                self._programar(lambda t=texto: self._log(t))
+
+            resultado = pipeline.ejecutar(
+                repositorio,
+                etapas=etapas,
+                progreso=_log_linea,
+                db_path=ruta_db,
+                should_stop=self._cancelar.is_set,
+            )
+            self._programar(lambda: self._fin_pipeline(resultado, etiqueta))
+
+        self._lanzar_hilo(trabajo)
+
+    def _fin_pipeline(self, resultado: dict, etiqueta: str) -> None:
+        self._procesando = False
+        self._widgets["procesar"].configure(state="normal")
+        self._widgets["enriquecer"].configure(state="normal")
+        linea = pipeline.resumen_linea(resultado)
+        self._log(linea)
+        for error in resultado.get("errores", []):
+            self._log("  !! %s" % error)
+        self._estado(linea.replace("PIPELINE: ", ""))
+        refrescar = self.context.services.get("refrescar_todo")
+        if callable(refrescar):
+            refrescar()

@@ -117,6 +117,20 @@ de código en el pipeline cuando se cambie de motor.
 
 ## Ola 2 — Paridad CLI/UI (impacto ALTO, esfuerzo MEDIO)
 
+> **✅ COMPLETA (2026-11-05)** — 2.1 `src/jobpulse_v15/pipeline.py` (etapas
+> `scrape → analisis → ia → reanalisis → backfill → paso5 → evidencia`, una
+> implementación por etapa) y `run_full_flow.py` pasa a ser un **envoltorio**
+> del orquestador · 2.2 botón **"Procesar"** en la pestaña "Scraping" de la UI
+> v2 (log + progreso + refresco de las demás pestañas) · 2.3 botón
+> **"Enriquecer IA"** (pase IA + re-análisis; con IA externa pide confirmación
+> de privacidad antes de enviar el texto) · 2.4 paso 3.5 en el flujo completo
+> de la UI clásica (ya hecho en la Ola 1). **Test de paridad**: el camino UI
+> (orquestador) y el camino CLI (etapas sueltas) dan el **mismo estado de
+> `job_match`** sobre dos bases idénticas (`tests/test_pipeline.py`).
+> **15 tests nuevos** + 3 de UI v2. La UI clásica mantiene su flujo (intacta
+> por regla del repo); migrarla al orquestador queda como sugerencia 5 de
+> `docs/FLUJO_CLI_VS_UI.md`.
+
 ### 2.1 Orquestador único `pipeline.py` — `Ola 2 / paso 1`
 - **Qué**: `src/jobpulse_v15/pipeline.py` con
   `ejecutar(repository, *, etapas=..., progreso=..., evaluar_todo=False)`.

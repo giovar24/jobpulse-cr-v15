@@ -10,8 +10,11 @@ fuentes)**; el plan está en `docs/PLAN_MEJORAS.md` (5 olas, con criterio de
 aceptación). **Al cierre se ejecutó la Ola 1 completa (O12)**: re-análisis
 incremental, badge de obsoletos, guarda antes del Paso 5, evidencia como
 módulo y login ANE con cierre ordenado. **Medición en copia de la BD real:
-`sin_requisitos` 231 → 11 (−220).** Suite: **1003 passed + 241 subtests**
-(base 922 → +81). **Commits pusheados** a `origin/main` (`caf486d`, `49f3827`).
+`sin_requisitos` 231 → 11 (−220).** Al cierre se ejecutó también la **Ola 2**:
+orquestador único `jobpulse_v15.pipeline` (una implementación por etapa) y
+botones **"Procesar"** y **"Enriquecer IA"** en la UI v2 (con test de paridad
+UI/CLI). Suite: **1021 passed + 241 subtests** (base 922 → +99),
+**Commits pusheados** a `origin/main` (`caf486d`, `49f3827`).
 
 > ℹ️ Esta sesión continúa el trabajo de la **noche del 2026-11-04** (sin
 > handoff propio): limpieza total + proceso completo sobre la BD real, que
@@ -137,6 +140,9 @@ python -m pytest tests/test_ia_externa.py tests/test_ia_enrichment.py `
 python -m pytest tests/test_reanalisis.py tests/test_evidencia.py `
   tests/test_ane_login.py -q
 
+# Ola 2 de O12 (orquestador + botones de UI v2)
+python -m pytest tests/test_pipeline.py tests/test_ui_v2.py -q
+
 # Evidencia (exit 0 = todo cuadra) y estado de la BD
 .\.venv\Scripts\python.exe -X utf8 verificar_evidencia.py
 .\.venv\Scripts\python.exe -X utf8 tools\estado_bd.py
@@ -164,6 +170,7 @@ python -m pytest tests/test_reanalisis.py tests/test_evidencia.py `
 | `src/jobpulse_v15/configuration_window.py` | UI clásica: "Máx. avisos por corrida" + presets desde `ia_api.PRESETS` |
 | `tests/test_ia_externa.py` | **NUEVO** — 39 tests del soporte de IA externa |
 | `src/jobpulse_v15/evidencia.py` | **NUEVO (Ola 1.4)** — generar/verificar/estado de la evidencia del Paso 5 (los scripts son envoltorios) |
+| `src/jobpulse_v15/pipeline.py` | **NUEVO (Ola 2.1)** — orquestador único: `ejecutar(repository, etapas=..., progreso=...)`; una implementación por etapa |
 | `src/jobpulse_v15/analysis_flow.py` | **Ola 1.1/1.2** — `reananalizar_con_campos_fuente`, `avisos_con_campos_sin_integrar`, `cuenta_analisis_obsoletos`, `analisis_refleja_campos` |
 | `tests/test_reanalisis.py` | **NUEVO** — 14 tests de 1.1/1.2 (idempotencia, no infla `job_analysis`) |
 | `tests/test_evidencia.py` | **NUEVO** — 19 tests de 1.4 |
@@ -201,7 +208,9 @@ python -m pytest tests/test_reanalisis.py tests/test_evidencia.py `
 
 ---
 
-## 8. Ola 1 de O12 — hecha (2026-11-05, al cierre)
+## 8. Olas 1 y 2 de O12 — hechas (2026-11-05, al cierre)
+
+### 8.1 Ola 1 — el hueco de raíz
 
 | Paso | Qué quedó | Dónde |
 |---|---|---|
@@ -214,21 +223,50 @@ python -m pytest tests/test_reanalisis.py tests/test_evidencia.py `
 | **Tests** | `tests/test_evidencia.py` (19) + `tests/test_reanalisis.py` (14) + `tests/test_ane_login.py` (12) | `tests/` |
 | **Medición** | Copia de la BD real en `%TEMP%\opencode\medicion_ola1.db`: se borran los 1333 `source_field` (estado "UI antes"), matching → **231 `sin_requisitos`**; re-análisis (638 actualizados, 67 sin cambio, 0 errores) + matching → **11** | (no toca la BD real) |
 
-**Pendiente inmediato**:
+### 8.2 Ola 2 — orquestador único y botones en la UI v2
 
-1. **Ola 2 de O12** (`docs/PLAN_MEJORAS.md`): orquestador único `pipeline.py`
-   + botones "Procesar"/"Enriquecer IA" en UI v2 + test de paridad CLI/UI
-   comparando `job_match`.
-2. **Ola 3 de O13**: selectores de LinkedIn y Elempleo + estado
-   `requiere_login`; verificar ANE con **dos barridos seguidos**.
+| Paso | Qué quedó | Dónde |
+|---|---|---|
+| **2.1** | `jobpulse_v15.pipeline.ejecutar(repository, etapas=..., progreso=..., evaluar_todo=...)`: cada etapa es **una implementación** (`scraper.ejecutar_barrido`, `analysis_flow.extract_job_analysis`, `ia_enrichment.pase_completo`, `analysis_flow.reananalizar_con_campos_fuente`, `repository.backfill_requirements_canonico`, `matching.ejecutar_paso5`, `jobpulse_v15.evidencia`). Etapa desconocida = `ValueError`; una excepción detiene las siguientes; un resultado con `ok=False` (IA "atascada") NO aborta | `src/jobpulse_v15/pipeline.py` (NUEVO) |
+| **2.1** | `run_full_flow.py` deja de tener lógica propia: es un **envoltorio** del orquestador (`--only-scrape`, `--pages`, `--no-notify`, `--evaluar-todo`) | `run_full_flow.py` |
+| **2.2** | Botón **"Procesar"** (pestaña "Scraping" de la UI v2): pipeline completo **sin raspar** (análisis → IA → re-análisis → backfill → Paso 5 → evidencia), con log, progreso, cancelación y refresco de las demás pestañas | `ui_v2/tabs/scraping.py`, `ui_v2/app.py` |
+| **2.3** | Botón **"Enriquecer IA"**: pase IA + re-análisis; con IA **externa** pide confirmación (el texto sale de la máquina) antes de enviar nada | `ui_v2/tabs/scraping.py` |
+| **2.4** | Paso 3.5 del flujo completo de la UI clásica (ya hecho en la Ola 1) | `ui.py` |
+| **Tests** | `tests/test_pipeline.py` (**15**): contrato (etapa desconocida, orden, progreso), cada etapa, **paridad UI/CLI sobre dos bases idénticas** (mismo `job_match`), idempotencia del re-análisis, corrida nueva del Paso 5. + 3 tests de UI v2 (botones y confirmación de privacidad) | `tests/` |
+| **Humo real** | Sobre una **copia** de la BD real (`%TEMP%\opencode\ola2.db`): `reanalisis + paso5 + evidencia` → mismos números que la CLI (calificada 239 · revisar 324 · descartada 89 · datos_insuf 42 · sin_requisitos 11) y evidencia verificada con 130 citas literales | (no toca la BD real) |
+
+**Nota**: la UI clásica mantiene su flujo (regla del repo: no se toca sin
+pedirlo) aunque usa las mismas implementaciones por etapa; migrarla al
+orquestador queda como sugerencia 5 de `docs/FLUJO_CLI_VS_UI.md`.
+
+**Seguridad de la evidencia**: `evidencia.docs_dir_para(base)` devuelve
+`<repo>/docs` para la base del repo y un `docs` **junto a la base** cuando es
+una copia (p. ej. `%TEMP%`): así una corrida sobre una copia nunca pisa el
+documento de evidencia del repo.
+
+## 9. Pendiente inmediato
+
+1. **Ola 3 de O13** (`docs/PLAN_MEJORAS.md`): selectores de **LinkedIn**
+   (`/jobs/search-results/` con clases ofuscadas) y **Elempleo**
+   (`.ee_list-item`) con su test por fetcher · estado `requiere_login` en la
+   salud de sitios · verificar ANE con **dos barridos seguidos** (el login ya
+   no pierde la cookie: cierre ordenado + `--mantener-abierto`).
+2. (Opcional, con permiso del usuario) migrar la **UI clásica** al
+   orquestador `pipeline.py`: usa las mismas implementaciones por etapa, pero
+   mantiene su propio flujo (regla del repo: la UI clásica no se toca sin
+   pedirlo).
 3. `educacion_no_confirmada` (31 casos): **NO** actualizar estados hasta que
    una **segunda persona** firme `docs/PASO5_REVISION_PENDIENTES.md`.
 
 ---
 
-## 9. Commits de esta sesión
+## 10. Commits de esta sesión
 
-- **HEAD** — `feat(o12): Ola 1 - paridad CLI/UI (re-análisis, evidencia,
+- **HEAD** — `feat(o12): Ola 2 - orquestador único (pipeline.py) y botones
+  "Procesar"/"Enriquecer IA" en la UI v2` — `pipeline.py` (NUEVO),
+  `run_full_flow.py` como envoltorio, 2 botones en la UI v2, 15 tests nuevos
+  + 3 de UI v2.
+- `21af318` — `feat(o12): Ola 1 - paridad CLI/UI (re-análisis, evidencia,
   login ANE)` — 20 archivos; +10 tests de ANE, 19 de evidencia, 14 de
   re-análisis. Suite: **1003 passed + 241 subtests**.
 - `caf486d` — `feat(ia-externa): Ollama, LM Studio y cloud como alternativa a la

@@ -152,15 +152,21 @@ def fecha_de_corrida(corrida_id: str) -> str:
 
 
 def docs_dir_para(db_path: str | Path) -> Path:
-    """Carpeta ``docs`` del repo al que pertenece la base (``<repo>/data/x.db``).
+    """Carpeta ``docs`` que corresponde a la base.
 
-    Si la base no vive en un ``<repo>/data/`` (ruta rara o una copia en
-    ``%TEMP%``), cae a ``docs`` relativo al directorio de trabajo.
+    - Base del repo (``<repo>/data/x.db``) → ``<repo>/docs``: la evidencia
+      auditable vive ahí.
+    - Base en otra parte (una **copia** en ``%TEMP%``, por ejemplo) → un
+      ``docs`` **junto a la base**: así nunca se pisa por accidente el
+      documento del repo con el de una copia.
     """
-    candidato = Path(db_path).resolve().parent.parent / "docs"
-    if candidato.is_dir():
-        return candidato
-    return Path("docs")
+    ruta = Path(db_path).resolve()
+    padre = ruta.parent
+    if padre.name == "data":
+        candidato = padre.parent / "docs"
+        if candidato.is_dir():
+            return candidato
+    return padre / "docs"
 
 
 def corrida_vigente(connection: sqlite3.Connection) -> str | None:
