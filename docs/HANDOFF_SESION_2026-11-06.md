@@ -66,6 +66,19 @@ curate --apply` (cola 1988 → **1225**) → re-análisis de los **705** avisos 
 OK (137 verificaciones) → `db check` ok. El resultado real fue **idéntico al
 medido en la copia** (58 cambios, 3,53 → 4,07 requisitos medios).
 
+**Después (Ola 4.3, métricas por etapa)**: las siete etapas del pipeline
+devuelven contadores **propios y en formatos distintos**, así que acabada la
+corrida no se podía responder a la pregunta que importa (¿cuántos avisos
+llegaron al Paso 5 y **en qué etapa se perdieron**?). Se añadió la tabla
+**`pipeline_etapa`** (migración **024**, esquema 24) con una fila por etapa y
+por ejecución, el módulo `jobpulse_v15.pipeline_metricas` (traduce cada etapa
+a los contadores comparables `avisos`/`requisitos`/`errores`), la
+instrumentación en el **único** punto del orquestador (`pipeline.ejecutar`,
+puramente aditiva: si falla, la corrida sigue) y el comando de consulta
+`… pipeline etapas [--limite N] [--corrida ID] [--json]`. Medido sobre una
+**copia** de la BD real: paso5 **705 avisos / 2866 requisitos evaluados**,
+evidencia 705 con 137 verificaciones, 0 errores.
+
 **Estado final de la BD real**: **esquema 23**, 705 avisos, 129 sitios,
 706 conceptos canónicos, cola de taxonomía **1225** (las pendientes reales),
 **2857 requisitos vigentes sin huecos**, corrida Paso 5 vigente
@@ -255,6 +268,61 @@ las integraron tienen un análisis **obsoleto** (les faltan requisitos) y hay
 que re-analizarlos con `enrich requirements-source --apply` (o el equivalente
 en el pipeline). Con eso los requisitos medios suben de 3,53 a 4,07.
 
+### 2.7 Ola 4.3 — métricas por etapa (`pipeline_etapa`)
+
+**El problema medido**: las siete etapas del pipeline devuelven contadores
+**propios y en formatos distintos** (`analizados`, `jobs_found`, `ciclos`,
+`candidatos`, `actualizados`, `por_estado`, `verificaciones`…). Acabada la
+corrida solo quedaba el estado final, así que **no se podía responder a la
+pregunta que importa**: de todos los avisos que entraron, ¿cuántos llegaron al
+Paso 5, cuántos tenían requisitos y **en qué etapa se perdieron**? (Caso real
+de la Ola 4.2: 705 avisos entraron al análisis, 9 acabaron en `sin_requisitos`
+y 58 cambiaron de estado por requisitos sin `codigo_canonico` — sin el
+registro, ese hueco solo se descubría mirando los estados finales.)
+
+**Lo que se hizo**:
+
+1. **Tabla `pipeline_etapa`** (migración **024**, esquema 23 → **24**): una
+   fila por **etapa y por ejecución** del pipeline. Columnas: `corrida_id`
+   (`pipe_<timestamp>`, **distinto** del `corrida_id` de `job_match` — el del
+   Paso 5 va en el `detalle_json` de la etapa `paso5`), `etapa`, `ok`,
+   `duracion_ms`, `avisos`, `requisitos`, `errores`, `detalle_json`,
+   `iniciado_en`, `terminado_en`. Índices por `(corrida_id, id)` y
+   `(etapa, id)`. **Sin claves foráneas** a propósito: el `corrida_id` del
+   pipeline es un id **lógico** (no hay tabla de corridas del pipeline).
+2. **Módulo `jobpulse_v15.pipeline_metricas`**: traduce el resultado de cada
+   etapa a tres números **comparables** (`avisos` / `requisitos` / `errores`) y
+   guarda los contadores **específicos** de la etapa en `detalle_json` (por
+   estado y motivo del Paso 5, por campo rellenado por la IA, por sitio del
+   barrido…).
+3. **Instrumentación en el orquestador** (`pipeline.ejecutar`): es el **único**
+   punto donde se cronometran las etapas → CLI, UI v2 y `run_full_flow.py`
+   dejan la misma métrica. **Puramente aditiva**: si falla, la corrida
+   **sigue** (una métrica nunca rompe un pipeline).
+4. **Contadores que faltaban** (añadidos a las etapas que no los exponían):
+   `analisis.requisitos_guardados`, `paso5.requisitos_evaluados` (suma de
+   `Resultado.total_req`), `reanalisis.texto_errores` y
+   `evidencia.documentados`.
+5. **Consulta**: `… -m jobpulse_v15 pipeline etapas [--limite N] [--corrida ID]
+   [--json]` + una línea "MÉTRICAS" en la UI v2 (la UI clásica queda intacta).
+
+**Medición sobre una COPIA** (`%TEMP%\opencode\ola43_copia.db`):
+
+```
+=== pipe_20261106_202905 ===
+etapa        ok           ms   avisos  requisitos  errores
+analisis     OK          227        0           0        0
+reanalisis   OK         1248        0           0        0
+backfill     OK            7        0           0        0
+paso5        OK          597      705        2866        0
+evidencia    OK         1293      705           0        0
+  TOTAL 3372 ms | 1410 aviso(s) | 2866 requisito(s) | 0 error(es)
+```
+
+Los contadores cuadran con el estado real (705 evaluados, 2866 requisitos,
+evidencia con 137 verificaciones literales y `no_confirmada=31` intacto), y el
+`detalle_json` del Paso 5 guarda el desglose por estado y por motivo.
+
 ---
 
 ## 3. Decisiones de diseño
@@ -289,6 +357,7 @@ en el pipeline). Con eso los requisitos medios suben de 3,53 a 4,07.
 | `educacion_no_confirmada` | 31 casos | ⏳ **ABIERTO** (firma de una 2ª persona) |
 | O5.3 (re-barrido de descripciones basura) | 43 descripciones <200 chars (35 de ANE) | 🟢 **HECHO Y APLICADO (2026-11-06)**: el corpus ya coincidía con la fuente; el hueco real era el **parser** (campos descartados). Parser ampliado + `scrape ane --revisitar` + re-análisis por texto nuevo. En la BD real: texto ANE 115.601 → 141.967 chars, **9 de 705 cambian de estado**, `educacion_no_confirmada` 31 → 31, corrida `20261106_152304` |
 | Ola 4.2 (curación de la taxonomía) | Cola `concepto_no_normalizado`: 1988 filas, 1976 sin resolver | 🟢 **HECHO Y APLICADO (2026-11-06)**: filtro `es_variante_encolable` + migración 023 (tanda 1) + `taxonomy curate`. En la BD real: etiquetas que resuelven 241 → **560**, cola 1988 → **1225**, requisitos 2483 (1 sin código) → **2857 (0 sin código)**, **58 de 705 cambian de estado**, `educacion_no_confirmada` 31 → 31, corrida `20261106_182554` |
+| Ola 4.3 (métricas por etapa) | Auditar por qué una corrida dio menos | 🟢 **HECHO (2026-11-06)**: tabla `pipeline_etapa` (migración 024, esquema 24) + instrumentación en `pipeline.ejecutar` + `pipeline_metricas.py` + `… pipeline etapas`. Medido sobre copia: paso5 705 avisos / 2866 requisitos, evidencia 137 verificaciones, 0 errores. **Pendiente**: aplicar la 024 a la BD real (pide OK) |
 | O6.4 (dedupe slugs ES/EN) | — | ⏳ Parcial |
 | O4 (calibración gate-vs-IA) | — | 🟡 Proponer cerrar como *superseded* |
 | O8.2 / O8.4 / O9 / pestañas nuevas UI v2 | — | ⏳ Pendiente (Ola 4) |
@@ -297,8 +366,9 @@ en el pipeline). Con eso los requisitos medios suben de 3,53 a 4,07.
 dato**: 4.1 (parser de ANE + re-barrido + re-análisis: **HECHO Y APLICADO**) ·
 4.2 curación de la taxonomía (`concepto_no_normalizado`: **HECHO Y APLICADO**
 — esquema 23, cola 1988 → **1225**, 2857 requisitos sin huecos, corrida
-`20261106_182554`) · 4.3 métricas por etapa (**lo que sigue**) · 4.2 segunda
-tanda de curación (`veces >= 2`).
+`20261106_182554`) · 4.3 métricas por etapa (**HECHO**: tabla `pipeline_etapa`
++ `… pipeline etapas`; falta aplicarla a la BD real) · 4.2 segunda tanda de
+curación (`veces >= 2`).
 
 ---
 
@@ -372,8 +442,13 @@ python -m pytest tests/test_conceptos.py tests/test_taxonomia.py `
 | `src/jobpulse_v15/skills_fuente.py` | **Ola 4.2**: `normalizar` y `mapa_normalizado` públicos (los usa la curación) |
 | `src/jobpulse_v15/cli.py` | **Ola 4.2**: `taxonomy curate [--apply] [--limit N]` |
 | `tests/test_taxonomia.py` (4) · `tests/test_conceptos.py` (+7) | **NUEVOS** de la Ola 4.2 |
+| `src/jobpulse_v15/pipeline_metricas.py` | **NUEVO** (Ola 4.3): contadores comparables por etapa, `registrar_etapa`, consultas |
+| `src/jobpulse_v15/migrations/024_pipeline_etapa.sql` | **NUEVO** — tabla `pipeline_etapa` (métricas por etapa; esquema 24) |
+| `src/jobpulse_v15/pipeline.py` | **Ola 4.3**: instrumentación (cronómetro + `registrar_etapa`) y contadores nuevos (`requisitos_guardados`, `requisitos_evaluados`, `texto_errores`, `documentados`) |
+| `src/jobpulse_v15/cli.py` | **Ola 4.3**: `pipeline etapas [--limite N] [--corrida ID] [--json]` |
+| `tests/test_pipeline_metricas.py` (nuevo) · `tests/test_pipeline.py` (+4) | **NUEVOS** de la Ola 4.3 |
 | `docs/SITIOS_PROBLEMATICOS.md` | Reescrito: 4 sitios, `requires_login`, sesión de ANE, rate-limit de LinkedIn |
-| `docs/PLAN_MEJORAS.md` · `DESARROLLO_v15.md` · `AGENTS.md` | Olas 4.1 y 4.2 aplicadas a la BD real; esquema 23 |
+| `docs/PLAN_MEJORAS.md` · `DESARROLLO_v15.md` · `AGENTS.md` | Olas 4.1 y 4.2 aplicadas a la BD real (esquema 23); Ola 4.3 hecha (esquema 24 al abrir la BD) |
 
 ---
 
@@ -428,6 +503,14 @@ python -m pytest tests/test_conceptos.py tests/test_taxonomia.py `
   "Nivel académico: Licenciatura (Requerido)." o "Bachillerato Universitario
   en …"; 2 → `revisar_a_mano/educacion_no_cumple` porque el texto NO dice
   "Requerido").
+- **Medición de la Ola 4.3** (sobre `%TEMP%\opencode\ola43_copia.db`, copia de
+  la BD real): la 024 se aplicó sola al abrir la copia (esquema 24) y el
+  orquestador dejó sus filas: paso5 **705 avisos / 2866 requisitos
+  evaluados**, evidencia 705 avisos con 137 verificaciones literales
+  (`no_confirmada=31` intacto), 0 errores, corrida completa ≈ 3,4 s.
+  **La BD real sigue en esquema 23**: la 024 se aplica al abrirla con
+  cualquier comando de la CLI (avisa `[esquema]`), así que ese paso pide OK
+  del usuario.
 
 ---
 
@@ -441,10 +524,13 @@ python -m pytest tests/test_conceptos.py tests/test_taxonomia.py `
    OK (137 verificaciones) → `db check` ok. Resultado **idéntico al medido en
    la copia** (58 avisos cambian de estado; `aplicar` 270 → 217;
    `educacion_no_confirmada` 31 → 31 intacto).
-2. **Ola 4 — seguir** (`docs/PLAN_MEJORAS.md`): **4.3 métricas por etapa**
-   (`pipeline_etapa`: tiempo, avisos, requisitos, errores) · 4.2 segunda tanda
-   de curación (la cola tiene 1225 pendientes: la siguiente tanda es la que
-   cubre `veces >= 2`).
+2. **Ola 4 — seguir** (`docs/PLAN_MEJORAS.md`): ~~4.3 métricas por etapa~~ →
+   **HECHO (2026-11-06)**: tabla `pipeline_etapa` (migración 024, esquema 24),
+   instrumentación en `pipeline.ejecutar` + `pipeline_metricas.py`, comando
+   `… pipeline etapas`. **Pendiente**: aplicar la 024 a la **BD real** (pide
+   OK; ocurre sola al abrirla con cualquier comando de la CLI, que avisa
+   `[esquema]`) · 4.2 segunda tanda de curación (la cola tiene 1225
+   pendientes: la siguiente tanda es la que cubre `veces >= 2`).
 3. **Los 24 avisos ANE nuevos** (122031+) que se detectaron al medir: el
    usuario decidió **no** meterlos en la Ola 4.1 (entran en el barrido normal,
    con su pase de IA). Si se quieren ya: `scrape ane --site ane-cr` (24

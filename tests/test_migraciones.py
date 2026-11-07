@@ -46,15 +46,15 @@ class TestVersionDelEsquema(unittest.TestCase):
     def test_la_base_nueva_llega_a_la_ultima_migracion(self):
         version = self.database.initialize()
 
-        self.assertEqual(version, 23)
+        self.assertEqual(version, 24)
         with self.database.connection() as connection:
             actual = connection.execute("PRAGMA user_version").fetchone()[0]
-        self.assertEqual(actual, 23)
+        self.assertEqual(actual, 24)
 
     def test_inicializar_de_nuevo_no_cambia_nada(self):
         self.database.initialize()
 
-        self.assertEqual(self.database.initialize(), 23)
+        self.assertEqual(self.database.initialize(), 24)
 
 
 class TestMigracion017(unittest.TestCase):
@@ -346,7 +346,7 @@ class TestMigracion020(unittest.TestCase):
     def test_la_base_nueva_llega_a_la_ultima_migracion(self):
         with self.database.connection() as connection:
             version = connection.execute("PRAGMA user_version").fetchone()[0]
-        self.assertEqual(version, 23)
+        self.assertEqual(version, 24)
 
     def test_las_skills_que_pedia_el_corpus(self):
         for variante in (
@@ -621,7 +621,7 @@ class TestMigracion023(unittest.TestCase):
     def test_la_base_nueva_llega_a_la_ultima_migracion(self):
         with self.database.connection() as connection:
             version = connection.execute("PRAGMA user_version").fetchone()[0]
-        self.assertEqual(version, 23)
+        self.assertEqual(version, 24)
 
     def test_los_alias_apuntan_al_canonico_correcto(self):
         for variante, canonico in (
@@ -736,6 +736,107 @@ class TestMigracion023(unittest.TestCase):
                 "SELECT COUNT(*) FROM concepto_no_normalizado"
             ).fetchone()[0]
         self.assertEqual(filas, 0)
+
+
+class TestMigracion024(unittest.TestCase):
+    """024: metricas por etapa del pipeline (Ola 4.3).
+
+    La tabla `pipeline_etapa` es instrumentacion PURAMENTE aditiva: una fila
+    por etapa y por ejecucion del pipeline, con su duracion, avisos,
+    requisitos y errores. Sirve para auditar POR QUE una corrida "dio menos".
+
+    Estos tests comprueban que:
+      * la tabla existe con las columnas esperadas;
+      * los CHECK impiden numeros negativos;
+      * NO hay claves foraneas (el `corrida_id` del pipeline es logico);
+      * la migracion es idempotente;
+      * NO toca los datos del matching (`job_match` sigue igual).
+    """
+
+    def setUp(self):
+        self.temp_dir = tempfile.TemporaryDirectory()
+        self.database = Database(Path(self.temp_dir.name) / "test.db")
+        self.database.initialize()
+
+    def tearDown(self):
+        self.temp_dir.cleanup()
+
+    def test_la_tabla_existe_con_sus_columnas(self):
+        with self.database.connection() as connection:
+            columnas = {
+                fila["name"]
+                for fila in connection.execute(
+                    "SELECT name FROM pragma_table_info('pipeline_etapa')"
+                )
+            }
+        self.assertEqual(
+            columnas,
+            {
+                "id",
+                "corrida_id",
+                "etapa",
+                "ok",
+                "duracion_ms",
+                "avisos",
+                "requisitos",
+                "errores",
+                "detalle_json",
+                "iniciado_en",
+                "terminado_en",
+            },
+        )
+
+    def test_los_indices_de_auditoria_existen(self):
+        with self.database.connection() as connection:
+            indices = {
+                fila["name"]
+                for fila in connection.execute(
+                    "SELECT name FROM sqlite_master "
+                    "WHERE type='index' AND tbl_name='pipeline_etapa'"
+                )
+            }
+        self.assertIn("idx_pipeline_etapa_corrida", indices)
+        self.assertIn("idx_pipeline_etapa_etapa", indices)
+
+    def test_no_tiene_claves_foraneas(self):
+        """El `corrida_id` del pipeline es un id LOGICO (no hay tabla madre)."""
+        with self.database.connection() as connection:
+            filas = connection.execute(
+                "PRAGMA foreign_key_list('pipeline_etapa')"
+            ).fetchall()
+        self.assertEqual(filas, [])
+
+    def test_no_acepta_numeros_negativos(self):
+        with self.database.connection() as connection:
+            with self.assertRaises(sqlite3.IntegrityError):
+                connection.execute(
+                    "INSERT INTO pipeline_etapa ("
+                    " corrida_id, etapa, ok, duracion_ms, avisos, requisitos,"
+                    " errores, detalle_json, iniciado_en, terminado_en"
+                    ") VALUES ('pipe_x', 'analisis', 1, -1, 0, 0, 0, NULL,"
+                    " '2026-11-06T10:00:00', '2026-11-06T10:00:01')"
+                )
+
+    def test_la_migracion_es_idempotente(self):
+        with self.database.connection() as connection:
+            _aplicar(connection, "024_pipeline_etapa.sql")
+            _aplicar(connection, "024_pipeline_etapa.sql")
+            filas = connection.execute(
+                "SELECT COUNT(*) FROM pipeline_etapa"
+            ).fetchone()[0]
+        self.assertEqual(filas, 0)
+
+    def test_no_toca_el_matching(self):
+        """La tabla es de auditoria: `job_match` no se toca."""
+        with self.database.connection() as connection:
+            antes = connection.execute(
+                "SELECT COUNT(*) FROM job_match"
+            ).fetchone()[0]
+            _aplicar(connection, "024_pipeline_etapa.sql")
+            despues = connection.execute(
+                "SELECT COUNT(*) FROM job_match"
+            ).fetchone()[0]
+        self.assertEqual(antes, despues)
 
 
 if __name__ == "__main__":

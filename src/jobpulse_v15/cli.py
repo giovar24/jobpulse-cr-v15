@@ -80,6 +80,61 @@ def _cmd_taxonomia_curar(repository: Repository, args) -> None:
     print(json.dumps(informe, ensure_ascii=False, indent=2))
 
 
+def _cmd_pipeline_etapas(repository: Repository, args) -> None:
+    """Muestra las metricas por etapa de las corridas del pipeline (Ola 4.3).
+
+    Sirve para auditar POR QUE una corrida "dio menos": cada etapa deja su
+    duracion, avisos, requisitos y errores en `pipeline_etapa`.
+    """
+    from jobpulse_v15 import pipeline_metricas
+
+    corrida_id = getattr(args, "corrida", None)
+    with repository.database.connection() as connection:
+        if corrida_id:
+            corrida = pipeline_metricas.consultar_corrida(connection, str(corrida_id))
+            corridas = [corrida] if corrida else []
+        else:
+            corridas = pipeline_metricas.consultar_corridas(
+                connection, limite=int(getattr(args, "limite", 10))
+            )
+    if getattr(args, "json", False):
+        print(json.dumps(corridas, ensure_ascii=False, indent=2))
+        return
+    if not corridas:
+        if corrida_id:
+            print("No existe la corrida %s." % corrida_id)
+        else:
+            print("Todavia no hay corridas del pipeline registradas.")
+        return
+    for corrida in corridas:
+        print("=== %s ===" % corrida["corrida_id"])
+        print(
+            "%-12s %-6s %8s %8s %11s %8s"
+            % ("etapa", "ok", "ms", "avisos", "requisitos", "errores")
+        )
+        for etapa in corrida["etapas"]:
+            print(
+                "%-12s %-6s %8d %8d %11d %8d"
+                % (
+                    etapa["etapa"],
+                    "OK" if etapa["ok"] else "ERROR",
+                    etapa["duracion_ms"],
+                    etapa["avisos"],
+                    etapa["requisitos"],
+                    etapa["errores"],
+                )
+            )
+        print(
+            "  TOTAL %d ms | %d aviso(s) | %d requisito(s) | %d error(es)\n"
+            % (
+                corrida["duracion_ms"],
+                corrida["avisos"],
+                corrida["requisitos"],
+                corrida["errores"],
+            )
+        )
+
+
 def _cmd_areas_classify(repository: Repository, args) -> None:
     """Clasifica las vacantes por su titulo y guarda el area (derivada)."""
     from jobpulse_v15 import areas as areas_mod
@@ -703,6 +758,38 @@ def main() -> int:
         type=int,
         default=50,
         help="Cuantas variantes pendientes mostrar (0 = todas).",
+    )
+
+    # === Metricas del pipeline (Ola 4.3) ===
+    pipeline_cmd = commands.add_parser(
+        "pipeline",
+        help="Auditar las etapas de las corridas del pipeline.",
+    )
+    pipeline_sub = pipeline_cmd.add_subparsers(
+        dest="pipeline_command", required=True
+    )
+    pipeline_etapas = pipeline_sub.add_parser(
+        "etapas",
+        help=(
+            "Metricas por etapa (tiempo, avisos, requisitos, errores) de las "
+            "ultimas corridas del pipeline."
+        ),
+    )
+    pipeline_etapas.add_argument(
+        "--limite",
+        type=int,
+        default=10,
+        help="Cuantas corridas mostrar (por defecto 10).",
+    )
+    pipeline_etapas.add_argument(
+        "--corrida",
+        default=None,
+        help="Id de una corrida concreta (pipe_YYYYmmdd_HHMMSS).",
+    )
+    pipeline_etapas.add_argument(
+        "--json",
+        action="store_true",
+        help="Salida en JSON (por defecto es una tabla legible).",
     )
 
     # === Credenciales y Login ===
@@ -1502,6 +1589,8 @@ def main() -> int:
                     _cmd_areas_classify(repository, args)
             elif args.command == "taxonomy" and args.taxonomy_command == "curate":
                 _cmd_taxonomia_curar(repository, args)
+            elif args.command == "pipeline" and args.pipeline_command == "etapas":
+                _cmd_pipeline_etapas(repository, args)
             elif args.command == "areas" and args.areas_command == "list":
                 from jobpulse_v15 import areas as areas_mod
 

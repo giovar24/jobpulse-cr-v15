@@ -18,6 +18,7 @@ REGLAS DURAS que estos tests fijan:
 6. la evidencia se genera y verifica sin subprocess.
 """
 import json
+import sqlite3
 import sys
 import tempfile
 import unittest
@@ -144,6 +145,74 @@ class TestContrato(Base):
         linea = pipeline.resumen_linea(resultado)
         self.assertIn("PIPELINE:", linea)
         self.assertIn("paso5=", linea)
+
+
+class TestMetricas(Base):
+    """Ola 4.3: cada etapa deja su metrica en `pipeline_etapa`."""
+
+    def _metricas(self):
+        with self.database.connection() as connection:
+            filas = connection.execute(
+                "SELECT corrida_id, etapa, ok, duracion_ms, avisos, requisitos,"
+                " errores, detalle_json FROM pipeline_etapa ORDER BY id"
+            ).fetchall()
+        return [dict(fila) for fila in filas]
+
+    def test_cada_etapa_registra_su_metrica(self):
+        self._job()
+        resultado = pipeline.ejecutar(
+            self.repository, etapas=("analisis", "paso5"), db_path=self.db_path
+        )
+        metricas = self._metricas()
+        self.assertEqual([m["etapa"] for m in metricas], ["analisis", "paso5"])
+        for metrica in metricas:
+            self.assertEqual(metrica["corrida_id"], resultado["corrida_pipeline"])
+            self.assertEqual(metrica["ok"], 1)
+            self.assertGreaterEqual(metrica["duracion_ms"], 0)
+        analisis = metricas[0]
+        self.assertEqual(analisis["avisos"], 1)
+        self.assertGreater(analisis["requisitos"], 0)
+
+    def test_el_id_del_pipeline_es_distinto_del_del_paso5(self):
+        """El `corrida_id` del pipeline agrupa etapas; el del Paso 5 es el
+        de `job_match` (son cosas distintas)."""
+        self._job()
+        resultado = pipeline.ejecutar(
+            self.repository, etapas=("analisis", "paso5"), db_path=self.db_path
+        )
+        self.assertTrue(resultado["corrida_pipeline"].startswith("pipe_"))
+        self.assertNotEqual(resultado["corrida_pipeline"], resultado["corrida"])
+        paso5 = [m for m in self._metricas() if m["etapa"] == "paso5"][0]
+        self.assertEqual(json.loads(paso5["detalle_json"])["corrida"], resultado["corrida"])
+
+    def test_una_metrica_que_falla_no_rompe_el_pipeline(self):
+        """La instrumentacion es aditiva: si falla, la corrida sigue."""
+        self._job()
+        from jobpulse_v15 import pipeline_metricas
+
+        with patch.object(
+            pipeline_metricas,
+            "registrar_etapa",
+            side_effect=sqlite3.OperationalError("no se pudo escribir"),
+        ):
+            resultado = pipeline.ejecutar(
+                self.repository, etapas=("analisis", "paso5"), db_path=self.db_path
+            )
+        self.assertTrue(resultado["ok"], resultado.get("errores"))
+        self.assertIn("paso5", resultado["etapas"])
+        self.assertEqual(self._metricas(), [])
+
+    def test_la_etapa_que_falla_queda_registrada(self):
+        self._job()
+        resultado = pipeline.ejecutar(
+            self.repository, etapas=("scrape",), db_path=self.db_path
+        )
+        metricas = self._metricas()
+        self.assertEqual(len(metricas), 1)
+        self.assertEqual(metricas[0]["etapa"], "scrape")
+        # Sin sitios no hay nada que barrer: la etapa lo dice (ok=False).
+        self.assertEqual(metricas[0]["ok"], 0)
+        self.assertFalse(resultado["ok"])
 
 
 class TestEtapas(Base):

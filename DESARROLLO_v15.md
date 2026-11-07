@@ -486,8 +486,13 @@ completo en `docs/PLAN_MEJORAS.md`):
    Lo que sigue: **4.2 (curación de la taxonomía) → APLICADA A LA BD REAL
    (2026-11-06)**: esquema 23, cola 1988 → **1225**, requisitos vigentes
    **2857 (0 sin código)**, corrida `20261106_182554`, evidencia OK,
-   `educacion_no_confirmada` 31 → 31 (intacto) · 4.3 (métricas por etapa) ·
-   los 24 avisos ANE nuevos (122031+) quedan para el barrido normal con IA.
+   `educacion_no_confirmada` 31 → 31 (intacto) · **4.3 (métricas por etapa) →
+   HECHO (2026-11-06)**: tabla `pipeline_etapa` (migración **024**, esquema 24),
+   instrumentación en `pipeline.ejecutar` (punto único) + módulo
+   `pipeline_metricas.py`, comando `… pipeline etapas [--limite N] [--corrida
+   ID] [--json]` y línea de métricas en la UI v2 (medido sobre una copia de la
+   BD real: paso5 705 avisos / 2866 requisitos evaluados) · los 24 avisos ANE
+   nuevos (122031+) quedan para el barrido normal con IA.
 1. **O12 — paridad CLI/UI** (meta #1): **Olas 1 y 2 YA ESTÁN** (2026-11-05:
    re-análisis incremental, badge, guarda, evidencia como módulo, login ANE
    con cierre ordenado y orquestador `pipeline.py` con los botones "Procesar"
@@ -666,6 +671,50 @@ completo en `docs/PLAN_MEJORAS.md`):
 ---
 
 ## 8. HISTORIAL DE CAMBIOS RECIENTES
+
+### 2026-11-06 — OLA 4.3: MÉTRICAS POR ETAPA DEL PIPELINE (`pipeline_etapa`)
+
+**Qué**: las siete etapas del pipeline devuelven contadores **propios y en
+formatos distintos** (`analizados`, `jobs_found`, `ciclos`, `candidatos`,
+`actualizados`, `por_estado`, `verificaciones`…). Acabada la corrida solo
+quedaba el estado final, así que no se podía responder a la pregunta que
+importa: **de todos los avisos que entraron, ¿cuántos llegaron al Paso 5,
+cuántos tenían requisitos y en qué etapa se perdieron?** (Caso real de la Ola
+4.2: 705 avisos entraron al análisis, 9 acabaron en `sin_requisitos` y 58
+cambiaron de estado por requisitos sin `codigo_canonico`.)
+
+1. **Tabla `pipeline_etapa`** (migración **024**, esquema 23 → **24**): una
+   fila por **etapa y por ejecución** del pipeline. Columnas: `corrida_id`
+   (`pipe_<timestamp>`, **distinto** del `corrida_id` de `job_match`),
+   `etapa`, `ok`, `duracion_ms`, `avisos`, `requisitos`, `errores`,
+   `detalle_json`, `iniciado_en`, `terminado_en`. Índices por
+   `(corrida_id, id)` y `(etapa, id)`. **Sin claves foráneas** (el
+   `corrida_id` del pipeline es un id **lógico**).
+2. **Módulo `jobpulse_v15.pipeline_metricas`**: traduce el resultado de cada
+   etapa a tres números **comparables** (`avisos` / `requisitos` / `errores`) y
+   guarda los contadores **específicos** de la etapa en `detalle_json` (por
+   estado y motivo del Paso 5, por campo rellenado por la IA, por sitio del
+   barrido…).
+3. **Instrumentación en el orquestador** (`pipeline.ejecutar`): es el **único**
+   punto donde se cronometran las etapas → CLI, UI v2 y `run_full_flow.py`
+   dejan la misma métrica. Es **puramente aditiva**: si falla, la corrida
+   **sigue** (una métrica nunca rompe un pipeline).
+4. **Contadores que faltaban**: `analisis.requisitos_guardados`,
+   `paso5.requisitos_evaluados` (suma de `Resultado.total_req`),
+   `reanalisis.texto_errores` y `evidencia.documentados` (los avisos de la
+   corrida, comparables con los del Paso 5).
+5. **Consulta**: `… -m jobpulse_v15 pipeline etapas [--limite N] [--corrida ID]
+   [--json]` + una línea "MÉTRICAS" en la UI v2 (la UI clásica queda intacta).
+
+**Medición (copia de la BD real, `%TEMP%\opencode\ola43_copia.db`)**: paso5
+**705 avisos / 2866 requisitos evaluados**, evidencia 705 avisos con **137
+verificaciones literales** (`no_confirmada=31`, intacto), 0 errores; tiempo
+total de la corrida ≈ 3,4 s. La migración 024 se aplicó sola al abrir la
+copia (convención del proyecto: el esquema se migra al abrir la BD).
+
+**Pendiente**: aplicar la 024 a la **BD real** (ocurre solo, al abrirla con
+cualquier comando de la CLI; avisa `[esquema]`) y dejar que las próximas
+corridas del pipeline deixe su fila de métricas.
 
 ### 2026-11-06 — OLA 4.2: CURACIÓN DE LA TAXONOMÍA (`concepto_no_normalizado`)
 

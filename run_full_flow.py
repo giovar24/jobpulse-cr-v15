@@ -124,6 +124,12 @@ def run_full_flow(
     )
     print("\n" + "=" * 60)
     print(pipeline.resumen_linea(resultado))
+    # Métricas por etapa (Ola 4.3): qué avisos llegaron a cada etapa.
+    from jobpulse_v15 import pipeline_metricas
+
+    linea_metricas = pipeline_metricas.resumen_linea_etapas(resultado)
+    if linea_metricas:
+        print(linea_metricas)
     for error in resultado["errores"]:
         print("  !! %s" % error)
     exito = bool(resultado["ok"])

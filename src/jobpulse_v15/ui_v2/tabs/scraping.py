@@ -474,9 +474,20 @@ class ScrapingTab(BaseTab):
         self._widgets["enriquecer"].configure(state="normal")
         linea = pipeline.resumen_linea(resultado)
         self._log(linea)
+        # Métricas por etapa (Ola 4.3): qué avisos llegaron a cada etapa y
+        # cuánto tardó cada una. Se leen del resultado en memoria (la fila
+        # queda guardada en `pipeline_etapa`).
+        self._log(self._linea_metricas(resultado))
         for error in resultado.get("errores", []):
             self._log("  !! %s" % error)
         self._estado(linea.replace("PIPELINE: ", ""))
         refrescar = self.context.services.get("refrescar_todo")
         if callable(refrescar):
             refrescar()
+
+    @staticmethod
+    def _linea_metricas(resultado: dict) -> str:
+        """Una línea con las métricas por etapa de la corrida."""
+        from jobpulse_v15 import pipeline_metricas
+
+        return pipeline_metricas.resumen_linea_etapas(resultado)

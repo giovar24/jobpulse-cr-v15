@@ -411,6 +411,72 @@ medios 3,53 → **4,07** (232 avisos con más, 0 con menos) y
 tiene 1225 pendientes; la siguiente cubre las variantes con `veces >= 2`, que
 son las que varios avisos piden).
 
+### 4.3 Métricas por etapa — **HECHO 2026-11-06**
+
+**Lo que decía el plan**: `pipeline_etapa` con tiempo, avisos, requisitos y
+errores → auditar por qué una corrida dio menos.
+
+**El hueco real (medido)**: las siete etapas del pipeline devuelven contadores
+**propios y en formatos distintos** (`analizados`, `jobs_found`, `ciclos`,
+`candidatos`, `actualizados`, `por_estado`, `verificaciones`…). Acabada la
+corrida solo quedaba un estado final (`calificada`/`revisar_a_mano`/…), y no
+se podía responder a la pregunta que de verdad importa: **de todos los avisos
+que entraron, ¿cuántos llegaron al Paso 5, cuántos tenían requisitos y en qué
+etapa se perdieron?**
+
+Caso real que lo motivó (Ola 4.2): 705 avisos entraron al análisis, pero 9
+acabaron en `sin_requisitos` y 58 cambiaron de estado porque sus requisitos
+(skills de ANE) no tenían `codigo_canonico`. Sin este registro, ese hueco solo
+se descubría mirando los estados finales.
+
+**Lo que se hizo**:
+
+1. **Tabla `pipeline_etapa`** (migración **024**, esquema 23 → **24**): una
+   fila por **etapa y por ejecución** del pipeline. Columnas: `corrida_id`,
+   `etapa`, `ok`, `duracion_ms`, `avisos`, `requisitos`, `errores`,
+   `detalle_json`, `iniciado_en`, `terminado_en`. Índices por `(corrida_id, id)`
+   y `(etapa, id)`. **Sin claves foráneas** a propósito: el `corrida_id` del
+   pipeline es un id **lógico** (`pipe_<timestamp>`), no el `corrida_id` del
+   `job_match` (el del Paso 5 va en el `detalle_json` de la etapa `paso5`).
+2. **Módulo `jobpulse_v15.pipeline_metricas`**: traduce el resultado de cada
+   etapa a tres números **comparables** (`avisos` / `requisitos` / `errores`) y
+   guarda además los contadores **específicos** de la etapa en `detalle_json`
+   (por estado del Paso 5, por campo rellenado por la IA, por sitio del
+   barrido…).
+3. **Instrumentación en el orquestador** (`pipeline.ejecutar`): es el **único**
+   punto donde se cronometran las etapas, así que CLI, UI v2 y
+   `run_full_flow.py` dejan la misma métrica. La instrumentación es
+   **puramente aditiva**: si falla (BD bloqueada, tabla que no existe), la
+   corrida **sigue** — una métrica nunca rompe un pipeline.
+4. **Contadores que faltaban** (añadidos a las etapas que no los exponían):
+   `analisis.requisitos_guardados`, `paso5.requisitos_evaluados` (suma de
+   `Resultado.total_req`) y `reanalisis.texto_errores`.
+5. **Consulta**: `jobpulse-v15 pipeline etapas [--limite N] [--corrida ID]
+   [--json]`, más una línea de métricas en la UI v2 (la UI clásica queda
+   intacta).
+
+**Medición sobre una COPIA de la BD real** (`%TEMP%\opencode\ola43_copia.db`):
+
+```
+=== pipe_20261106_202905 ===
+etapa        ok           ms   avisos  requisitos  errores
+analisis     OK          227        0           0        0
+reanalisis   OK         1248        0           0        0
+backfill     OK            7        0           0        0
+paso5        OK          597      705        2866        0
+evidencia    OK         1293      705           0        0
+  TOTAL 3372 ms | 1410 aviso(s) | 2866 requisito(s) | 0 error(es)
+```
+
+Los contadores cuadran con el estado real: 705 avisos evaluados, 2866
+requisitos evaluados, evidencia con 137 verificaciones literales y
+`no_confirmada=31` (intacto). El `detalle_json` de la etapa `paso5` guarda el
+desglose por estado y por motivo (`calificada=190`, `revisar_a_mano=376`,
+`descartada=96`, `datos_insuficientes=34`, `sin_requisitos=9`).
+
+**Lo que NO hace**: no toca `job_match`, ni `job_analysis`, ni los umbrales del
+motor, ni borra ni funde datos. Es una tabla de **auditoría**.
+
 ---
 
 ## Ola 5 — Se puede dejar de último (impacto bajo o esfuerzo alto)

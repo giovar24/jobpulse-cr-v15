@@ -23,24 +23,28 @@ Reglas del proyecto que este módulo **no** cambia:
 * la etapa `ia` con proveedor externo **no arranca** nada local, y la
   confirmación de privacidad la hace el CALLER (UI) antes de invocar;
 * ninguna etapa borra ni funde datos.
+
+Métricas por etapa (Ola 4.3): este módulo es el ÚNICO punto donde se
+cronometran las etapas. Cada una deja una fila en `pipeline_etapa`
+(migración 024) con su duración, avisos, requisitos y errores, para poder
+auditar POR QUÉ una corrida "dio menos". La instrumentación es **puramente
+aditiva**: si falla, la corrida sigue (una métrica nunca rompe un pipeline).
 """
 from __future__ import annotations
 
 import sqlite3
+import time
 from collections import Counter
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence
 
-#: Todas las etapas, en el ORDEN en que se ejecutan.
-ETAPAS: tuple[str, ...] = (
-    "scrape",
-    "analisis",
-    "ia",
-    "reanalisis",
-    "backfill",
-    "paso5",
-    "evidencia",
-)
+from jobpulse_v15 import pipeline_metricas
+
+#: Todas las etapas, en el ORDEN en que se ejecutan. La lista vive en
+#: `pipeline_metricas` (única fuente): este módulo la recorre y la
+#: instrumenta.
+ETAPAS: tuple[str, ...] = pipeline_metricas.ETAPAS
 
 #: Lo que corre un "Procesar" normal: sobre los avisos que ya están en la BD.
 #: `scrape` necesita sitios y `backfill` recorre todos los requisitos, así que
@@ -86,7 +90,8 @@ def ejecutar(
 
     Devuelve::
 
-        {"ok": bool, "corrida": str | None, "detenido": bool,
+        {"ok": bool, "corrida": str | None, "corrida_pipeline": str,
+         "detenido": bool,
          "etapas": {"analisis": {...}, "ia": {...}, ...},
          "errores": [str, ...]}
 
@@ -94,6 +99,10 @@ def ejecutar(
     **detienen** las siguientes (no tiene sentido evaluar sobre un análisis que
     reventó). Un resultado de etapa con ``ok=False`` (p. ej. IA "atascada") NO
     aborta: el Paso 5 se corre igual, para que el usuario vea el estado real.
+
+    ``corrida`` es el ``corrida_id`` del Paso 5 (el de `job_match`).
+    ``corrida_pipeline`` es el id de ESTA ejecución del pipeline
+    (`pipe_<timestamp>`): agrupa las filas de `pipeline_etapa` (Ola 4.3).
     """
     log = progreso or _noop
     pedidas = tuple(etapas) if etapas is not None else ETAPAS_POR_DEFECTO
@@ -109,6 +118,18 @@ def ejecutar(
     corrida: str | None = None
     detenido = False
 
+    # ── Métricas por etapa (Ola 4.3) ──────────────────────────────
+    # El esquema se migra al abrir la base (convención del proyecto): la
+    # migración 024 crea `pipeline_etapa`. Si algo falla, la corrida sigue.
+    base_metricas = repository.database
+    if Path(base_metricas.path) != ruta_db:
+        base_metricas = pipeline_metricas.base_de(ruta_db)
+    try:
+        pipeline_metricas.asegurar_esquema(base_metricas, log)
+    except Exception as exc:  # noqa: BLE001 - la métrica no rompe la corrida
+        log("[métricas] No se pudo preparar el esquema de métricas: %s" % exc)
+    corrida_pipeline = pipeline_metricas.nuevo_corrida_id(base_metricas)
+
     for nombre in ETAPAS:
         if nombre not in pedidas:
             continue
@@ -117,6 +138,8 @@ def ejecutar(
             log("— Pipeline detenido antes de la etapa %s." % nombre)
             break
         log("=== %s ===" % nombre.upper())
+        iniciado_en = datetime.now()
+        reloj = time.perf_counter()
         try:
             resultado = _EJECUTORAS[nombre](
                 repository,
@@ -135,10 +158,22 @@ def ejecutar(
         except Exception as exc:  # noqa: BLE001 - se reporta, no se traga
             resultado = {"ok": False, "error": "%s: %s" % (type(exc).__name__, exc)}
             errores.append("%s: %s" % (nombre, resultado["error"]))
+        duracion_ms = int((time.perf_counter() - reloj) * 1000)
+        terminado_en = datetime.now()
         resultado.setdefault("ok", True)
         resultados[nombre] = resultado
         if resultado.get("corrida"):
             corrida = str(resultado["corrida"])
+        _registrar_metrica(
+            base_metricas,
+            corrida_pipeline,
+            nombre,
+            resultado,
+            duracion_ms,
+            iniciado_en,
+            terminado_en,
+            log,
+        )
         if "error" in resultado:
             log("✗ %s: %s" % (nombre, resultado["error"]))
             break
@@ -147,10 +182,43 @@ def ejecutar(
     return {
         "ok": ok,
         "corrida": corrida,
+        "corrida_pipeline": corrida_pipeline,
         "detenido": detenido,
         "etapas": resultados,
         "errores": errores,
     }
+
+
+def _registrar_metrica(
+    base,
+    corrida_pipeline: str,
+    nombre: str,
+    resultado: Mapping[str, Any],
+    duracion_ms: int,
+    iniciado_en: datetime,
+    terminado_en: datetime,
+    log: Callable[[str], None],
+) -> None:
+    """Guarda la métrica de UNA etapa (Ola 4.3).
+
+    Puramente aditiva: si la escritura falla (BD bloqueada, tabla que no
+    existe, ...) se avisa en el log y la corrida CONTINÚA. Una métrica
+    nunca puede romper un pipeline.
+    """
+    try:
+        pipeline_metricas.registrar_etapa(
+            base,
+            corrida_id=corrida_pipeline,
+            etapa=nombre,
+            ok=bool(resultado.get("ok", True)),
+            duracion_ms=duracion_ms,
+            resultado=resultado,
+            iniciado_en=iniciado_en,
+            terminado_en=terminado_en,
+            error=resultado.get("error"),
+        )
+    except Exception as exc:  # noqa: BLE001 - la métrica no rompe la corrida
+        log("[métricas] No se pudo registrar la etapa %s: %s" % (nombre, exc))
 
 
 # ---------------------------------------------------------------------------
@@ -237,18 +305,28 @@ def _etapa_analisis(
     )
     log("%d aviso(s) sin análisis." % len(pendientes))
     ok = fallos = 0
+    requisitos_guardados = 0
     for job in pendientes:
         if should_stop is not None and should_stop():
             break
         try:
-            extract_job_analysis(repository, str(job["job_id"]))
+            guardado = extract_job_analysis(repository, str(job["job_id"]))
             ok += 1
+            requisitos_guardados += len(guardado.get("requirements") or [])
         except (ValueError, sqlite3.Error) as exc:
             fallos += 1
             log("✗ %s: %s" % (job["job_id"], exc))
-    log("Reglas: %d analizados, %d con error." % (ok, fallos))
-    return {"ok": fallos == 0, "pendientes": len(pendientes), "analizados": ok,
-            "fallos": fallos}
+    log(
+        "Reglas: %d analizados, %d con error, %d requisito(s) guardado(s)."
+        % (ok, fallos, requisitos_guardados)
+    )
+    return {
+        "ok": fallos == 0,
+        "pendientes": len(pendientes),
+        "analizados": ok,
+        "fallos": fallos,
+        "requisitos_guardados": requisitos_guardados,
+    }
 
 
 def _etapa_ia(
@@ -330,6 +408,7 @@ def _etapa_reanalisis(repository, log, *, should_stop=None, **_ignorados) -> dic
         stats,
         texto_candidatos=texto.get("candidatos", 0),
         texto_reanalizados=texto.get("reanalizados", 0),
+        texto_errores=texto.get("errores", 0),
         ok=stats.get("errores", 0) == 0 and texto.get("errores", 0) == 0,
     )
 
@@ -375,11 +454,13 @@ def _etapa_paso5(
         connection.close()
     por_estado = dict(Counter(r.estado for r in resultados))
     por_motivo = dict(Counter(r.motivo for r in resultados))
+    requisitos_evaluados = sum(int(r.total_req or 0) for r in resultados)
     log(
-        "Paso 5: corrida %s · %d evaluada(s) · %s"
+        "Paso 5: corrida %s · %d evaluada(s) · %d requisito(s) evaluado(s) · %s"
         % (
             corrida,
             len(resultados),
+            requisitos_evaluados,
             ", ".join("%s=%d" % (k, v) for k, v in sorted(por_estado.items())),
         )
     )
@@ -387,6 +468,7 @@ def _etapa_paso5(
         "ok": True,
         "corrida": corrida,
         "evaluadas": len(resultados),
+        "requisitos_evaluados": requisitos_evaluados,
         "por_estado": por_estado,
         "por_motivo": por_motivo,
     }
@@ -415,10 +497,24 @@ def _etapa_evidencia(
         log("Evidencia OK: %d verificación(es) literal(es)." % verificado["verificaciones"])
     else:
         log("⚠️ Evidencia con %d discrepancia(s)." % len(verificado["fallos"]))
+    # Los avisos que la evidencia documenta (para que el contador sea
+    # COMPARABLE con el del Paso 5: los mismos avisos de la misma corrida).
+    documentados = 0
+    conexion = sqlite3.connect(str(db_path))
+    try:
+        documentados = int(
+            conexion.execute(
+                "SELECT COUNT(*) FROM job_match WHERE corrida_id = ?",
+                (generado["corrida"],),
+            ).fetchone()[0]
+        )
+    finally:
+        conexion.close()
     return {
         "ok": bool(verificado["ok"]),
         "corrida": generado["corrida"],
         "documento": str(generado["ruta"]),
+        "documentados": documentados,
         "descartadas": generado["descartadas"],
         "no_confirmadas": generado["no_confirmadas"],
         "verificaciones": verificado["verificaciones"],
@@ -460,4 +556,8 @@ def resumen_linea(resultado: Mapping[str, Any]) -> str:
             partes.append("%s=%s" % (nombre, "OK" if etapa.get("ok") else "—"))
     return ("PIPELINE: " + (" · ".join(partes) if partes else "sin etapas")) + (
         "" if resultado.get("ok") else "  ⚠️ CON PROBLEMAS"
+    ) + (
+        "  · corrida=%s" % resultado["corrida_pipeline"]
+        if resultado.get("corrida_pipeline")
+        else ""
     )

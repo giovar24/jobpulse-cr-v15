@@ -54,7 +54,7 @@ caro de descubrir**; lo puntual vive en los handoffs.
   migraciones N-M`). `init-db`, `backup` y `db check` **no** migran.
 - Esquema por migraciones: `src/jobpulse_v15/migrations/0NN_*.sql`. Cambio de
   esquema = **archivo nuevo**; nunca `ALTER` manual ni editar una migración ya
-  aplicada. Versionado con `PRAGMA user_version` (actual: **22**).
+  aplicada. Versionado con `PRAGMA user_version` (actual: **24**).
 - Si una migración tiene que **recrear una tabla** (cambiar un `CHECK`), SQLite
   no lo permite con `ALTER` y `PRAGMA foreign_keys` no se puede cambiar dentro
   de una transacción: la migración gestiona su propia transacción y lo marca
@@ -112,6 +112,21 @@ print(pipeline.resumen_linea(resultado))
 Reglas: una etapa desconocida es `ValueError`; el Paso 5 es siempre **corrida
 nueva**; la etapa `ia` con proveedor externo **no** arranca nada local y la
 confirmación de privacidad la hace el caller (UI) antes de invocar.
+
+### Métricas por etapa (Ola 4.3)
+
+`pipeline.ejecutar` cronometra **cada** etapa y deja una fila en
+`pipeline_etapa` (migración 024): `corrida_id` (`pipe_<timestamp>`, **distinto**
+del `corrida_id` de `job_match`), `etapa`, `ok`, `duracion_ms`, `avisos`,
+`requisitos`, `errores`, `detalle_json`, `iniciado_en`, `terminado_en`.
+
+- La instrumentación vive **solo** en `pipeline.py` (punto único) + el módulo
+  `pipeline_metricas.py` (traduce cada etapa a los contadores comparables
+  `avisos`/`requisitos`/`errores`).
+- Es **puramente aditiva**: si falla, la corrida sigue (una métrica nunca
+  rompe un pipeline). No toca `job_match`, `job_analysis` ni los umbrales.
+- Consulta: `… -m jobpulse_v15 pipeline etapas [--limite N] [--corrida ID]
+  [--json]`.
 
 ### Comprobar que el scrape llegó bien
 
@@ -367,6 +382,7 @@ $py = ".\.venv\Scripts\python.exe"
 & $py -X utf8 -m jobpulse_v15 enrich posting-language [--apply]
 & $py -X utf8 -m jobpulse_v15 enrich profile-canonico [--apply]
 & $py -X utf8 -m jobpulse_v15 taxonomy curate [--apply] [--limit N]
+& $py -X utf8 -m jobpulse_v15 pipeline etapas [--limite N] [--corrida ID] [--json]
 & $py -X utf8 -m jobpulse_v15 viabilidad list [--banda aplicar] | top --limit 20
 & $py -X utf8 -m jobpulse_v15 postulaciones correo --dias 90 [--apply]
 & $py -X utf8 -m jobpulse_v15 postulaciones workday --apply
