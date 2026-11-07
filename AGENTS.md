@@ -35,8 +35,8 @@ caro de descubrir**; lo puntual vive en los handoffs.
 
 - **App/CLI/scripts** → venv: `.\.venv\Scripts\python.exe -X utf8 …`
 - **Tests** → python del **sistema**: `python -m pytest tests/ -q`
-  (pytest **no** está en el venv; ~17 min la suite completa; baseline verificado
-  2026-11-07: **1164 passed + 980 subtests** — 1021,90 s).
+  (pytest **no** está en el venv; ~9–17 min la suite completa; baseline verificado
+  2026-11-07: **1171 passed + 1740 subtests** — 510,99 s; con la 025).
 - **`-X utf8` en todo comando que imprima datos de la BD**: sin él, un `\uf0b7`
   o un `\x85` en una descripción rompe la salida (los saves sí se completan).
   Para CSV por consola: `[Console]::OutputEncoding = UTF8` antes.
@@ -54,7 +54,7 @@ caro de descubrir**; lo puntual vive en los handoffs.
   migraciones N-M`). `init-db`, `backup` y `db check` **no** migran.
 - Esquema por migraciones: `src/jobpulse_v15/migrations/0NN_*.sql`. Cambio de
   esquema = **archivo nuevo**; nunca `ALTER` manual ni editar una migración ya
-  aplicada. Versionado con `PRAGMA user_version` (actual: **24**).
+  aplicada. Versionado con `PRAGMA user_version` (actual: **25**).
 - Si una migración tiene que **recrear una tabla** (cambiar un `CHECK`), SQLite
   no lo permite con `ALTER` y `PRAGMA foreign_keys` no se puede cambiar dentro
   de una transacción: la migración gestiona su propia transacción y lo marca

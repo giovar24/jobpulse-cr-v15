@@ -491,7 +491,12 @@ completo en `docs/PLAN_MEJORAS.md`):
    instrumentación en `pipeline.ejecutar` (punto único) + módulo
    `pipeline_metricas.py`, comando `… pipeline etapas [--limite N] [--corrida
    ID] [--json]` y línea de métricas en la UI v2 (medido sobre una copia de la
-   BD real: paso5 705 avisos / 2866 requisitos evaluados) · los 24 avisos ANE
+   BD real: paso5 705 avisos / 2866 requisitos evaluados) · **4.2 tanda 2 →
+   APLICADA A LA BD REAL (2026-11-07)**: migración **025** (esquema **25**,
+   8 alias + 10 códigos nuevos = 21 variantes), cola 1225 → **1204**,
+   requisitos vigentes **2900 (0 sin código)**, corrida `20261107_133939`,
+   evidencia OK (137 verificaciones), `educacion_no_confirmada` 31 intacto ·
+   los 24 avisos ANE
    nuevos (122031+) quedan para el barrido normal con IA.
 1. **O12 — paridad CLI/UI** (meta #1): **Olas 1 y 2 YA ESTÁN** (2026-11-05:
    re-análisis incremental, badge, guarda, evidencia como módulo, login ANE

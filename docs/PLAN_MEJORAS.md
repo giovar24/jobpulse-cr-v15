@@ -407,9 +407,67 @@ medios 3,53 → **4,07** (232 avisos con más, 0 con menos) y
 (`docs/PASO5_REVISION_PENDIENTES.md`) se regeneró para la corrida vigente
 (31 casos, sin veredictos: los firma una segunda persona).
 
-**Lo que queda para la Ola 4.2**: una **segunda tanda** de curación (la cola
-tiene 1225 pendientes; la siguiente cubre las variantes con `veces >= 2`, que
-son las que varios avisos piden).
+**Segunda tanda de curación — APLICADA A LA BD REAL 2026-11-07 (medida en
+copia, con OK del usuario)**
+
+**Alcance**: las **28 variantes que varios avisos piden** (≥ 2 avisos, medida
+con `taxonomia.demanda_corpus`; el contador `veces` de la cola está duplicado
+×2 tras el re-análisis, no sirve como medida). Migración **025**
+(`025_taxonomia_curacion_tanda_2.sql`), mismo patrón que la 023:
+
+- **8 alias** a conceptos existentes: `power brakes` → `tooling-especializado`
+  (es una máquina-herramienta de la **misma lista** que ya curó la 023),
+  `html css` → html, `nc capas` → acciones-correctivas, `service operations`
+  → operational-support, `supply chain engineering` → abastecimiento,
+  `informe de ventas` → reporting, `almacenamiento al vacio` y `preliminado de
+  alimentos` → manipulacion-alimentos;
+- **10 códigos nuevos** (13 variantes): `tuv`, `b2b`, `macos`,
+  `sistemas-operativos`, `r`, `servidores` (servers/servidores),
+  `organizacion`, `comunicacion` (comunicacion/listening skills),
+  `validacion` (validacion/validation), `variance-analysis`;
+- **9 variantes se dejan en la cola a propósito** (documentado en la cabecera
+  de la migración): `data driven settings`, `external services`, `upgrades`,
+  `website`, `four seasons` (nombre de la empresa), `providing product
+  information` (tarea, no competencia) y los 3 **fantasmas** de
+  `demanda_corpus` — `espanol c1`, `ingles c1`, `english target language`:
+  el extractor YA los crea como requisito de **idioma** con su nivel (0 filas
+  tipo `%c1%` en `job_requirements` como skill, verificado); curarlos como
+  skills daría un falso "faltante" porque el perfil registra `espanol` como
+  idioma. El arreglo correcto es de código (demanda_corpus lee `jobs.skills`
+  crudos), no de datos.
+
+**Medición (copia → real, resultado IDÉNTICO)**:
+
+| Métrica | Antes | Después |
+|---|---|---|
+| Cola `concepto_no_normalizado` | 1225 | **1204** (−21) |
+| Taxonomía (filas `concepto`) | 706 | **727** (+21) |
+| Requisitos vigentes | 2858 (0 sin código) | **2900 (0 sin código)** (+42: 39 skill, 3 language) |
+| Variantes distintas con código | 546 | 566 (+20) |
+| Códigos canónicos usados | 281 | 291 (+10) |
+| Matching: calificada / revisar | 191 / 376 | **188 / 380** |
+| datos_insuficientes / descartada / sin_requisitos | 34 / 96 / 8 | 33 / 96 / 8 |
+| `educacion_no_confirmada` | 31 | **31 (intacto)** |
+
+El −3 de `calificada` es el efecto esperado: los +42 requisitos recién
+visibles hacen que 3 avisos que parecían cubiertos del todo muestren un
+`required` real que faltaba (tope `revisar`) y 1 pase de `datos_insuficientes`
+a `revisar`. El motor ve más requisitos, no peor matching.
+
+**Aplicación a la BD real (2026-11-07, con OK del usuario)**: respaldo
+`data/backups/pre_tanda2_20261107_133858.db` → apertura (aplica la **025**,
+esquema **25**) → `taxonomy curate --apply` (cola 1225 → **1204**) →
+`enrich requirements-source --apply` (705 avisos, 1750 requisitos fuente, 0
+errores) → `enrich requirements-canonico --apply` (0) → corrida
+**`20261107_133939`** (705 evaluadas, 2906 requisitos) → evidencia
+`docs/PASO5_EVIDENCIA_2026-11-07.md` OK (**137 verificaciones literales**,
+`no_confirmada=31`) → hoja de firma regenerada (31 casos) → `db check` ok
+(esquema 25, integridad ok, 0 FK).
+
+**Lo que queda para la Ola 4.2**: curar el resto de la cola (1204
+pendientes; 1197 los pide UN solo aviso → siguiente tanda cuando entre corpus
+nuevo), y el arreglo de código de los 3 fantasmas `* c1` en
+`demanda_corpus`.
 
 ### 4.3 Métricas por etapa — **HECHO 2026-11-06**
 
