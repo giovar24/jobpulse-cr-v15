@@ -273,5 +273,126 @@ class TestResolver(unittest.TestCase):
         self.assertEqual(codigo, "experiencia-anos")
 
 
+class TestFiltroDeEncolado(unittest.TestCase):
+    """El filtro de la cola (Ola 4.2).
+
+    La cola `concepto_no_normalizado` es la lista de trabajo de la taxonomia:
+    solo debe contener lo que de verdad falta. Con el corpus real tenia 1988
+    filas de las que 1976 no resolvian a nada (actividades, palabras vacias
+    y sectores).
+    """
+
+    def test_una_actividad_no_se_encola(self):
+        # "despachar" es lo que HACE el puesto, no lo que sabe el perfil.
+        self.assertFalse(conceptos.es_variante_encolable("skill", "despachar"))
+        self.assertFalse(conceptos.es_variante_encolable("skill", "empacar"))
+        self.assertFalse(
+            conceptos.es_variante_encolable("skill", "revisar equipos")
+        )
+        self.assertFalse(
+            conceptos.es_variante_encolable("skill", "asesorar al cliente")
+        )
+
+    def test_una_palabra_vacia_no_se_encola(self):
+        self.assertFalse(conceptos.es_variante_encolable("skill", "analysis"))
+        self.assertFalse(conceptos.es_variante_encolable("skill", "planning"))
+        self.assertFalse(conceptos.es_variante_encolable("skill", "control"))
+
+    def test_un_sector_no_se_encola(self):
+        self.assertFalse(conceptos.es_variante_encolable("skill", "construccion"))
+        self.assertFalse(conceptos.es_variante_encolable("skill", "ventas"))
+
+    def test_una_competencia_si_se_encola(self):
+        self.assertTrue(conceptos.es_variante_encolable("skill", "mulesoft"))
+        self.assertTrue(conceptos.es_variante_encolable("skill", "powershell"))
+        self.assertTrue(conceptos.es_variante_encolable("skill", "metrologia"))
+        self.assertTrue(
+            conceptos.es_variante_encolable("skill", "lectura de planos")
+        )
+
+    def test_una_frase_larga_no_se_encola(self):
+        # Mas de tres palabras es una frase, no una competencia.
+        self.assertFalse(
+            conceptos.es_variante_encolable(
+                "skill", "account and inventory reconciliation activities"
+            )
+        )
+
+    def test_una_categoria_sin_concepto_no_se_encola(self):
+        self.assertFalse(conceptos.es_variante_encolable("area", "informatica"))
+
+
+class TestColaSinRuido(unittest.TestCase):
+    """La cola ignora el ruido: se escribe UNICAMENTE lo encolable."""
+
+    def setUp(self):
+        self.tmpdir = tempfile.TemporaryDirectory()
+        self.database = Database(Path(self.tmpdir.name) / "test.db")
+        self.database.initialize()
+        self.repository = Repository(self.database)
+        self.repository.register_platform(
+            "workday", "Workday", "api", default_language="en"
+        )
+        self.repository.register_site(
+            "intel-cr",
+            "workday",
+            "Intel Careers Costa Rica",
+            "https://example.test/jobs",
+            company_name="Intel",
+            country="CR",
+        )
+        self.repository.save_job(
+            {
+                "job_id": "job-1",
+                "title": "Analyst",
+                "company": "Intel",
+                "country": "CR",
+                "description_raw": "Excel avanzado y Licenciatura en Ingenieria.",
+            },
+            site_id="intel-cr",
+            source_job_id="J-1",
+        )
+
+    def tearDown(self):
+        self.tmpdir.cleanup()
+
+    def _cola(self):
+        with closing(sqlite3.connect(self.database.path)) as connection:
+            return connection.execute(
+                """
+                SELECT categoria, texto FROM concepto_no_normalizado
+                ORDER BY categoria, texto
+                """
+            ).fetchall()
+
+    def _guardar(self, value_code):
+        self.repository.save_analysis(
+            "job-1",
+            text_hash="hash-%s" % value_code,
+            extractor_version="rules-1",
+            analysis_status="partial",
+            field_statuses={
+                "language": "not_mentioned",
+                "education": "not_mentioned",
+                "license": "not_mentioned",
+                "experience": "not_mentioned",
+                "skill": "ambiguous",
+            },
+            requirements=[_requisito("skill", value_code)],
+        )
+
+    def test_la_actividad_no_llega_a_la_cola(self):
+        self._guardar("despachar")
+        self.assertEqual(self._cola(), [])
+
+    def test_el_sector_no_llega_a_la_cola(self):
+        self._guardar("construccion")
+        self.assertEqual(self._cola(), [])
+
+    def test_la_competencia_sin_concepto_si_llega_a_la_cola(self):
+        self._guardar("tecnologia-futura")
+        self.assertEqual(self._cola(), [("skill", "tecnologia-futura")])
+
+
 if __name__ == "__main__":
     unittest.main()

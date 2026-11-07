@@ -317,6 +317,80 @@ Se aplicó **solo a los 120 avisos ANE ya guardados** (decisión del usuario: lo
 (`docs/PASO5_REVISION_PENDIENTES.md`) se regeneró para la corrida vigente
 (31 casos, sin veredictos: los firma una segunda persona).
 
+### 4.2 Curación de la taxonomía — **MEDIDO 2026-11-06**
+
+**Lo que decía el plan**: 1988 variantes en `concepto_no_normalizado`
+(la mayoría frases de tarea) → filtrar antes de encolar + curar en tandas.
+
+**Lo que se midió primero** (audit del corpus real, sobre una copia):
+
+| Dato | Valor |
+|---|---|
+| Skills distintas en `jobs.skills` | 3397 (5199 menciones) |
+| Resolvían a un concepto | **241** (877 menciones: el 17 %) |
+| Frases de tarea (`ats.es_frase_de_tarea`) | 1180 (1950 menciones) |
+| NO resolvían | 1976 (2372 menciones) |
+| Conceptos canónicos en `concepto` | 392 |
+
+Y la **cola estaba obsoleta**: 10 filas ya tenían concepto (las migraciones 020
+y 021 los añadieron después y la cola nunca se re-evaluó), y 1976 filas no
+resolvían a nada. La causa del ruido: `jobs.skills` mezcla **herramientas**
+("ServiceNow") con **tareas** ("despachar", "empacar"), **palabras vacías**
+("analysis", "planning") y **sectores** ("construccion", "ventas") — el
+criterio que la propia migración 021 aplicó a mano, pero que nadie automatizó.
+
+**Lo que se hizo**:
+
+1. **Filtro antes de encolar** (`conceptos.es_variante_encolable`): descarta
+   lo que no es competencia — una **actividad** ("despachar", "revisar
+   equipos"), una **palabra vacía** ("analysis") o un **sector**
+   ("construccion") — y lo que son frases de más de tres palabras. El filtro
+   vive en `encolar_sin_concepto`, el **único punto de entrada** de la cola,
+   así que aplica a todos los orígenes (oferta y CV). Es **conservador**: lo
+   que no cae en las reglas se queda en la cola; nunca se descarta en
+   silencio.
+2. **Curación por tandas** (datos, no código): la migración **023**
+   (`023_taxonomia_curacion_tanda_1.sql`) añade **alias** de conceptos que ya
+   existían ("office 365 basico" → Office 365, "mantenimiento correctivo" →
+   mantenimiento) y **conceptos nuevos** para las herramientas y métodos que
+   el corpus pide (Mulesoft, PowerShell, MFA, ISO 9001, lectura de planos,
+   metrología, cableado estructurado…).
+3. **Herramienta de curación** (`jobpulse-v15 taxonomy curate`): audita el
+   corpus frente a la taxonomía (resuelto / ruido / pendiente) y, con
+   `--apply`, **reconstruye la cola** desde `jobs.skills` / `jobs.languages`:
+   borra lo que ya resolvió y lo que es ruido, y reescribe `veces` con el
+   número de **avisos** que piden cada variante (antes contaba encolados).
+
+**Medición sobre una COPIA de la BD real** (`%TEMP%\opencode\ola42_full.db`):
+
+| Métrica | Antes | Después |
+|---|---|---|
+| Etiquetas del corpus que resuelven | 241 | **560** (877 → 2064 menciones) |
+| Ruido descartado | — | 1623 variantes (2582 menciones) |
+| Cola `concepto_no_normalizado` | 1988 filas | **1225 filas** (pendientes reales) |
+| Requisitos vigentes | 2483 (1 sin código) | **2857 (0 sin código)** |
+| Requisitos medios por aviso | 3,53 | **4,07** (232 avisos con más, 0 con menos) |
+
+**Lo que cambia en el matching (medido, no supuesto)**: 58 avisos cambian de
+estado — 47 `calificada → revisar_a_mano`, 7 `datos_insuficientes →
+revisar_a_mano`, 2 `sin_requisitos → revisar_a_mano`, 1 `calificada →
+datos_insuficientes`, 1 `datos_insuficientes → calificada`. En bandas de
+viabilidad: `aplicar` 270 → **217**, `no_prioritario` 323 → **376**, `revisar`
+2 → 4, `sin_datos` 14 → 12, `veto` 96 → 96 (sin cambios).
+
+**Por qué es correcto** (ejemplos literales del motor): los avisos ANE
+`ane-121787`, `ane-121797`… se evaluaban con **un solo requisito** (el
+idioma) y salían `calificada/cumple_umbral`; ahora además piden
+"inventario" (`codigo_canonico='inventarios'`), `ane-121790` pide además
+"fontanería" y "electricidad", `ane-121807` pide además ISO 19011, PCAOB,
+ICFR, SEC SOX y COSO → el perfil no los tiene → `revisar_a_mano/skill_faltante`.
+Antes esos requisitos eran **invisibles** (sin `codigo_canonico` el motor los
+ignora en silencio) y las vacantes parecían más compatibles de lo que son.
+
+**Pendiente**: ~~aplicar a la BD real~~ → **esperando OK del usuario**
+(respaldo + migración 023 + reconstrucción de la cola + re-análisis de los
+705 avisos + backfill + Paso 5 + evidencia).
+
 ---
 
 ## Ola 5 — Se puede dejar de último (impacto bajo o esfuerzo alto)

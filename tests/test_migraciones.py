@@ -46,15 +46,15 @@ class TestVersionDelEsquema(unittest.TestCase):
     def test_la_base_nueva_llega_a_la_ultima_migracion(self):
         version = self.database.initialize()
 
-        self.assertEqual(version, 22)
+        self.assertEqual(version, 23)
         with self.database.connection() as connection:
             actual = connection.execute("PRAGMA user_version").fetchone()[0]
-        self.assertEqual(actual, 22)
+        self.assertEqual(actual, 23)
 
     def test_inicializar_de_nuevo_no_cambia_nada(self):
         self.database.initialize()
 
-        self.assertEqual(self.database.initialize(), 22)
+        self.assertEqual(self.database.initialize(), 23)
 
 
 class TestMigracion017(unittest.TestCase):
@@ -346,7 +346,7 @@ class TestMigracion020(unittest.TestCase):
     def test_la_base_nueva_llega_a_la_ultima_migracion(self):
         with self.database.connection() as connection:
             version = connection.execute("PRAGMA user_version").fetchone()[0]
-        self.assertEqual(version, 22)
+        self.assertEqual(version, 23)
 
     def test_las_skills_que_pedia_el_corpus(self):
         for variante in (
@@ -580,6 +580,162 @@ class TestMigracion022(unittest.TestCase):
                     "UPDATE source_sites SET health_status='inventado' "
                     "WHERE site_id='ane-cr'"
                 )
+
+
+class TestMigracion023(unittest.TestCase):
+    """023: curacion de la taxonomia, tanda 1.
+
+    La cola `concepto_no_normalizado` es la lista de trabajo de la taxonomia.
+    Con el corpus real tenia 1988 filas de las que 1976 no resolvian a nada
+    (actividades, palabras vacias, sectores). La 023 la cura por LOTES: agrega
+    ALIAS de conceptos que ya existian ("office 365 basico" -> Office 365) y
+    CONCEPTOS NUEVOS para las herramientas y metodos que el corpus pide y no
+    tenian ningun codigo (Mulesoft, PowerShell, MFA, ISO 9001...).
+
+    Estos tests comprueban que:
+      * los alias apuntan al codigo canonico correcto;
+      * los conceptos nuevos existen;
+      * las variantes son utilizables (minusculas, sin acentos, sin espacios
+        raros): el resolver compara `LOWER(TRIM(variante))`;
+      * la migracion es idempotente (INSERT OR IGNORE);
+      * la migracion NO toca la cola (esa la reconstruye `taxonomy curate`).
+    """
+
+    def setUp(self):
+        self.temp_dir = tempfile.TemporaryDirectory()
+        self.database = Database(Path(self.temp_dir.name) / "test.db")
+        self.database.initialize()
+
+    def tearDown(self):
+        self.temp_dir.cleanup()
+
+    def _codigo(self, categoria: str, variante: str) -> str | None:
+        with self.database.connection() as connection:
+            fila = connection.execute(
+                "SELECT codigo_canonico FROM concepto "
+                "WHERE categoria=? AND variante=?",
+                (categoria, variante),
+            ).fetchone()
+        return fila["codigo_canonico"] if fila else None
+
+    def test_la_base_nueva_llega_a_la_ultima_migracion(self):
+        with self.database.connection() as connection:
+            version = connection.execute("PRAGMA user_version").fetchone()[0]
+        self.assertEqual(version, 23)
+
+    def test_los_alias_apuntan_al_canonico_correcto(self):
+        for variante, canonico in (
+            ("office 365 basico", "microsoft-365"),
+            ("excel basico", "excel"),
+            ("windows basico", "windows"),
+            ("power point", "powerpoint"),
+            ("outlook", "email"),
+            ("mantenimiento correctivo", "mantenimiento"),
+            ("inventario", "inventarios"),
+            ("documentacion y trazabilidad", "documentation"),
+            ("cierre de cajas", "cierre-caja"),
+            ("apertura de cajas", "apertura-caja"),
+            ("administer microsoft 365", "microsoft-365"),
+            ("capturing logs", "log-analysis"),
+            ("sistemas operativos windows", "windows"),
+        ):
+            with self.subTest(variante=variante):
+                self.assertEqual(self._codigo("skill", variante), canonico)
+
+    def test_los_conceptos_nuevos_existen(self):
+        for variante in (
+            "mulesoft",
+            "powershell",
+            "mfa",
+            "saml",
+            "iso 9001",
+            "iso 19011",
+            "lectura de planos",
+            "cableado estructurado",
+            "electricidad",
+            "fontaneria",
+            "pcaob",
+            "icfr",
+            "coso",
+            "asientos contables",
+            "metrology",
+            "calipers",
+        ):
+            with self.subTest(variante=variante):
+                self.assertIsNotNone(self._codigo("skill", variante))
+
+    def test_los_codigos_canonicos_nuevos_existen(self):
+        """La curacion agrupa sinonimas bajo un codigo canonico."""
+        with self.database.connection() as connection:
+            codigos = {
+                fila[0]
+                for fila in connection.execute(
+                    "SELECT DISTINCT codigo_canonico FROM concepto"
+                )
+            }
+        for canonico in (
+            "mulesoft",
+            "powershell",
+            "mfa",
+            "saml",
+            "iso-9001",
+            "iso-19011",
+            "lectura-planos",
+            "metrologia",
+            "cableado-estruturado",
+            "electricidad",
+            "fontaneria",
+            "pcaob",
+            "icfr",
+            "coso",
+            "asientos-contables",
+            "inventarios",
+        ):
+            with self.subTest(canonico=canonico):
+                self.assertIn(canonico, codigos)
+
+    def test_los_alias_de_licencia_y_de_idioma(self):
+        self.assertEqual(self._codigo("license", "b4"), "licencia-conducir")
+        self.assertEqual(
+            self._codigo("language", "traditional chinese taiwan"), "chino"
+        )
+
+    def test_las_variantes_son_utilizables(self):
+        """El resolver compara `LOWER(TRIM(variante))`: sin acentos, sin
+        espacios dobles y en minusculas."""
+        with self.database.connection() as connection:
+            filas = connection.execute(
+                "SELECT categoria, variante FROM concepto"
+            ).fetchall()
+        for fila in filas:
+            variante = fila["variante"]
+            with self.subTest(variante=variante):
+                self.assertEqual(variante, variante.lower())
+                self.assertEqual(variante, variante.strip())
+                self.assertNotIn("  ", variante)
+                self.assertFalse(
+                    any(c in variante for c in "áéíóúñÁÉÍÓÚÑ"),
+                    "la variante lleva acentos: %r" % variante,
+                )
+
+    def test_la_migracion_es_idempotente(self):
+        with self.database.connection() as connection:
+            antes = connection.execute(
+                "SELECT COUNT(*) FROM concepto"
+            ).fetchone()[0]
+            _aplicar(connection, "023_taxonomia_curacion_tanda_1.sql")
+            despues = connection.execute(
+                "SELECT COUNT(*) FROM concepto"
+            ).fetchone()[0]
+        self.assertEqual(antes, despues)
+
+    def test_la_migracion_no_toca_la_cola(self):
+        """La cola la reconstruye `taxonomy curate` (datos, no esquema)."""
+        with self.database.connection() as connection:
+            filas = connection.execute(
+                "SELECT COUNT(*) FROM concepto_no_normalizado"
+            ).fetchone()[0]
+        self.assertEqual(filas, 0)
 
 
 if __name__ == "__main__":

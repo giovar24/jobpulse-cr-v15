@@ -483,8 +483,11 @@ completo en `docs/PLAN_MEJORAS.md`):
    `revisar_a_mano/educacion_no_cumple` porque el texto NO dice "Requerido"),
    **`educacion_no_confirmada` NO cambia** (31 → 31). Corrida vigente
    **`20261106_152304`** · evidencia OK (137 verificaciones) · `db check` ok.
-   Lo que sigue: 4.2 (curación de la taxonomía) · 4.3 (métricas por etapa) ·
-   los 24 avisos ANE nuevos (122031+) quedan para el barrido normal con IA.
+   Lo que sigue: **4.2 (curación de la taxonomía) → implementada y medida
+   sobre copia; falta aplicarla a la BD real** (respaldo → migración 023 →
+   `taxonomy curate --apply` → re-análisis de los 705 avisos → backfill → Paso
+   5 → evidencia) · 4.3 (métricas por etapa) · los 24 avisos ANE nuevos
+   (122031+) quedan para el barrido normal con IA.
 1. **O12 — paridad CLI/UI** (meta #1): **Olas 1 y 2 YA ESTÁN** (2026-11-05:
    re-análisis incremental, badge, guarda, evidencia como módulo, login ANE
    con cierre ordenado y orquestador `pipeline.py` con los botones "Procesar"
@@ -663,6 +666,53 @@ completo en `docs/PLAN_MEJORAS.md`):
 ---
 
 ## 8. HISTORIAL DE CAMBIOS RECIENTES
+
+### 2026-11-06 — OLA 4.2: CURACIÓN DE LA TAXONOMÍA (`concepto_no_normalizado`)
+
+**Qué**: la cola `concepto_no_normalizado` es la lista de trabajo de la
+taxonomía (variante de texto → código canónico). Al medirla sobre una copia
+de la BD real resultó **obsoleta**: 1988 filas de las que 10 ya resolvían y
+1976 no. De las **3397 skills** distintas de `jobs.skills` solo **241**
+resolvían a un concepto (el 17 %): el resto eran **actividades** ("despachar",
+"empacar"), **palabras vacías** ("analysis", "planning") o **sectores**
+("construccion", "ventas") — el criterio que la propia migración 021 aplicó a
+mano, pero que nadie automatizó.
+
+1. **Filtro antes de encolar** (`conceptos.es_variante_encolable`): descarta
+   actividad, palabra vacía, sector y frases de más de tres palabras. Vive en
+   `encolar_sin_concepto`, el **único punto de entrada** de la cola → aplica a
+   todos los orígenes. Es **conservador**: lo que no cae en las reglas se queda
+   en la cola; nunca se descarta en silencio.
+2. **Curación por tandas** (datos, no código): migración **023**
+   (`023_taxonomia_curacion_tanda_1.sql`) con **alias** de conceptos que ya
+   existían ("office 365 basico" → Office 365, "mantenimiento correctivo" →
+   mantenimiento) y **conceptos nuevos** para lo que el corpus pide y no
+   existía (Mulesoft, PowerShell, MFA, SAML, ISO 9001/19011, lectura de planos,
+   metrología, cableado estructurado, fontanería, electricidad, PCAOB, ICFR,
+   COSO, asientos contables…).
+3. **Herramienta de curación** (`jobpulse-v15 taxonomy curate [--apply]`):
+   audita el corpus (resuelto / ruido / pendiente) y, con `--apply`,
+   reconstruye la cola desde `jobs.skills`/`jobs.languages`: borra lo ya
+   resuelto y lo que es ruido, y reescribe `veces` con el nº de **avisos** que
+   piden cada variante (antes contaba encolados).
+
+**Medición (copia de la BD real, `%TEMP%\opencode\ola42_full.db`)**: las
+etiquetas que resuelven suben de 241 a **560** (877 → 2064 menciones), la cola
+baja de 1988 a **1225** filas (las pendientes reales), los requisitos
+vigentes suben de 2483 (1 sin código) a **2857 (0 sin código)** y los
+requisitos medios por aviso de 3,53 a **4,07** (232 avisos con más, 0 con
+menos). **58 avisos cambian de estado** (47 `calificada → revisar_a_mano`):
+los avisos ANE se evaluaban con **un solo requisito** (el idioma) y ahora
+también con las skills que realmente piden ("inventario", "fontanería",
+"electricidad", ISO 19011, PCAOB, ICFR, SEC SOX, COSO) → el perfil no las
+tiene → `revisar_a_mano/skill_faltante`. Antes esos requisitos eran
+**invisibles** (sin `codigo_canonico` el motor los ignora en silencio) y las
+vacantes parecían más compatibles de lo que son. Bandas: `aplicar` 270 → **217**,
+`no_prioritario` 323 → **376**, `veto` 96 → 96 (sin cambios),
+`educacion_no_confirmada` 31 → **31 (intacto)**.
+
+**Pendiente**: aplicar a la **BD real** (respaldo → migración 023 → `taxonomy
+curate --apply` → re-análisis de los 705 avisos → backfill → Paso 5 → evidencia).
 
 ### 2026-11-06 — OLA 4.1: CALIDAD DEL DATO (parser de ANE + re-barrido de detalle + re-análisis por texto nuevo)
 

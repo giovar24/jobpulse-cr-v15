@@ -261,42 +261,55 @@ anteriores `valida=0`); nunca `UPDATE` in-place.
 1. **Requirements sin `codigo_canonico` se ignoran en silencio** → la vacante
    cae en `sin_requisitos` sin avisar. Antes de culpar al motor: mira la cola
    `concepto_no_normalizado`.
-2. **Nunca insertar requisitos por SQL directo**: `job_requirements` tiene
+2. **La cola de la taxonomía se filtra y se reconstruye** (Ola 4.2): solo
+   entran variantes ENCOLABLES (`conceptos.es_variante_encolable`: ni
+   actividad, ni palabra vacía, ni sector, ni frase de más de 3 palabras) y
+   `jobpulse-v15 taxonomy curate --apply` la reconstruye desde
+   `jobs.skills`/`jobs.languages` (`veces` = nº de **avisos** que la piden).
+   Curar la taxonomía = **migración de datos** nueva (`02x_taxonomia_*`),
+   nunca `UPDATE` a mano.
+3. **Nunca insertar requisitos por SQL directo**: `job_requirements` tiene
    `analysis_id` (FK a `job_analysis`), no `job_id`. Usa `Repository.save_analysis`.
-3. `jobs.posting_language` es NOT NULL (tests: `undetermined`); `mixed` es
+4. `jobs.posting_language` es NOT NULL (tests: `undetermined`); `mixed` es
    válido. `concepto` no tiene `nombre`: es `codigo_canonico` + `variante`.
-4. `jobs.requirements_raw` es NULL en casi todos los Workday: el texto real
+5. `jobs.requirements_raw` es NULL en casi todos los Workday: el texto real
    está en `description_raw` (~4–5k chars) → buscar en ambos.
-5. **El score sin imputación es degenerado**: una vacante con 1 solo requisito
+6. **El score sin imputación es degenerado**: una vacante con 1 solo requisito
    cubierto saca 100. Viabilidad y ranking ATS hacen **dos pasadas** (pesos
    fijos + imputación del promedio del corpus).
-6. `Database.connection()` es un context manager y `EvaluadorPaso5` carga los
+7. `Database.connection()` es un context manager y `EvaluadorPaso5` carga los
    datos **al construirse** → conexión viva durante toda la evaluación y
    evaluador **nuevo** por evaluación. En Windows, cerrar la conexión **antes**
    de borrar el temporal (`PermissionError` si no).
-7. **Caché IA en disco** (`data/usuario/ia_cache/`): falsea benchmarks →
+8. **Caché IA en disco** (`data/usuario/ia_cache/`): falsea benchmarks →
    aísla con `JOBPULSE_IA_CACHE`. `failed` en el pase IA **no** es error de
    red (cuenta "no mencionado"); los errores reales avisan
    "IA extract {campo} fallo tras 3 intentos".
-8. **Caché de embeddings**: el temporal debe terminar en `.npy`
+9. **Caché de embeddings**: el temporal debe terminar en `.npy`
    (`embeddings_cache.npy.tmp.npy`) o `np.save` añade otra extensión y el
    `replace()` falla → se re-vectoriza todo el corpus en cada arranque.
-9. `job_field_status` **no** tiene categoría `salary` (el estado del salario se
-   mira en `jobs.salary_min`; la regla de "declara salario" vive en `salario.py`).
-10. El **TÍTULO** de un aviso no es fuente de ubicación; el catálogo Workday
+10. `job_field_status` **no** tiene categoría `salary` (el estado del salario se
+    mira en `jobs.salary_min`; la regla de "declara salario" vive en `salario.py`).
+11. El **TÍTULO** de un aviso no es fuente de ubicación; el catálogo Workday
     devuelve el título entero como ciudad (no hacerlo).
-11. Tk: fuentes con espacio van **entre llaves** (`{Segoe UI} 10`); nunca
+12. Tk: fuentes con espacio van **entre llaves** (`{Segoe UI} 10`); nunca
     mezcles `pack` y `grid` en el mismo padre; un widget sin gestor queda
     invisible (1x1); el callback de `yscrollcommand` solo actualiza el
     scrollbar (tocar el canvas ahí = reentrada infinita).
-12. En tests: `with patch(...) as m` deja `m` **sin definir** fuera del bloque
+13. En tests: `with patch(...) as m` deja `m` **sin definir** fuera del bloque
     → guarda el mock en otra variable. Los tests del cliente IA deben parchear
     `jobpulse_v15.ui_perfil.asegurar_servidor` (si no, arranca el llama-server
     real en plena suite → saturación de RAM).
-13. `with ... as X` borra el nombre al salir del bloque (comportamiento de
+14. `with ... as X` borra el nombre al salir del bloque (comportamiento de
     Python, no de Tk).
-14. Retención: la política vive en `ui_config.json` y la comparten UI clásica y
+15. Retención: la política vive en `ui_config.json` y la comparten UI clásica y
     v2 (merge en `ui_v2/data/retencion.py`); la retención **oculta, nunca borra**.
+16. La etapa `reanalisis` del pipeline solo rehace los avisos que **nunca**
+    integraron `jobs.skills` (`avisos_con_campos_sin_integrar`). Tras cambiar
+    la **taxonomía** (una migración `02x_taxonomia_*`), los avisos que ya la
+    integraron tienen un análisis **obsoleto** (les faltan requisitos): hay que
+    re-analizarlos TODOS con `enrich requirements-source --apply` antes del
+    backfill y del Paso 5.
 
 ## IA: local o externa (Ollama, LM Studio, cloud gratis)
 
@@ -353,6 +366,7 @@ $py = ".\.venv\Scripts\python.exe"
 & $py -X utf8 -m jobpulse_v15 areas list | areas classify [--dry-run]
 & $py -X utf8 -m jobpulse_v15 enrich posting-language [--apply]
 & $py -X utf8 -m jobpulse_v15 enrich profile-canonico [--apply]
+& $py -X utf8 -m jobpulse_v15 taxonomy curate [--apply] [--limit N]
 & $py -X utf8 -m jobpulse_v15 viabilidad list [--banda aplicar] | top --limit 20
 & $py -X utf8 -m jobpulse_v15 postulaciones correo --dias 90 [--apply]
 & $py -X utf8 -m jobpulse_v15 postulaciones workday --apply

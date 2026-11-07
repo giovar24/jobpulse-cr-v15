@@ -69,6 +69,11 @@ def _normalizar(texto: str) -> str:
     return " ".join(ats._normalize_skill(str(texto or "")).split())
 
 
+#: Alias publico: la curacion de la taxonomia (`taxonomia.py`) normaliza las
+#: etiquetas con la MISMA clave con la que se buscan los conceptos.
+normalizar = _normalizar
+
+
 def parsear_skills(texto: Any) -> list[str]:
     """Lista de skills de ``jobs.skills``.
 
@@ -151,6 +156,11 @@ def _mapa_normalizado(
             continue
         mapa.setdefault((categoria, clave), (codigo, variante.strip().lower()))
     return mapa
+
+
+#: Alias publico: la curacion de la taxonomia (`taxonomia.py`) necesita el
+#: mismo mapa (variante normalizada -> codigo) que usa el clasificador.
+mapa_normalizado = _mapa_normalizado
 
 
 def _codigo_de_clase_licencia(etiqueta: str) -> str | None:

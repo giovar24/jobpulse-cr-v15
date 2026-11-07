@@ -67,6 +67,19 @@ def _extract_job_analysis(repository: Repository, job_id: str) -> dict[str, Any]
     return extract_job_analysis(repository, job_id)
 
 
+def _cmd_taxonomia_curar(repository: Repository, args) -> None:
+    """Audita (y opcionalmente reconstruye) la cola de la taxonomia."""
+    from jobpulse_v15 import taxonomia
+
+    with repository.database.connection() as connection:
+        informe = taxonomia.curar(
+            connection,
+            aplicar=bool(getattr(args, "apply", False)),
+            limite=int(getattr(args, "limit", 50)),
+        )
+    print(json.dumps(informe, ensure_ascii=False, indent=2))
+
+
 def _cmd_areas_classify(repository: Repository, args) -> None:
     """Clasifica las vacantes por su titulo y guarda el area (derivada)."""
     from jobpulse_v15 import areas as areas_mod
@@ -662,6 +675,34 @@ def main() -> int:
         "--dry-run",
         action="store_true",
         help="Solo muestra el conteo por area; no escribe en job_area.",
+    )
+
+    # === Taxonomia de conceptos ===
+    taxonomia_cmd = commands.add_parser(
+        "taxonomy",
+        help="Curar la taxonomia de conceptos (variante de texto -> codigo).",
+    )
+    taxonomia_sub = taxonomia_cmd.add_subparsers(
+        dest="taxonomy_command", required=True
+    )
+    taxonomia_curar = taxonomia_sub.add_parser(
+        "curate",
+        help=(
+            "Audita la cola de la taxonomia y muestra que falta cubrir. "
+            "Con --apply reconstruye la cola desde el corpus (descarta lo ya "
+            "resuelto y lo que no es competencia)."
+        ),
+    )
+    taxonomia_curar.add_argument(
+        "--apply",
+        action="store_true",
+        help="Reconstruir la cola (por defecto solo informa).",
+    )
+    taxonomia_curar.add_argument(
+        "--limit",
+        type=int,
+        default=50,
+        help="Cuantas variantes pendientes mostrar (0 = todas).",
     )
 
     # === Credenciales y Login ===
@@ -1459,6 +1500,8 @@ def main() -> int:
                 )
                 if args.classify:
                     _cmd_areas_classify(repository, args)
+            elif args.command == "taxonomy" and args.taxonomy_command == "curate":
+                _cmd_taxonomia_curar(repository, args)
             elif args.command == "areas" and args.areas_command == "list":
                 from jobpulse_v15 import areas as areas_mod
 

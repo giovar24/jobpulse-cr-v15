@@ -38,6 +38,29 @@ evidencia OK (137 verificaciones, 0 fallos) → `db check` ok. Texto total de
 los avisos ANE: 115.601 → **141.967 chars** (+23 %). `educacion_no_confirmada`
 sigue en **31**.
 
+**Después (Ola 4.2, curación de la taxonomía)**: la cola
+`concepto_no_normalizado` tenía **1988 filas y estaba obsoleta** (10 ya
+resolvían; 1976 no). Medido el corpus real: de **3397 skills** distintas en
+`jobs.skills` solo **241 resolvían** a un concepto (el 17 %); el resto eran
+**actividades** ("despachar", "empacar"), **palabras vacías** ("analysis",
+"planning") o **sectores** ("construccion", "ventas") — el criterio que la
+migración 021 aplicó a mano pero que nadie automatizó. Se añadió (1) el
+**filtro antes de encolar** (`conceptos.es_variante_encolable`, en el único
+punto de entrada de la cola), (2) la **curación por tandas**: la migración
+**023** (alias de conceptos existentes + conceptos nuevos), y (3) la
+herramienta `jobpulse-v15 taxonomy curate` (audita el corpus y reconstruye la
+cola). Medido sobre una **copia** de la BD real: las etiquetas que resuelven
+suben de 241 a **560**, la cola baja de 1988 a **1225** filas (las pendientes
+reales), los requisitos vigentes suben de 2483 (1 sin código) a **2857 (0 sin
+código)** y **58 avisos cambian de estado** (47 `calificada → revisar_a_mano`):
+los avisos ANE se evaluaban con **un solo requisito** (el idioma) y ahora
+también con las skills que realmente piden ("inventario", "fontanería",
+"electricidad", ISO 19011, PCAOB…) → el perfil no las tiene →
+`revisar_a_mano/skill_faltante`. Bandas: `aplicar` 270 → **217**,
+`no_prioritario` 323 → **376**, `veto` 96 → 96 (sin cambios),
+`educacion_no_confirmada` 31 → **31 (intacto)**. **Pendiente: aplicar a la BD
+real (esperando OK del usuario).**
+
 > ℹ️ Esta sesión continúa la del **2026-11-05** (`docs/HANDOFF_SESION_2026-11-05.md`):
 > Ola 1 y Ola 2 de O12 ya estaban hechas y pusheadas.
 
@@ -149,6 +172,77 @@ Tests: `tests/test_sesion_navegador.py` (18) + 2 en `tests/test_ane_login.py`.
   `data/backups/pre_mig022_20261106_130349.db`). Ninguna medición la tocó:
   los barridos fueron sobre `%TEMP%\opencode\ane_check.db`.
 
+### 2.6 Ola 4.2 — curación de la taxonomía (`concepto_no_normalizado`)
+
+**El problema medido** (sobre una copia de la BD real):
+
+| Dato | Valor |
+|---|---|
+| Filas en la cola | **1988** (10 ya resolví­an; 1976 no) |
+| Skills distintas en `jobs.skills` | 3397 (5199 menciones) |
+| Resolvían a un concepto | **241** (877 menciones: el 17 %) |
+| Ruido (actividad / palabra vacía / sector) | 1634 variantes (2594 menciones) |
+| Conceptos canónicos | 392 |
+
+La cola era una lista de trabajo **inútil**: mezclaba herramientas ("Mulesoft")
+con tareas ("despachar", "empacar"), palabras vacías ("analysis", "planning")
+y sectores ("construccion", "ventas"). El criterio ya existía (migración 021:
+*"se deja fuera lo que es una funcion ('ventas'), un sector ('construccion'),
+una palabra vacia ('analysis', 'planning') o una tarea ('despachar',
+'empacar')"*) pero estaba escrito a mano en el SQL: la cola se llenaba de
+todo.
+
+**Lo que se hizo**:
+
+1. **Filtro antes de encolar** (`conceptos.es_variante_encolable`): descarta
+   actividad, palabra vacía, sector y frases de más de tres palabras. Vive en
+   `encolar_sin_concepto`, el **único punto de entrada** de la cola → aplica a
+   todos los orígenes. Es **conservador**: lo que no cae en las reglas se
+   queda en la cola (nunca se descarta en silencio).
+2. **Curación por tandas** (datos): la migración **023**
+   (`023_taxonomia_curacion_tanda_1.sql`) añade **alias** de conceptos que ya
+   existían ("office 365 basico" → Office 365, "mantenimiento correctivo" →
+   mantenimiento, "cierre de cajas" → cierre de caja) y **conceptos nuevos**
+   para lo que el corpus pide y no existía (Mulesoft, PowerShell, MFA, SAML,
+   ISO 9001/19011, lectura de planos, metrología, cableado estructurado,
+   fontanería, electricidad…).
+3. **Herramienta de curación** (`jobpulse-v15 taxonomy curate [--apply]`):
+   audita el corpus (resuelto / ruido / pendiente) y reconstruye la cola
+   desde `jobs.skills`/`jobs.languages`: borra lo ya resuelto y lo que es
+   ruido, y reescribe `veces` con el nº de **avisos** que piden cada variante
+   (antes contaba encolados: un número que se inflaba con cada re-análisis).
+
+**Medición sobre una COPIA** (`%TEMP%\opencode\ola42_full.db`):
+
+| Métrica | Antes | Después |
+|---|---|---|
+| Etiquetas que resuelven | 241 | **560** (877 → 2064 menciones) |
+| Cola | 1988 | **1225** (pendientes reales) |
+| Requisitos vigentes | 2483 (1 sin código) | **2857 (0 sin código)** |
+| Requisitos medios por aviso | 3,53 | **4,07** (232 con más, 0 con menos) |
+| `calificada` / `revisar_a_mano` | 237 / 320 | **190 / 376** |
+| `datos_insuf` / `sin_requisitos` | 41 / 11 | **34 / 9** |
+| `descartada` / `educacion_no_confirmada` | 96 / 31 | **96 / 31 (intacto)** |
+| Bandas `aplicar` / `no_prioritario` | 270 / 323 | **217 / 376** |
+
+**Por qué cambian 58 avisos** (esto es la calidad del dato, no un bug):
+`ane-121787` se evaluaba con **un solo requisito** ("espanol") y salía
+`calificada/cumple_umbral`; con la taxonomía curada además pide "Inventario"
+→ `codigo_canonico='inventarios'` → el perfil no lo tiene →
+`revisar_a_mano/skill_faltante`. Lo mismo con `ane-121790` ("fontanería",
+"electricidad"), `ane-121807` (ISO 19011, PCAOB, ICFR, SEC SOX, COSO),
+`ane-121822` ("asientos contables"). Antes esos requisitos eran **invisibles**
+(sin `codigo_canonico` el motor los ignora en silencio) y las vacantes
+parecían más compatibles de lo que son. `veto` (96) no cambia y
+`educacion_no_confirmada` (31) tampoco.
+
+**Ojo (para la siguiente tanda)**: la etapa `reanalisis` del pipeline solo
+re-analiza los avisos que **nunca** integraron `jobs.skills`
+(`avisos_con_campos_sin_integrar`): tras cambiar la taxonomía, los que ya
+las integraron tienen un análisis **obsoleto** (les faltan requisitos) y hay
+que re-analizarlos con `enrich requirements-source --apply` (o el equivalente
+en el pipeline). Con eso los requisitos medios suben de 3,53 a 4,07.
+
 ---
 
 ## 3. Decisiones de diseño
@@ -208,6 +302,14 @@ python -m pytest tests/test_linkedin.py tests/test_elempleo.py `
 python -m pytest tests/test_ane_detalle.py tests/test_reanalisis.py `
   tests/test_pipeline.py tests/test_repository.py -q
 
+# Solo la Ola 4.2
+python -m pytest tests/test_conceptos.py tests/test_taxonomia.py `
+  tests/test_matching.py tests/test_migraciones.py -q
+
+# Taxonomia: auditar la cola / reconstruirla (NO toca la BD real sin --apply)
+.\.venv\Scripts\python.exe -X utf8 -m jobpulse_v15 taxonomy curate --limit 30
+.\.venv\Scripts\python.exe -X utf8 -m jobpulse_v15 taxonomy curate --apply
+
 # ANE: login + barrido (sesión guardada → funciona aunque Brave se cierre)
 .\.venv\Scripts\python.exe -X utf8 login_ane.py --mantener-abierto
 .\.venv\Scripts\python.exe -X utf8 -m jobpulse_v15 scrape ane --site ane-cr
@@ -249,6 +351,12 @@ python -m pytest tests/test_ane_detalle.py tests/test_reanalisis.py `
 | `src/jobpulse_v15/repository.py` | `list_source_records(site_id)` (avisos guardados + su URL, para el re-barrido) |
 | `src/jobpulse_v15/cli.py` | `scrape ane --revisitar [--limite N]` |
 | `tests/test_ane_detalle.py` (14) · `tests/test_reanalisis.py` (21) | **NUEVOS** de la Ola 4.1 |
+| `src/jobpulse_v15/conceptos.py` | **Ola 4.2**: `es_variante_encolable` (filtro de la cola) + `PALABRAS_DE_ACTIVIDAD`/`PALABRAS_GENERICAS`/`SECTORES`; `encolar_sin_concepto` es el único punto de entrada |
+| `src/jobpulse_v15/taxonomia.py` | **NUEVO** (Ola 4.2): `demanda_corpus` (resuelto/ruido/pendiente) y `curar` (reconstruye la cola desde el corpus) |
+| `src/jobpulse_v15/migrations/023_taxonomia_curacion_tanda_1.sql` | **NUEVO** — taxonomía curada, tanda 1: alias de conceptos existentes + conceptos nuevos |
+| `src/jobpulse_v15/skills_fuente.py` | **Ola 4.2**: `normalizar` y `mapa_normalizado` públicos (los usa la curación) |
+| `src/jobpulse_v15/cli.py` | **Ola 4.2**: `taxonomy curate [--apply] [--limit N]` |
+| `tests/test_taxonomia.py` (4) · `tests/test_conceptos.py` (+7) | **NUEVOS** de la Ola 4.2 |
 | `docs/SITIOS_PROBLEMATICOS.md` | Reescrito: 4 sitios, `requires_login`, sesión de ANE, rate-limit de LinkedIn |
 | `docs/PLAN_MEJORAS.md` · `DESARROLLO_v15.md` · `AGENTS.md` | Ola 3 completada + Ola 4.1 medida; esquema 22 |
 
@@ -260,6 +368,10 @@ python -m pytest tests/test_ane_detalle.py tests/test_reanalisis.py `
   136 corridas de sitio, 825 `job_analysis` (705 vigentes + 120 del
   re-análisis), 1964 `job_match` (1 corrida válida). `integrity_check ok`,
   0 violaciones de FK.
+  **OJO (Ola 4.2)**: la migración **023** (taxonomía curada) está en el repo
+  pero **NO** está aplicada en la BD real: sigue en **esquema 22**. En cuanto
+  se abra la BD real con la CLI (cualquier comando), la 023 se aplica sola →
+  aplicar la Ola 4.2 a la BD real es un paso explícito y con respaldo previo.
   Corrida Paso 5 vigente `20261106_152304` (aplicada por la Ola 4.1):
   calificada 237 · revisar 320 · descartada 96 · datos_insuf 41 ·
   sin_requisitos 11 · `educacion_no_confirmada` 31.
@@ -304,27 +416,36 @@ python -m pytest tests/test_ane_detalle.py tests/test_reanalisis.py `
 
 ## 8. Pendiente inmediato
 
-1. **Ola 4 — seguir** (`docs/PLAN_MEJORAS.md`): 4.2 curación de la taxonomía
-   (`concepto_no_normalizado`: 1988 variantes; en la BD real la cola de
-   requisitos sin `codigo_canonico` es **1**) · 4.3 métricas por etapa.
-2. **Los 24 avisos ANE nuevos** (122031+) que se detectaron al medir: el
+1. **Aplicar la Ola 4.2 a la BD real** (esperando OK del usuario): respaldo →
+   migración **023** (taxonomía curada, tanda 1) → `taxonomy curate --apply`
+   (reconstruir la cola) → **re-analizar los 705 avisos** (con
+   `enrich requirements-source --apply`: la etapa `reanalisis` del pipeline
+   solo rehace los que nunca integraron `jobs.skills`) → backfill → Paso 5
+   (corrida nueva) → evidencia → `db check`. Medido en copia: 58 avisos
+   cambian de estado, `aplicar` 270 → 217, `educacion_no_confirmada` 31 (intacto).
+2. **Ola 4 — seguir** (`docs/PLAN_MEJORAS.md`): **4.3 métricas por etapa**
+   (`pipeline_etapa`: tiempo, avisos, requisitos, errores) · 4.2 segunda tanda
+   de curación (la cola tiene 1225 pendientes: la siguiente tanda es la que
+   cubre `veces >= 2`).
+3. **Los 24 avisos ANE nuevos** (122031+) que se detectaron al medir: el
    usuario decidió **no** meterlos en la Ola 4.1 (entran en el barrido normal,
    con su pase de IA). Si se quieren ya: `scrape ane --site ane-cr` (24
    nuevos) → `analysis extract-pending` → `run_enriquecimiento.py` → re-análisis
    → backfill → `run_paso5.py`.
-3. (Opcional, con permiso del usuario) migrar la **UI clásica** al orquestador
+4. (Opcional, con permiso del usuario) migrar la **UI clásica** al orquestador
    `pipeline.py` (usa las mismas implementaciones por etapa, pero mantiene su
    propio flujo; la UI clásica no se toca sin pedirlo).
-4. `educacion_no_confirmada` (31 casos): **NO** actualizar estados hasta que
+5. `educacion_no_confirmada` (31 casos): **NO** actualizar estados hasta que
    una **segunda persona** firme `docs/PASO5_REVISION_PENDIENTES.md` (ya
    regenerada para la corrida `20261106_152304`).
-5. Decidir si el **rate-limit de LinkedIn** sube de 1,5 s según la carga real
+6. Decidir si el **rate-limit de LinkedIn** sube de 1,5 s según la carga real
    (medido: 10 peticiones sin espera → 429).
 
 ---
 
 ## 9. Commits de esta sesión
 
+- **(pendiente)** — `feat(o5.3): Ola 4.2 - filtro de la cola de taxonomía, curacion en tandas y herramienta de curacion` — filtro `es_variante_encolable`, migración 023 (tanda 1), `taxonomia.py` + `taxonomy curate`, 19 tests nuevos; medido sobre copia (58 avisos cambian de estado; `educacion_no_confirmada` 31 → 31). Suite: **1127 passed + 980 subtests**.
 - **HEAD (aplicación a la BD real)** — `docs(o5.3): Ola 4.1 aplicada a la BD real (texto de ANE corregido, corrida 20261106_152304)` — evidencia + hoja de firma regeneradas, docs actualizadas.
 - `280b4e7` — `feat(o5.3): Ola 4.1 - parser de ANE completo, re-barrido de detalle y re-análisis por texto nuevo` (pusheado) — parser ampliado, `scrape ane --revisitar`, `reananalizar_texto_cambiado`, medición sobre copia (9 de 705 cambian de estado; `educacion_no_confirmada` 31 → 31).
 - `14bba25` — `feat(o13): Ola 3 - cobertura de fuentes (LinkedIn, Elempleo, requires_login, sesión ANE)` — scrapers reescritos, migración 022, `requiere_login.py`, `sesion_navegador.py`, 52 tests nuevos + 2 de UI v2 + 2 de ANE, docs actualizadas. Suite: **1083 passed + 247 subtests**.
