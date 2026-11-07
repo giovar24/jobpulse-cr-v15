@@ -477,6 +477,17 @@ desglose por estado y por motivo (`calificada=190`, `revisar_a_mano=376`,
 **Lo que NO hace**: no toca `job_match`, ni `job_analysis`, ni los umbrales del
 motor, ni borra ni funde datos. Es una tabla de **auditoría**.
 
+**APLICADA A LA BD REAL (2026-11-06, con OK del usuario)**: **solo la
+migración 024** (la tabla de auditoría), **sin** tocar el matching: respaldo
+`data/backups/pre_ola43_20261106_210124.db` (19,4 MB) → `db check` previo
+(esquema 23, `integrity ok`, 0 violaciones de FK) → apertura (aplica la 024,
+esquema **24**) → `db check` posterior (`integrity ok`, 0 violaciones de FK).
+Estado **sin cambios**: 705 avisos · 706 conceptos · cola 1225 · 825
+`job_analysis` · **0 requisitos sin código** · 2669 filas de `job_match` ·
+corrida vigente **`20261106_182554`** · `educacion_no_confirmada` **31
+(intacto)**. `pipeline_etapa` queda vacía (0 filas) hasta la próxima corrida
+real del pipeline.
+
 ---
 
 ## Ola 5 — Se puede dejar de último (impacto bajo o esfuerzo alto)

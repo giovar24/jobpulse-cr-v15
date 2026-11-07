@@ -712,9 +712,14 @@ verificaciones literales** (`no_confirmada=31`, intacto), 0 errores; tiempo
 total de la corrida ≈ 3,4 s. La migración 024 se aplicó sola al abrir la
 copia (convención del proyecto: el esquema se migra al abrir la BD).
 
-**Pendiente**: aplicar la 024 a la **BD real** (ocurre solo, al abrirla con
-cualquier comando de la CLI; avisa `[esquema]`) y dejar que las próximas
-corridas del pipeline deixe su fila de métricas.
+**Pendiente**: ~~aplicar la 024 a la **BD real**~~ → **APLICADA (2026-11-06,
+con OK del usuario)**: **solo la migración** (respaldo
+`data/backups/pre_ola43_20261106_210124.db`, esquema 23 → **24**, `db check`
+ok: `integrity ok`, 0 violaciones de FK); **nada del matching cambió** (705
+avisos, 706 conceptos, cola 1225, 825 `job_analysis`, 0 requisitos sin
+código, 2669 filas de `job_match`, corrida vigente **`20261106_182554`**,
+`educacion_no_confirmada` **31 intacto**). `pipeline_etapa` queda vacía hasta
+la próxima corrida real del pipeline.
 
 ### 2026-11-06 — OLA 4.2: CURACIÓN DE LA TAXONOMÍA (`concepto_no_normalizado`)
 

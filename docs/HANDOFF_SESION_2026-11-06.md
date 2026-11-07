@@ -77,9 +77,13 @@ instrumentación en el **único** punto del orquestador (`pipeline.ejecutar`,
 puramente aditiva: si falla, la corrida sigue) y el comando de consulta
 `… pipeline etapas [--limite N] [--corrida ID] [--json]`. Medido sobre una
 **copia** de la BD real: paso5 **705 avisos / 2866 requisitos evaluados**,
-evidencia 705 con 137 verificaciones, 0 errores.
+evidencia 705 con 137 verificaciones, 0 errores. **Aplicada a la BD real con
+OK del usuario** (solo la migración 024: respaldo
+`pre_ola43_20261106_210124.db`, esquema 23 → **24**, `db check` ok; **nada del
+matching cambió**: 705 avisos, corrida vigente `20261106_182554`,
+`educacion_no_confirmada` 31 intacto).
 
-**Estado final de la BD real**: **esquema 23**, 705 avisos, 129 sitios,
+**Estado final de la BD real**: **esquema 24**, 705 avisos, 129 sitios,
 706 conceptos canónicos, cola de taxonomía **1225** (las pendientes reales),
 **2857 requisitos vigentes sin huecos**, corrida Paso 5 vigente
 **`20261106_182554`** (calificada 190 · revisar 376 · descartada 96 ·
@@ -323,6 +327,18 @@ Los contadores cuadran con el estado real (705 evaluados, 2866 requisitos,
 evidencia con 137 verificaciones literales y `no_confirmada=31` intacto), y el
 `detalle_json` del Paso 5 guarda el desglose por estado y por motivo.
 
+**APLICADA A LA BD REAL (2026-11-06, con OK del usuario)**: solo la
+**migración 024** (la tabla de auditoría), **sin** tocar el matching:
+respaldo `data/backups/pre_ola43_20261106_210124.db` (19,4 MB) → `db check`
+previo (esquema 23, `integrity ok`, 0 violaciones de FK) → apertura (aplica
+la **024**, esquema **24**) → `db check` posterior (**esquema 24**, `integrity
+ok`, 0 violaciones de FK). Estado **sin cambios**: 705 avisos · 706 conceptos
+· cola 1225 · 825 `job_analysis` · **0 requisitos sin código** · 2669 filas de
+`job_match` · corrida vigente **`20261106_182554`** (calificada 190 · revisar
+376 · descartada 96 · datos_insuf 34 · sin_requisitos 9) ·
+`educacion_no_confirmada` **31 (intacto)**. `pipeline_etapa` queda **vacía**
+(0 filas): se llenará sola con la próxima corrida real del pipeline.
+
 ---
 
 ## 3. Decisiones de diseño
@@ -357,7 +373,7 @@ evidencia con 137 verificaciones literales y `no_confirmada=31` intacto), y el
 | `educacion_no_confirmada` | 31 casos | ⏳ **ABIERTO** (firma de una 2ª persona) |
 | O5.3 (re-barrido de descripciones basura) | 43 descripciones <200 chars (35 de ANE) | 🟢 **HECHO Y APLICADO (2026-11-06)**: el corpus ya coincidía con la fuente; el hueco real era el **parser** (campos descartados). Parser ampliado + `scrape ane --revisitar` + re-análisis por texto nuevo. En la BD real: texto ANE 115.601 → 141.967 chars, **9 de 705 cambian de estado**, `educacion_no_confirmada` 31 → 31, corrida `20261106_152304` |
 | Ola 4.2 (curación de la taxonomía) | Cola `concepto_no_normalizado`: 1988 filas, 1976 sin resolver | 🟢 **HECHO Y APLICADO (2026-11-06)**: filtro `es_variante_encolable` + migración 023 (tanda 1) + `taxonomy curate`. En la BD real: etiquetas que resuelven 241 → **560**, cola 1988 → **1225**, requisitos 2483 (1 sin código) → **2857 (0 sin código)**, **58 de 705 cambian de estado**, `educacion_no_confirmada` 31 → 31, corrida `20261106_182554` |
-| Ola 4.3 (métricas por etapa) | Auditar por qué una corrida dio menos | 🟢 **HECHO (2026-11-06)**: tabla `pipeline_etapa` (migración 024, esquema 24) + instrumentación en `pipeline.ejecutar` + `pipeline_metricas.py` + `… pipeline etapas`. Medido sobre copia: paso5 705 avisos / 2866 requisitos, evidencia 137 verificaciones, 0 errores. **Pendiente**: aplicar la 024 a la BD real (pide OK) |
+| Ola 4.3 (métricas por etapa) | Auditar por qué una corrida dio menos | 🟢 **HECHO Y APLICADO (2026-11-06)**: tabla `pipeline_etapa` (migración 024, esquema 24) + instrumentación en `pipeline.ejecutar` + `pipeline_metricas.py` + `… pipeline etapas`. Medido sobre copia: paso5 705 avisos / 2866 requisitos, evidencia 137 verificaciones, 0 errores. En la BD real: **solo la migración** (nada del matching cambió) |
 | O6.4 (dedupe slugs ES/EN) | — | ⏳ Parcial |
 | O4 (calibración gate-vs-IA) | — | 🟡 Proponer cerrar como *superseded* |
 | O8.2 / O8.4 / O9 / pestañas nuevas UI v2 | — | ⏳ Pendiente (Ola 4) |
@@ -366,8 +382,8 @@ evidencia con 137 verificaciones literales y `no_confirmada=31` intacto), y el
 dato**: 4.1 (parser de ANE + re-barrido + re-análisis: **HECHO Y APLICADO**) ·
 4.2 curación de la taxonomía (`concepto_no_normalizado`: **HECHO Y APLICADO**
 — esquema 23, cola 1988 → **1225**, 2857 requisitos sin huecos, corrida
-`20261106_182554`) · 4.3 métricas por etapa (**HECHO**: tabla `pipeline_etapa`
-+ `… pipeline etapas`; falta aplicarla a la BD real) · 4.2 segunda tanda de
+`20261106_182554`) · 4.3 métricas por etapa (**HECHO Y APLICADO** — esquema 24, solo la migración;
+la tabla se llena con la próxima corrida real) · 4.2 segunda tanda de
 curación (`veces >= 2`).
 
 ---
@@ -454,8 +470,9 @@ python -m pytest tests/test_conceptos.py tests/test_taxonomia.py `
 
 ## 7. Contexto (estado de la BD real)
 
-- **BD real `data/jobpulse_v15.db`**: **esquema 23** (tras la Ola 4.2),
-  **705 avisos**, 129 sitios, 136 corridas de sitio, 825 `job_analysis`
+- **BD real `data/jobpulse_v15.db`**: **esquema 24** (tras la Ola 4.3; la 023
+  fue la Ola 4.2), **705 avisos**, 129 sitios, 136 corridas de sitio, 825
+  `job_analysis`
   (705 vigentes + 120 del re-análisis; el re-análisis de la Ola 4.2 **actualizó
   las filas vigentes en sitio**, no infla el historial), 706 conceptos
   canónicos, 2669 `job_match` (4 corridas; 1 válida).
@@ -469,7 +486,8 @@ python -m pytest tests/test_conceptos.py tests/test_taxonomia.py `
   Corrida anterior (sigue en la BD, `valida=0`): `20261106_152304`
   (Ola 4.1: calificada 237 · revisar 320 · descartada 96 · datos_insuf 41 ·
   sin_requisitos 11) y `20261104_231932`.
-- **Respaldo**: `data/backups/pre_ola42_20261106_182411.db` (antes de la Ola
+- **Respaldo**: `data/backups/pre_ola43_20261106_210124.db` (antes de la 024),
+  `data/backups/pre_ola42_20261106_182411.db` (antes de la Ola
   4.2), `data/backups/pre_ola4_20261106_151857.db` (antes de la Ola
   4.1), `data/backups/pre_mig022_20261106_130349.db` (antes de la 022) y
   `data/backups/pre_limpieza_20261104_211349.db`.
@@ -508,9 +526,12 @@ python -m pytest tests/test_conceptos.py tests/test_taxonomia.py `
   orquestador dejó sus filas: paso5 **705 avisos / 2866 requisitos
   evaluados**, evidencia 705 avisos con 137 verificaciones literales
   (`no_confirmada=31` intacto), 0 errores, corrida completa ≈ 3,4 s.
-  **La BD real sigue en esquema 23**: la 024 se aplica al abrirla con
-  cualquier comando de la CLI (avisa `[esquema]`), así que ese paso pide OK
-  del usuario.
+  **En la BD real se aplicó SOLO la migración 024** (con OK del usuario;
+  respaldo `pre_ola43_20261106_210124.db`): esquema 23 → **24**, `db check` ok
+  (`integrity ok`, 0 violaciones de FK) y **nada más cambió** (705 avisos,
+  corrida vigente `20261106_182554`, `educacion_no_confirmada` 31).
+  `pipeline_etapa` tiene **0 filas**: se llenará con la próxima corrida real
+  del pipeline.
 
 ---
 
@@ -525,11 +546,12 @@ python -m pytest tests/test_conceptos.py tests/test_taxonomia.py `
    la copia** (58 avisos cambian de estado; `aplicar` 270 → 217;
    `educacion_no_confirmada` 31 → 31 intacto).
 2. **Ola 4 — seguir** (`docs/PLAN_MEJORAS.md`): ~~4.3 métricas por etapa~~ →
-   **HECHO (2026-11-06)**: tabla `pipeline_etapa` (migración 024, esquema 24),
-   instrumentación en `pipeline.ejecutar` + `pipeline_metricas.py`, comando
-   `… pipeline etapas`. **Pendiente**: aplicar la 024 a la **BD real** (pide
-   OK; ocurre sola al abrirla con cualquier comando de la CLI, que avisa
-   `[esquema]`) · 4.2 segunda tanda de curación (la cola tiene 1225
+   **HECHO Y APLICADO A LA BD REAL (2026-11-06)**: tabla `pipeline_etapa`
+   (migración 024, esquema 24), instrumentación en `pipeline.ejecutar` +
+   `pipeline_metricas.py`, comando `… pipeline etapas`. En la BD real se
+   aplicó **solo la migración** (respaldo `pre_ola43_20261106_210124.db`,
+   `db check` ok); la tabla está vacía y se llenará con la próxima corrida real
+   del pipeline · 4.2 segunda tanda de curación (la cola tiene 1225
    pendientes: la siguiente tanda es la que cubre `veces >= 2`).
 3. **Los 24 avisos ANE nuevos** (122031+) que se detectaron al medir: el
    usuario decidió **no** meterlos en la Ola 4.1 (entran en el barrido normal,
