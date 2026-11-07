@@ -451,7 +451,12 @@ python -m pytest tests/test_conceptos.py tests/test_taxonomia.py `
 
 # Corrida real del pipeline (el MISMO orquestador que la CLI y la UI v2)
 #   sin 'scrape' = sobre los datos crudos que ya existen
-.\.venv\Scripts\python.exe -X utf8 -c "from jobpulse_v15 import pipeline; ..."
+.\.venv\Scripts\python.exe -X utf8 tools\corrida_medicion.py [--sin-ia] [--db RUTA]
+
+# MEDIR una mejora: estado ANTES -> la corrida -> estado DESPUES -> comparar
+.\.venv\Scripts\python.exe -X utf8 tools\estado_extraccion.py antes  antes.json
+.\.venv\Scripts\python.exe -X utf8 tools\estado_extraccion.py despues despues.json
+.\.venv\Scripts\python.exe -X utf8 tools\comparar_extraccion.py antes.json despues.json
 
 # Health de los sitios (los que piden login)
 .\.venv\Scripts\python.exe -X utf8 -m jobpulse_v15 site list --needs-review
@@ -496,6 +501,8 @@ python -m pytest tests/test_conceptos.py tests/test_taxonomia.py `
 | `docs/SITIOS_PROBLEMATICOS.md` | Reescrito: 4 sitios, `requires_login`, sesión de ANE, rate-limit de LinkedIn |
 | `docs/PLAN_MEJORAS.md` · `DESARROLLO_v15.md` · `AGENTS.md` | Olas 4.1 y 4.2 aplicadas a la BD real (esquema 23); Ola 4.3 hecha (esquema 24 al abrir la BD) |
 | `docs/FLUJO_CLI_VS_UI.md` | **§5** el flujo anotado de la corrida real (etapa por etapa) · **§6** comparación con el flujo de la UI (CLI ↔ UI v2 ↔ UI clásica), **sin tocar la UI** |
+| `tools/estado_extraccion.py` · `tools/comparar_extraccion.py` | **NUEVOS**: medir la extracción de código antes/después de una corrida (cuántos requisitos ve el motor, cola de taxonomía, campos de la IA, matching). Solo lectura |
+| `tools/corrida_medicion.py` | **NUEVO**: corre el orquestador sobre el corpus actual **sin `scrape`** (para medir el efecto de una etapa). Es el mismo orquestador que la CLI y la UI v2 |
 
 ---
 

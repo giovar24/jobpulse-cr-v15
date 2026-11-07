@@ -388,4 +388,7 @@ $py = ".\.venv\Scripts\python.exe"
 & $py -X utf8 -m jobpulse_v15 postulaciones workday --apply
 & $py -X utf8 -m jobpulse_v15 db check
 & $py -X utf8 tools\estado_bd.py | tools\progreso_enriquecimiento.py | tools\huecos_restantes.py
+# Medir el efecto de una corrida (ANTES -> corrida -> DESPUES -> comparar)
+& $py -X utf8 tools\estado_extraccion.py antes antes.json
+& $py -X utf8 tools\comparar_extraccion.py antes.json despues.json
 ```

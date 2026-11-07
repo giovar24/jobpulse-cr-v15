@@ -209,9 +209,14 @@ $py = ".\.venv\Scripts\python.exe"
 & $py -X utf8 -m jobpulse_v15 backup --output data\backups\pre_ia_<stamp>.db
 
 # 1) La corrida: el ORQUESTADOR (implementación única de cada etapa)
-& $py -X utf8 -c "from jobpulse_v15 import pipeline; ..."
-#   pipeline.ejecutar(repo, etapas=('analisis','ia','reanalisis','backfill',
-#                                    'paso5','evidencia'), db_path=..., progreso=print)
+& $py -X utf8 tools\corrida_medicion.py [--sin-ia] [--db RUTA]
+#   (por dentro: pipeline.ejecutar(repo, etapas=('analisis','ia','reanalisis',
+#    'backfill','paso5','evidencia'), db_path=..., progreso=print))
+
+# 2) MEDIR el efecto: estado ANTES -> la corrida -> estado DESPUES -> comparar
+& $py -X utf8 tools\estado_extraccion.py antes antes.json
+& $py -X utf8 tools\estado_extraccion.py despues despues.json
+& $py -X utf8 tools\comparar_extraccion.py antes.json despues.json
 ```
 
 El mismo orquestador es el que usa la CLI de producto (`run_full_flow.py`) y
