@@ -185,6 +185,33 @@ NOMBRE_IDIOMA = {
     "undetermined": "sin determinar",
 }
 
+
+def idioma_en_skill(etiqueta: str | None) -> str | None:
+    """Variante de idioma si una etiqueta de ``jobs.skills`` pide un idioma.
+
+    La fuente a veces guarda la peticion de idioma entre las SKILLS
+    ("Inglés - C1" en ANE, "English <> Target Language" en Workday). El
+    extractor JAMAS crea un requisito skill con eso (los idiomas se comparan
+    contra los hechos de idioma del perfil), asi que curarlos como skill
+    daria un falso "faltante". La curacion de la taxonomia usa esta funcion
+    para mandarlos al lado de idioma.
+
+    "Inglés - C1" -> "ingles"; "English (target language)" -> "ingles".
+    ``None`` si la etiqueta no empieza por un NOMBRE de idioma. Los CODIGOS
+    de dos letras quedan fuera a proposito: en skills, "IT" es tecnologia,
+    no italiano (bug real del corpus: un aviso de soporte tecnico acabo con
+    requisito de italiano por el codigo "it").
+    """
+    if not etiqueta:
+        return None
+    texto = _sin_acentos(str(etiqueta))
+    texto = re.sub(r"[^a-z0-9]+", " ", texto)
+    partes = texto.split()
+    if not partes or len(partes[0]) <= 2:
+        return None
+    return NOMBRES_IDIOMA.get(partes[0])
+
+
 # Palabras funcionales: son la senal mas estable del idioma de un texto
 # (los terminos tecnicos y los nombres propios son iguales en ambos).
 _MARCAS_ES = frozenset({

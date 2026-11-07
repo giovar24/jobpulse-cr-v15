@@ -155,6 +155,48 @@ class TestTaxonomia(unittest.TestCase):
             ).fetchone()[0]
         self.assertEqual(primera, segunda)
 
+    def test_el_idioma_disfrazado_de_skill_no_se_encola_como_skill(self):
+        """"Inglés - C1" entre las skills es peticion de IDIOMA.
+
+        El extractor nunca crea un requisito skill con eso (los idiomas se
+        comparan contra los hechos de idioma del perfil): curar "ingles c1"
+        como skill daria un falso "faltante". La demanda lo cuenta en el
+        lado idioma — resuelto, porque 'ingles' esta en la taxonomia — y la
+        cola no lo pide. "IT" en cambio es tecnologia: sigue siendo skill.
+        """
+        self._crear_aviso(
+            "job-3", ["Inglés - C1", "English <> Target Language", "IT"]
+        )
+        with closing(sqlite3.connect(self.database.path)) as connection:
+            demanda = taxonomia.demanda_corpus(connection)
+        self.assertNotIn(("skill", "ingles c1"), demanda["pendientes"])
+        self.assertNotIn(
+            ("skill", "english target language"), demanda["pendientes"]
+        )
+        self.assertEqual(demanda["resueltas"][("language", "ingles")], 2)
+        # "IT" no es italiano (bug real corregido por la 026): es skill.
+        self.assertNotIn(("language", "italiano"), demanda["resueltas"])
+        self.assertIn(("skill", "it"), demanda["pendientes"])
+
+    def test_curar_borra_los_idiomas_disfrazados_de_la_cola(self):
+        """Si la cola tenia la variante fantasma, curar la limpia."""
+        with closing(sqlite3.connect(self.database.path)) as connection:
+            connection.execute(
+                """
+                INSERT INTO concepto_no_normalizado (categoria, texto, origen, veces)
+                VALUES ('skill', 'ingles c1', 'oferta', 2)
+                """
+            )
+            connection.commit()
+            taxonomia.curar(connection, aplicar=True)
+            filas = [
+                (r[0], r[1])
+                for r in connection.execute(
+                    "SELECT categoria, texto FROM concepto_no_normalizado"
+                ).fetchall()
+            ]
+        self.assertNotIn(("skill", "ingles c1"), filas)
+
 
 if __name__ == "__main__":
     unittest.main()

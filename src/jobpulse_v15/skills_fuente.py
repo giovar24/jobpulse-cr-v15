@@ -189,6 +189,14 @@ def clasificar(
         encontrado = mapa.get((categoria, clave))
         if encontrado:
             codigo, variante = encontrado
+            # Los CODIGOS de dos letras ("en", "es", "it") son claves
+            # internas del idioma del aviso (las emite el extractor de
+            # reglas y las resuelve `conceptos.resolver`), nunca etiquetas
+            # naturales: una etiqueta de skill de dos letras es tecnologia
+            # ("IT"), no italiano. (Bug real: indeed-d4b1295866756a8c acabo
+            # con requisito de italiano por pedir "IT".)
+            if categoria == "language" and len(clave) <= 2:
+                continue
             return categoria, variante, codigo
     # "Licencia B3": la clase va como codigo ("b3"), no como etiqueta.
     clase = _codigo_de_clase_licencia(etiqueta)

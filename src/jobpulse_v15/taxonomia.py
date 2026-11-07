@@ -29,7 +29,7 @@ import sqlite3
 from collections import Counter
 from typing import Any
 
-from jobpulse_v15 import conceptos, skills_fuente
+from jobpulse_v15 import conceptos, idiomas, skills_fuente
 
 #: Clave de la demanda: ``(categoria, variante)``.
 Clave = tuple[str, str]
@@ -67,10 +67,35 @@ def demanda_corpus(connection: sqlite3.Connection) -> dict[str, Counter]:
     ruido: Counter[Clave] = Counter()
     pendientes: Counter[Clave] = Counter()
 
+    def _demanda_de_idioma(variante: str) -> None:
+        """Cuenta una peticion de idioma en su lado (idioma), no en skills.
+
+        El idioma se compara contra los hechos de IDIOMA del perfil
+        (``cumple_language``): un concepto skill con "espanol c1" haria un
+        falso "faltante" incluso con el perfil diciendo que el espanol es
+        su lengua nativa.
+        """
+        clave = skills_fuente.normalizar(variante)
+        if not clave:
+            return
+        if ("language", clave) in mapa:
+            resueltas[("language", clave)] += 1
+        elif conceptos.es_variante_encolable("language", clave):
+            pendientes[("language", clave)] += 1
+        else:
+            ruido[("language", clave)] += 1
+
     for _job_id, skills, languages in _filas_corpus(connection):
         for etiqueta in skills_fuente.parsear_skills(skills):
             clave = skills_fuente.normalizar(etiqueta)
             if not clave:
+                continue
+            # Idioma disfrazado de skill ("Inglés - C1" entre las skills de
+            # ANE): el extractor nunca lo convierte en requisito skill, asi
+            # que la cola no debe pedir curarlo como tal. Va al lado idioma.
+            variante_idioma = idiomas.idioma_en_skill(etiqueta)
+            if variante_idioma is not None:
+                _demanda_de_idioma(variante_idioma)
                 continue
             if skills_fuente.clasificar(connection, clave, mapa):
                 resueltas[("skill", clave)] += 1

@@ -168,6 +168,28 @@ class TestClasificacion(Base):
         self.assertEqual(resolucion[0], "license")
         self.assertEqual(resolucion[2], "licencia-conducir")
 
+    def test_un_codigo_de_dos_letras_no_resuelve_como_idioma(self):
+        """"IT" es tecnologia, no italiano (bug real: indeed-d4b1295866756a8c
+        acabo con requisito de idioma italiano por pedir "IT" entre sus
+        skills). Los codigos de dos letras son claves internas del extractor
+        de reglas (`analysis.py` emite value_code 'en'/'es'), nunca etiquetas
+        naturales; el resolutor directo (`conceptos.resolver`) sigue
+        entendiendolos porque mira la variante, no pasa por aqui.
+        """
+        with self.database.connection() as connection:
+            self.assertIsNone(skills_fuente.clasificar(connection, "IT"))
+            self.assertIsNone(skills_fuente.clasificar(connection, "it"))
+            self.assertIsNone(skills_fuente.clasificar(connection, "en"))
+            # Los NOMBRES de idioma si resuelven (etiqueta natural).
+            self.assertEqual(
+                skills_fuente.clasificar(connection, "ingles"),
+                ("language", "ingles", "ingles"),
+            )
+            # Las variantes cortas de skill ('r', tanda 2) siguen vivas.
+            self.assertEqual(
+                skills_fuente.clasificar(connection, "R"), ("skill", "r", "r")
+            )
+
 
 class TestRequisitosDeFuente(Base):
     """Las reglas duras del pipeline."""
@@ -198,6 +220,14 @@ class TestRequisitosDeFuente(Base):
 
         self.assertEqual(requisitos, [])
         self.assertEqual(sin_concepto, [])
+
+    def test_un_skill_it_no_genera_requisito_de_idioma(self):
+        # Bug real (2026-11-07): "IT" entre las skills acabo como requisito
+        # de idioma ITALIANO. Ahora va a la cola como skill pendiente.
+        requisitos, sin_concepto = self._requisitos(skills='["IT"]')
+
+        self.assertEqual(requisitos, [])
+        self.assertEqual(sin_concepto, [("skill", "it")])
 
     def test_lo_que_no_resuelve_va_a_la_cola(self):
         # "Zabbix" es una competencia real que la taxonomia todavia no

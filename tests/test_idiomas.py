@@ -123,5 +123,42 @@ class TestNormalizacionDeNiveles(unittest.TestCase):
         self.assertIsNone(idiomas.nombre_idioma_a_variante(None))
 
 
+class TestIdiomaEnSkill(unittest.TestCase):
+    """Etiquetas de skill que en realidad piden un idioma.
+
+    La fuente a veces guarda la peticion de idioma entre las skills
+    ("Inglés - C1" en ANE, "English <> Target Language" en Workday). El
+    extractor JAMAS crea un requisito skill con eso, asi que curarlos como
+    skill daria un falso "faltante": la curacion los manda al lado idioma
+    (`taxonomia.demanda_corpus`).
+    """
+
+    def test_reconoce_idioma_con_nivel(self):
+        self.assertEqual(idiomas.idioma_en_skill("Inglés - C1"), "ingles")
+        self.assertEqual(idiomas.idioma_en_skill("Español - C1"), "espanol")
+        self.assertEqual(idiomas.idioma_en_skill("ingles c1"), "ingles")
+
+    def test_reconoce_idioma_con_cualquier_cola(self):
+        self.assertEqual(
+            idiomas.idioma_en_skill("English <> Target Language"), "ingles"
+        )
+        self.assertEqual(idiomas.idioma_en_skill("english fluency"), "ingles")
+        self.assertEqual(
+            idiomas.idioma_en_skill("Spanish communication skills"), "espanol"
+        )
+
+    def test_un_codigo_de_dos_letras_no_es_idioma(self):
+        """En skills, "IT" es tecnologia, no italiano (bug real del corpus)."""
+        self.assertIsNone(idiomas.idioma_en_skill("IT"))
+        self.assertIsNone(idiomas.idioma_en_skill("it inventory"))
+        self.assertIsNone(idiomas.idioma_en_skill("it disaster recovery itdr"))
+
+    def test_lo_que_no_es_idioma_da_none(self):
+        self.assertIsNone(idiomas.idioma_en_skill("ServiceNow"))
+        self.assertIsNone(idiomas.idioma_en_skill("TecnologiaFutura"))
+        self.assertIsNone(idiomas.idioma_en_skill(""))
+        self.assertIsNone(idiomas.idioma_en_skill(None))
+
+
 if __name__ == "__main__":
     unittest.main()
