@@ -359,12 +359,12 @@ class TestEsquema(Base):
         base = Database(self.db_path)
         avisos = []
         version = pipeline_metricas.asegurar_esquema(base, avisos.append)
-        self.assertEqual(version, 24)
+        self.assertEqual(version, 25)
         # Ya estaba migrada: no avisa.
         self.assertEqual(avisos, [])
 
     def test_asegurar_esquema_migra_una_base_vieja(self):
-        """Una base en esquema 23 recibe la 024 al abrirla (convencion)."""
+        """Una base en esquema 23 recibe la 024 y la 025 al abrirla (convencion)."""
         viejo = Path(self.temp_dir.name) / "viejo.db"
         shutil.copy2(self.db_path, viejo)
         # Simula una base anterior a la 024.
@@ -374,9 +374,9 @@ class TestEsquema(Base):
 
         avisos = []
         version = pipeline_metricas.asegurar_esquema(Database(viejo), avisos.append)
-        self.assertEqual(version, 24)
+        self.assertEqual(version, 25)
         self.assertTrue(avisos)
-        self.assertIn("24", avisos[0])
+        self.assertIn("25", avisos[0])
 
 
 if __name__ == "__main__":

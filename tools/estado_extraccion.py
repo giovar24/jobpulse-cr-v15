@@ -16,6 +16,9 @@ dos JSON (ver ``comparar_extraccion.py``).
 
 Uso:
     .\\.venv\\Scripts\\python.exe -X utf8 tools\\estado_extraccion.py [etiqueta] [salida.json]
+
+Con ``--db RUTA`` mide otra base (una COPIA de la real, para medir una
+corrida sin tocar el corpus del usuario; el flag va antes de la etiqueta).
 """
 from __future__ import annotations
 
@@ -26,8 +29,14 @@ from pathlib import Path
 
 from jobpulse_v15.db import Database
 
-ETIQUETA = sys.argv[1] if len(sys.argv) > 1 else "estado"
-SALIDA = Path(sys.argv[2]) if len(sys.argv) > 2 else None
+_ARGV = sys.argv[1:]
+DB_EXPLICITA = None
+if len(_ARGV) >= 2 and _ARGV[0] == "--db":
+    DB_EXPLICITA = _ARGV[1]
+    _ARGV = _ARGV[2:]
+
+ETIQUETA = _ARGV[0] if _ARGV else "estado"
+SALIDA = Path(_ARGV[1]) if len(_ARGV) > 1 else None
 
 REQUISITOS_VIGENTES = """
   SELECT r.category, r.origin, r.codigo_canonico, r.value_text
@@ -49,7 +58,7 @@ CAMPOS = {
 
 
 def main() -> int:
-    ruta = Database().path
+    ruta = Database(DB_EXPLICITA).path
     con = sqlite3.connect("file:%s?mode=ro" % ruta.as_posix(), uri=True)
     con.row_factory = sqlite3.Row
 
