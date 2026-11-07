@@ -433,8 +433,7 @@ con `taxonomia.demanda_corpus`; el contador `veces` de la cola está duplicado
   el extractor YA los crea como requisito de **idioma** con su nivel (0 filas
   tipo `%c1%` en `job_requirements` como skill, verificado); curarlos como
   skills daría un falso "faltante" porque el perfil registra `espanol` como
-  idioma. El arreglo correcto es de código (demanda_corpus lee `jobs.skills`
-  crudos), no de datos.
+  idioma. **El arreglo de código se hizo el mismo día (ver abajo)**.
 
 **Medición (copia → real, resultado IDÉNTICO)**:
 
@@ -464,10 +463,39 @@ errores) → `enrich requirements-canonico --apply` (0) → corrida
 `no_confirmada=31`) → hoja de firma regenerada (31 casos) → `db check` ok
 (esquema 25, integridad ok, 0 FK).
 
-**Lo que queda para la Ola 4.2**: curar el resto de la cola (1204
-pendientes; 1197 los pide UN solo aviso → siguiente tanda cuando entre corpus
-nuevo), y el arreglo de código de los 3 fantasmas `* c1` en
-`demanda_corpus`.
+**Lo que queda para la Ola 4.2**: curar el resto de la cola (1199
+pendientes; 1192 los pide UN solo aviso → siguiente tanda cuando entre corpus
+nuevo).
+
+**Arreglo de código de los fantasmas + bug "IT" → italiano — APLICADO A LA
+BD REAL el mismo día (2026-11-07, con OK del usuario, medido en copia
+fresca)**:
+
+- **Bug real de matching**: `indeed-d4b1295866756a8c` (soporte técnico) pide
+  **"IT"** entre sus skills y `clasificar` lo resolvía por la categoría
+  language (la 021 insertó el código "it" como variante de `italiano` y
+  prueba language antes que skill) → el motor evaluaba el aviso pidiendo
+  **ITALIANO**.
+- **El arreglo (solo código; esquema sigue en 25)**: `idiomas.idioma_en_skill`
+  reconoce la etiqueta-skill que empieza por un NOMBRE de idioma ("Inglés -
+  C1", "English <> Target Language") y `demanda_corpus` la cuenta en el lado
+  idioma de la demanda → la cola deja de pedir curarla como skill (salieron
+  los 3 fantasmas `* c1`/`target language` y 3 hermanos de 1 aviso). Y
+  `skills_fuente.clasificar` ya no resuelve una etiqueta natural de ≤2
+  letras por la categoría language — mata el bug "IT". Los códigos 'en'/'es'
+  que emite el extractor de reglas siguen resolviendo por
+  `conceptos.resolver`.
+- **Lección de la medición**: la primera versión — migración 026 que borraba
+  las variantes de 2 letras — rompía **218 requisitos** del extractor de
+  reglas (183 'en' + 35 'es' sin `codigo_canonico`: invisibles). Detectado
+  midiendo en copia; **026 eliminada, nunca llegó a la BD real**. Las
+  variantes 'en'/'es' son **load-bearing**.
+- **Resultado (copia == real)**: requisitos 2900 → **2899 (0 sin código)**
+  (−1 = el italiano falso), cola 1204 → **1199** (−6 fantasmas, +1
+  `skill 'it'` honesta), **bandas idénticas** (188/380/33/96/8),
+  `educacion_no_confirmada` 31 intacto. Respaldo
+  `data/backups/pre_fantasma_20261107_171605.db`, corrida vigente
+  **`20261107_171903`**, evidencia OK (137 verificaciones), `db check` ok.
 
 ### 4.3 Métricas por etapa — **HECHO 2026-11-06**
 

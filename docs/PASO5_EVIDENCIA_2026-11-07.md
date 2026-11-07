@@ -1,4 +1,4 @@
-# Paso 5 — Evidencia del bloqueante educativo (corrida `20261107_133939`)
+# Paso 5 — Evidencia del bloqueante educativo (corrida `20261107_171903`)
 
 > Documento GENERADO por `generar_evidencia_paso5.py` (no editado a mano).
 > Todo el texto citado es **literal** de `jobs.requirements_raw` +
@@ -99,10 +99,11 @@ corrida          filas  valida=1
 20261106_152304  705    0
 20261106_182554  705    0
 20261106_220243  705    0
-20261107_133939  705    705
+20261107_133939  705    0
+20261107_171903  705    705
 ```
 
-## 3. Conteo por estado y motivo (corrida vigente `20261107_133939`)
+## 3. Conteo por estado y motivo (corrida vigente `20261107_171903`)
 
 ```
 calificada             | cumple_umbral                          | 188
@@ -1717,7 +1718,7 @@ corrida `20261029_171039` (106 vacantes en total):
   tres, ordenadas por `job_id`).
 
 Cada caso se revisó a mano contra la frase literal del aviso.
-`Estado final` es el de la corrida vigente `20261107_133939`.
+`Estado final` es el de la corrida vigente `20261107_171903`.
 
 | # | job_id | veredicto manual | por qué | estado final | motivo final |
 |---|---|---|---|---|---|
@@ -1871,7 +1872,7 @@ Cada caso se revisó a mano contra la frase literal del aviso.
 - **B30 `workday-Technical-Project-Manager---HiredScore_JR-0108592-1`** — Preferred Qualifications + Bachelor's degree
   > ...ers and internal teams even when priorities or requirements are evolving Strong problem-solving skills, with the ability to troubleshoot technical issues and drive resolution Preferred Qualifications Bachelor’s degree in Business, Information Systems, Industrial Engineering, or a related field 2+ years of experience delivering AI-enabled solutions, intelligent automation, or ML-powered features wi...
 
-## 7. DELTA vs. la corrida anterior `20261106_220243` (5 avisos cambian)
+## 7. DELTA vs. la corrida anterior `20261107_133939` (0 avisos cambian)
 
 Cada cambio se midió ANTES de escribir la corrida nueva (evaluación en
 seco contra la BD) y aquí queda documentado con la frase literal del
@@ -1879,17 +1880,6 @@ aviso.
 
 | # | job_id | antes | ahora | por qué |
 |---|---|---|---|---|
-| 1 | `ane-121829` | `calificada` / `cumple_umbral` | `revisar_a_mano` / `skill_faltante` | motivo corregido: el texto sí obliga (lo que faltaba era la vía) |
-| 2 | `ane-121830` | `calificada` / `cumple_umbral` | `revisar_a_mano` / `skill_faltante` | motivo corregido: el texto sí obliga (lo que faltaba era la vía) |
-| 3 | `ane-121845` | `calificada` / `cumple_umbral` | `revisar_a_mano` / `skill_faltante` | motivo corregido: el texto sí obliga (lo que faltaba era la vía) |
-| 4 | `ane-121850` | `datos_insuficientes` / `cobertura_insuficiente` | `revisar_a_mano` / `skill_faltante` | motivo corregido: el texto sí obliga (lo que faltaba era la vía) |
-| 5 | `workday-AUXILIAR-2-MEDIO-TIEMPO_JR107569-1` | `revisar_a_mano` / `experiencia_no_verificable` | `revisar_a_mano` / `skill_faltante` | motivo corregido: el texto sí obliga (lo que faltaba era la vía) |
 
 ### 7.1. Frase literal de cada cambio
 
-- **1. `ane-121829`** — `calificada/cumple_umbral` → `revisar_a_mano/skill_faltante`
-- **2. `ane-121830`** — `calificada/cumple_umbral` → `revisar_a_mano/skill_faltante`
-  > INDISPENSABLE: - Contar con grado académico de Bachiller en Educación Media con Técnico Medio en Educación Diversificada emitido por el Ministerio de educación Pública (MEP) o Técnico del Instituto Nacional de Aprendizaje (INA), en una especialidad afín a las funciones del puesto.
-- **3. `ane-121845`** — `calificada/cumple_umbral` → `revisar_a_mano/skill_faltante`
-- **4. `ane-121850`** — `datos_insuficientes/cobertura_insuficiente` → `revisar_a_mano/skill_faltante`
-- **5. `workday-AUXILIAR-2-MEDIO-TIEMPO_JR107569-1`** — `revisar_a_mano/experiencia_no_verificable` → `revisar_a_mano/skill_faltante`
