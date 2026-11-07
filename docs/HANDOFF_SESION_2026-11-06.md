@@ -463,6 +463,7 @@ python -m pytest tests/test_conceptos.py tests/test_taxonomia.py `
 
 ## 9. Commits de esta sesión
 
+- `84af033` — `docs(o5.3): Ola 4.2 aplicada a la BD real (taxonomia curada, corrida 20261106_182554)` — respaldo + migración 023 (esquema 23) + cola 1988 → **1225** + re-análisis de los 705 avisos + **2857 requisitos (0 sin código)** + evidencia OK (137) + `db check` ok; resultado **idéntico al medido en la copia** (58 avisos cambian de estado; `educacion_no_confirmada` 31 → 31).
 - `df6a31d` — `feat(o5.3): Ola 4.2 - filtro de la cola de taxonomía, curacion en tandas y herramienta de curacion` — filtro `es_variante_encolable`, migración 023 (tanda 1), `taxonomia.py` + `taxonomy curate`, 19 tests nuevos; medido sobre copia (58 avisos cambian de estado; `educacion_no_confirmada` 31 → 31). Suite: **1127 passed + 980 subtests**.
 - **HEAD (aplicación a la BD real)** — `docs(o5.3): Ola 4.1 aplicada a la BD real (texto de ANE corregido, corrida 20261106_152304)` — evidencia + hoja de firma regeneradas, docs actualizadas.
 - `280b4e7` — `feat(o5.3): Ola 4.1 - parser de ANE completo, re-barrido de detalle y re-análisis por texto nuevo` (pusheado) — parser ampliado, `scrape ane --revisitar`, `reananalizar_texto_cambiado`, medición sobre copia (9 de 705 cambian de estado; `educacion_no_confirmada` 31 → 31).
