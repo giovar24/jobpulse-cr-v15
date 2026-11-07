@@ -387,9 +387,29 @@ ICFR, SEC SOX y COSO → el perfil no los tiene → `revisar_a_mano/skill_faltan
 Antes esos requisitos eran **invisibles** (sin `codigo_canonico` el motor los
 ignora en silencio) y las vacantes parecían más compatibles de lo que son.
 
-**Pendiente**: ~~aplicar a la BD real~~ → **esperando OK del usuario**
-(respaldo + migración 023 + reconstrucción de la cola + re-análisis de los
-705 avisos + backfill + Paso 5 + evidencia).
+**Pendiente**: ~~aplicar a la BD real~~ → **APLICADA A LA BD REAL
+(2026-11-06, con OK del usuario)**: respaldo
+`data/backups/pre_ola42_20261106_182411.db` (`integrity_check ok`, esquema 22,
+705 avisos) → apertura (aplica la **023**, esquema 23) → `taxonomy curate
+--apply` (cola 1988 → **1225**) → re-análisis de los **705** avisos (la etapa
+`reanalisis` del pipeline solo rehace los que nunca integraron `jobs.skills`)
+→ requisitos vigentes 2483 (1 sin código) → **2857 (0 sin código)** → backfill
+(0) → **corrida `20261106_182554`** → evidencia OK (137 verificaciones
+literales, `no_confirmada=31`) → `db check` ok (`integrity ok`, 0 violaciones
+de FK).
+
+**El resultado real fue IDÉNTICO al medido en la copia**: 58 avisos cambian de
+estado (47 `calificada → revisar_a_mano`, 7 `datos_insuficientes →
+revisar_a_mano`, 2 `sin_requisitos → revisar_a_mano`, 1 `calificada →
+datos_insuficientes`, 1 `datos_insuficientes → calificada`), requisitos
+medios 3,53 → **4,07** (232 avisos con más, 0 con menos) y
+`educacion_no_confirmada` 31 → **31 (intacto)**. La hoja de firma
+(`docs/PASO5_REVISION_PENDIENTES.md`) se regeneró para la corrida vigente
+(31 casos, sin veredictos: los firma una segunda persona).
+
+**Lo que queda para la Ola 4.2**: una **segunda tanda** de curación (la cola
+tiene 1225 pendientes; la siguiente cubre las variantes con `veces >= 2`, que
+son las que varios avisos piden).
 
 ---
 

@@ -483,11 +483,11 @@ completo en `docs/PLAN_MEJORAS.md`):
    `revisar_a_mano/educacion_no_cumple` porque el texto NO dice "Requerido"),
    **`educacion_no_confirmada` NO cambia** (31 → 31). Corrida vigente
    **`20261106_152304`** · evidencia OK (137 verificaciones) · `db check` ok.
-   Lo que sigue: **4.2 (curación de la taxonomía) → implementada y medida
-   sobre copia; falta aplicarla a la BD real** (respaldo → migración 023 →
-   `taxonomy curate --apply` → re-análisis de los 705 avisos → backfill → Paso
-   5 → evidencia) · 4.3 (métricas por etapa) · los 24 avisos ANE nuevos
-   (122031+) quedan para el barrido normal con IA.
+   Lo que sigue: **4.2 (curación de la taxonomía) → APLICADA A LA BD REAL
+   (2026-11-06)**: esquema 23, cola 1988 → **1225**, requisitos vigentes
+   **2857 (0 sin código)**, corrida `20261106_182554`, evidencia OK,
+   `educacion_no_confirmada` 31 → 31 (intacto) · 4.3 (métricas por etapa) ·
+   los 24 avisos ANE nuevos (122031+) quedan para el barrido normal con IA.
 1. **O12 — paridad CLI/UI** (meta #1): **Olas 1 y 2 YA ESTÁN** (2026-11-05:
    re-análisis incremental, badge, guarda, evidencia como módulo, login ANE
    con cierre ordenado y orquestador `pipeline.py` con los botones "Procesar"
@@ -711,8 +711,20 @@ vacantes parecían más compatibles de lo que son. Bandas: `aplicar` 270 → **2
 `no_prioritario` 323 → **376**, `veto` 96 → 96 (sin cambios),
 `educacion_no_confirmada` 31 → **31 (intacto)**.
 
-**Pendiente**: aplicar a la **BD real** (respaldo → migración 023 → `taxonomy
-curate --apply` → re-análisis de los 705 avisos → backfill → Paso 5 → evidencia).
+**Pendiente**: una **segunda tanda** de curación (la cola tiene 1225
+pendientes; la siguiente cubre las variantes con `veces >= 2`).
+
+**APLICADO A LA BD REAL (2026-11-06, con OK del usuario)**: respaldo
+`data/backups/pre_ola42_20261106_182411.db` (`integrity ok`, esquema 22, 705
+avisos) → apertura (aplica la **023**, esquema 23) → `taxonomy curate --apply`
+(cola 1988 → **1225**) → re-análisis de los **705** avisos (la etapa
+`reanalisis` del pipeline solo rehace los que nunca integraron `jobs.skills`)
+→ requisitos vigentes 2483 (1 sin código) → **2857 (0 sin código)** → backfill
+(0) → **corrida `20261106_182554`** → evidencia OK (137 verificaciones
+literales, `no_confirmada=31`) → `db check` ok (`integrity ok`, 0 violaciones
+de FK). El resultado real fue **idéntico al medido en la copia**: 58 avisos
+cambian de estado, requisitos medios 3,53 → **4,07**, `educacion_no_confirmada`
+31 → **31 (intacto)**.
 
 ### 2026-11-06 — OLA 4.1: CALIDAD DEL DATO (parser de ANE + re-barrido de detalle + re-análisis por texto nuevo)
 

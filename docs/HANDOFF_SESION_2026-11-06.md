@@ -58,8 +58,20 @@ también con las skills que realmente piden ("inventario", "fontanería",
 "electricidad", ISO 19011, PCAOB…) → el perfil no las tiene →
 `revisar_a_mano/skill_faltante`. Bandas: `aplicar` 270 → **217**,
 `no_prioritario` 323 → **376**, `veto` 96 → 96 (sin cambios),
-`educacion_no_confirmada` 31 → **31 (intacto)**. **Pendiente: aplicar a la BD
-real (esperando OK del usuario).**
+`educacion_no_confirmada` 31 → **31 (intacto)**. **Aplicada a la BD real con
+OK del usuario**: respaldo `data/backups/pre_ola42_20261106_182411.db`
+(`integrity ok`, esquema 22) → migración **023** (esquema 23) → `taxonomy
+curate --apply` (cola 1988 → **1225**) → re-análisis de los **705** avisos →
+**2857 requisitos (0 sin código)** → **corrida `20261106_182554`** → evidencia
+OK (137 verificaciones) → `db check` ok. El resultado real fue **idéntico al
+medido en la copia** (58 cambios, 3,53 → 4,07 requisitos medios).
+
+**Estado final de la BD real**: **esquema 23**, 705 avisos, 129 sitios,
+706 conceptos canónicos, cola de taxonomía **1225** (las pendientes reales),
+**2857 requisitos vigentes sin huecos**, corrida Paso 5 vigente
+**`20261106_182554`** (calificada 190 · revisar 376 · descartada 96 ·
+datos_insuf 34 · sin_requisitos 9 · `educacion_no_confirmada` **31**, sin
+cambios), `integrity_check ok` y 0 violaciones de FK.
 
 > ℹ️ Esta sesión continúa la del **2026-11-05** (`docs/HANDOFF_SESION_2026-11-05.md`):
 > Ola 1 y Ola 2 de O12 ya estaban hechas y pusheadas.
@@ -276,14 +288,17 @@ en el pipeline). Con eso los requisitos medios suben de 3,53 a 4,07.
 | **O14 Control del coste de la IA** | Límites opt-in y ajustables | ✅ Hecho (2026-11-05) |
 | `educacion_no_confirmada` | 31 casos | ⏳ **ABIERTO** (firma de una 2ª persona) |
 | O5.3 (re-barrido de descripciones basura) | 43 descripciones <200 chars (35 de ANE) | 🟢 **HECHO Y APLICADO (2026-11-06)**: el corpus ya coincidía con la fuente; el hueco real era el **parser** (campos descartados). Parser ampliado + `scrape ane --revisitar` + re-análisis por texto nuevo. En la BD real: texto ANE 115.601 → 141.967 chars, **9 de 705 cambian de estado**, `educacion_no_confirmada` 31 → 31, corrida `20261106_152304` |
+| Ola 4.2 (curación de la taxonomía) | Cola `concepto_no_normalizado`: 1988 filas, 1976 sin resolver | 🟢 **HECHO Y APLICADO (2026-11-06)**: filtro `es_variante_encolable` + migración 023 (tanda 1) + `taxonomy curate`. En la BD real: etiquetas que resuelven 241 → **560**, cola 1988 → **1225**, requisitos 2483 (1 sin código) → **2857 (0 sin código)**, **58 de 705 cambian de estado**, `educacion_no_confirmada` 31 → 31, corrida `20261106_182554` |
 | O6.4 (dedupe slugs ES/EN) | — | ⏳ Parcial |
 | O4 (calibración gate-vs-IA) | — | 🟡 Proponer cerrar como *superseded* |
 | O8.2 / O8.4 / O9 / pestañas nuevas UI v2 | — | ⏳ Pendiente (Ola 4) |
 
 **Siguiente ola** (plan en `docs/PLAN_MEJORAS.md`): **Ola 4 — calidad del
-dato**: 4.1 (parser de ANE + re-barrido de detalle + re-análisis por texto
-nuevo: **MEDIDO**, falta aplicar a la BD real) · 4.2 curación de la taxonomía
-(`concepto_no_normalizado`) · 4.3 métricas por etapa.
+dato**: 4.1 (parser de ANE + re-barrido + re-análisis: **HECHO Y APLICADO**) ·
+4.2 curación de la taxonomía (`concepto_no_normalizado`: **HECHO Y APLICADO**
+— esquema 23, cola 1988 → **1225**, 2857 requisitos sin huecos, corrida
+`20261106_182554`) · 4.3 métricas por etapa (**lo que sigue**) · 4.2 segunda
+tanda de curación (`veces >= 2`).
 
 ---
 
@@ -358,27 +373,29 @@ python -m pytest tests/test_conceptos.py tests/test_taxonomia.py `
 | `src/jobpulse_v15/cli.py` | **Ola 4.2**: `taxonomy curate [--apply] [--limit N]` |
 | `tests/test_taxonomia.py` (4) · `tests/test_conceptos.py` (+7) | **NUEVOS** de la Ola 4.2 |
 | `docs/SITIOS_PROBLEMATICOS.md` | Reescrito: 4 sitios, `requires_login`, sesión de ANE, rate-limit de LinkedIn |
-| `docs/PLAN_MEJORAS.md` · `DESARROLLO_v15.md` · `AGENTS.md` | Ola 3 completada + Ola 4.1 medida; esquema 22 |
+| `docs/PLAN_MEJORAS.md` · `DESARROLLO_v15.md` · `AGENTS.md` | Olas 4.1 y 4.2 aplicadas a la BD real; esquema 23 |
 
 ---
 
 ## 7. Contexto (estado de la BD real)
 
-- **BD real `data/jobpulse_v15.db`**: **esquema 22**, **705 avisos**, 129 sitios,
-  136 corridas de sitio, 825 `job_analysis` (705 vigentes + 120 del
-  re-análisis), 1964 `job_match` (1 corrida válida). `integrity_check ok`,
-  0 violaciones de FK.
-  **OJO (Ola 4.2)**: la migración **023** (taxonomía curada) está en el repo
-  pero **NO** está aplicada en la BD real: sigue en **esquema 22**. En cuanto
-  se abra la BD real con la CLI (cualquier comando), la 023 se aplica sola →
-  aplicar la Ola 4.2 a la BD real es un paso explícito y con respaldo previo.
-  Corrida Paso 5 vigente `20261106_152304` (aplicada por la Ola 4.1):
-  calificada 237 · revisar 320 · descartada 96 · datos_insuf 41 ·
-  sin_requisitos 11 · `educacion_no_confirmada` 31.
-  Corrida anterior (sigue en la BD, `valida=0`): `20261104_231932`
-  (calificada 239 · revisar 324 · descartada 89 · datos_insuf 42 ·
-  sin_requisitos 11).
-- **Respaldo**: `data/backups/pre_ola4_20261106_151857.db` (antes de la Ola
+- **BD real `data/jobpulse_v15.db`**: **esquema 23** (tras la Ola 4.2),
+  **705 avisos**, 129 sitios, 136 corridas de sitio, 825 `job_analysis`
+  (705 vigentes + 120 del re-análisis; el re-análisis de la Ola 4.2 **actualizó
+  las filas vigentes en sitio**, no infla el historial), 706 conceptos
+  canónicos, 2669 `job_match` (4 corridas; 1 válida).
+  `integrity_check ok`, 0 violaciones de FK.
+  **Requisitos vigentes**: 2483 (1 sin `codigo_canonico`) → **2857 (0 sin
+  código)**. **Cola `concepto_no_normalizado`**: 1988 → **1225** (las
+  pendientes reales; `veces` = nº de avisos que piden cada variante).
+  Corrida Paso 5 vigente `20261106_182554` (aplicada por la Ola 4.2):
+  calificada 190 · revisar 376 · descartada 96 · datos_insuf 34 ·
+  sin_requisitos 9 · `educacion_no_confirmada` 31 (intacto).
+  Corrida anterior (sigue en la BD, `valida=0`): `20261106_152304`
+  (Ola 4.1: calificada 237 · revisar 320 · descartada 96 · datos_insuf 41 ·
+  sin_requisitos 11) y `20261104_231932`.
+- **Respaldo**: `data/backups/pre_ola42_20261106_182411.db` (antes de la Ola
+  4.2), `data/backups/pre_ola4_20261106_151857.db` (antes de la Ola
   4.1), `data/backups/pre_mig022_20261106_130349.db` (antes de la 022) y
   `data/backups/pre_limpieza_20261104_211349.db`.
 - **Mediciones de la Ola 3** (todas sobre `%TEMP%\opencode\ane_check.db`, copia
@@ -416,13 +433,14 @@ python -m pytest tests/test_conceptos.py tests/test_taxonomia.py `
 
 ## 8. Pendiente inmediato
 
-1. **Aplicar la Ola 4.2 a la BD real** (esperando OK del usuario): respaldo →
-   migración **023** (taxonomía curada, tanda 1) → `taxonomy curate --apply`
-   (reconstruir la cola) → **re-analizar los 705 avisos** (con
-   `enrich requirements-source --apply`: la etapa `reanalisis` del pipeline
-   solo rehace los que nunca integraron `jobs.skills`) → backfill → Paso 5
-   (corrida nueva) → evidencia → `db check`. Medido en copia: 58 avisos
-   cambian de estado, `aplicar` 270 → 217, `educacion_no_confirmada` 31 (intacto).
+1. ~~**Aplicar la Ola 4.2 a la BD real**~~ → **HECHO (2026-11-06, con OK del
+   usuario)**: respaldo `data/backups/pre_ola42_20261106_182411.db` →
+   migración **023** (esquema 23) → `taxonomy curate --apply` (cola
+   1988 → **1225**) → re-análisis de los **705** avisos → **2857 requisitos
+   (0 sin código)** → backfill (0) → **corrida `20261106_182554`** → evidencia
+   OK (137 verificaciones) → `db check` ok. Resultado **idéntico al medido en
+   la copia** (58 avisos cambian de estado; `aplicar` 270 → 217;
+   `educacion_no_confirmada` 31 → 31 intacto).
 2. **Ola 4 — seguir** (`docs/PLAN_MEJORAS.md`): **4.3 métricas por etapa**
    (`pipeline_etapa`: tiempo, avisos, requisitos, errores) · 4.2 segunda tanda
    de curación (la cola tiene 1225 pendientes: la siguiente tanda es la que
@@ -437,7 +455,7 @@ python -m pytest tests/test_conceptos.py tests/test_taxonomia.py `
    propio flujo; la UI clásica no se toca sin pedirlo).
 5. `educacion_no_confirmada` (31 casos): **NO** actualizar estados hasta que
    una **segunda persona** firme `docs/PASO5_REVISION_PENDIENTES.md` (ya
-   regenerada para la corrida `20261106_152304`).
+   regenerada para la corrida `20261106_182554`).
 6. Decidir si el **rate-limit de LinkedIn** sube de 1,5 s según la carga real
    (medido: 10 peticiones sin espera → 429).
 
