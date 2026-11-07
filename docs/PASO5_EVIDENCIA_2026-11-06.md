@@ -1,4 +1,4 @@
-# Paso 5 — Evidencia del bloqueante educativo (corrida `20261106_182554`)
+# Paso 5 — Evidencia del bloqueante educativo (corrida `20261106_220243`)
 
 > Documento GENERADO por `generar_evidencia_paso5.py` (no editado a mano).
 > Todo el texto citado es **literal** de `jobs.requirements_raw` +
@@ -97,13 +97,14 @@ corrida          filas  valida=1
 20261104_220600  554    0
 20261104_231932  705    0
 20261106_152304  705    0
-20261106_182554  705    705
+20261106_182554  705    0
+20261106_220243  705    705
 ```
 
-## 3. Conteo por estado y motivo (corrida vigente `20261106_182554`)
+## 3. Conteo por estado y motivo (corrida vigente `20261106_220243`)
 
 ```
-calificada             | cumple_umbral                          | 190
+calificada             | cumple_umbral                          | 191
 datos_insuficientes    | cobertura_insuficiente                 | 29
 datos_insuficientes    | educacion_no_cumple                    | 2
 datos_insuficientes    | skill_faltante                         | 3
@@ -113,7 +114,7 @@ revisar_a_mano         | educacion_no_confirmada                | 31
 revisar_a_mano         | educacion_no_cumple                    | 49
 revisar_a_mano         | experiencia_no_verificable             | 3
 revisar_a_mano         | skill_faltante                         | 293
-sin_requisitos         | sin_requisitos_mapeados                | 9
+sin_requisitos         | sin_requisitos_mapeados                | 8
 ```
 
 ## 4. Las 96 `descartada` — evidencia literal
@@ -1715,7 +1716,7 @@ corrida `20261029_171039` (106 vacantes en total):
   tres, ordenadas por `job_id`).
 
 Cada caso se revisó a mano contra la frase literal del aviso.
-`Estado final` es el de la corrida vigente `20261106_182554`.
+`Estado final` es el de la corrida vigente `20261106_220243`.
 
 | # | job_id | veredicto manual | por qué | estado final | motivo final |
 |---|---|---|---|---|---|
@@ -1869,7 +1870,7 @@ Cada caso se revisó a mano contra la frase literal del aviso.
 - **B30 `workday-Technical-Project-Manager---HiredScore_JR-0108592-1`** — Preferred Qualifications + Bachelor's degree
   > ...ers and internal teams even when priorities or requirements are evolving Strong problem-solving skills, with the ability to troubleshoot technical issues and drive resolution Preferred Qualifications Bachelor’s degree in Business, Information Systems, Industrial Engineering, or a related field 2+ years of experience delivering AI-enabled solutions, intelligent automation, or ML-powered features wi...
 
-## 7. DELTA vs. la corrida anterior `20261106_152304` (60 avisos cambian)
+## 7. DELTA vs. la corrida anterior `20261106_182554` (1 avisos cambian)
 
 Cada cambio se midió ANTES de escribir la corrida nueva (evaluación en
 seco contra la BD) y aquí queda documentado con la frase literal del
@@ -1877,140 +1878,8 @@ aviso.
 
 | # | job_id | antes | ahora | por qué |
 |---|---|---|---|---|
-| 1 | `ane-121787` | `calificada` / `cumple_umbral` | `revisar_a_mano` / `skill_faltante` | motivo corregido: el texto sí obliga (lo que faltaba era la vía) |
-| 2 | `ane-121790` | `calificada` / `cumple_umbral` | `revisar_a_mano` / `skill_faltante` | motivo corregido: el texto sí obliga (lo que faltaba era la vía) |
-| 3 | `ane-121797` | `calificada` / `cumple_umbral` | `revisar_a_mano` / `skill_faltante` | motivo corregido: el texto sí obliga (lo que faltaba era la vía) |
-| 4 | `ane-121807` | `calificada` / `cumple_umbral` | `revisar_a_mano` / `skill_faltante` | motivo corregido: el texto sí obliga (lo que faltaba era la vía) |
-| 5 | `ane-121808` | `datos_insuficientes` / `cobertura_insuficiente` | `revisar_a_mano` / `skill_faltante` | motivo corregido: el texto sí obliga (lo que faltaba era la vía) |
-| 6 | `ane-121813` | `calificada` / `cumple_umbral` | `revisar_a_mano` / `skill_faltante` | motivo corregido: el texto sí obliga (lo que faltaba era la vía) |
-| 7 | `ane-121822` | `calificada` / `cumple_umbral` | `revisar_a_mano` / `skill_faltante` | motivo corregido: el texto sí obliga (lo que faltaba era la vía) |
-| 8 | `ane-121823` | `datos_insuficientes` / `cobertura_insuficiente` | `revisar_a_mano` / `skill_faltante` | motivo corregido: el texto sí obliga (lo que faltaba era la vía) |
-| 9 | `ane-121826` | `revisar_a_mano` / `idioma_no_comparable` | `revisar_a_mano` / `skill_faltante` | motivo corregido: el texto sí obliga (lo que faltaba era la vía) |
-| 10 | `ane-121828` | `revisar_a_mano` / `idioma_no_comparable` | `revisar_a_mano` / `skill_faltante` | motivo corregido: el texto sí obliga (lo que faltaba era la vía) |
-| 11 | `ane-121838` | `datos_insuficientes` / `cobertura_insuficiente` | `revisar_a_mano` / `skill_faltante` | motivo corregido: el texto sí obliga (lo que faltaba era la vía) |
-| 12 | `ane-121840` | `calificada` / `cumple_umbral` | `revisar_a_mano` / `skill_faltante` | motivo corregido: el texto sí obliga (lo que faltaba era la vía) |
-| 13 | `ane-121846` | `calificada` / `cumple_umbral` | `revisar_a_mano` / `skill_faltante` | motivo corregido: el texto sí obliga (lo que faltaba era la vía) |
-| 14 | `ane-121848` | `calificada` / `cumple_umbral` | `revisar_a_mano` / `skill_faltante` | motivo corregido: el texto sí obliga (lo que faltaba era la vía) |
-| 15 | `ane-121855` | `sin_requisitos` / `sin_requisitos_mapeados` | `revisar_a_mano` / `skill_faltante` | motivo corregido: el texto sí obliga (lo que faltaba era la vía) |
-| 16 | `ane-121856` | `calificada` / `cumple_umbral` | `revisar_a_mano` / `skill_faltante` | motivo corregido: el texto sí obliga (lo que faltaba era la vía) |
-| 17 | `ane-121857` | `calificada` / `cumple_umbral` | `revisar_a_mano` / `skill_faltante` | motivo corregido: el texto sí obliga (lo que faltaba era la vía) |
-| 18 | `ane-121858` | `calificada` / `cumple_umbral` | `revisar_a_mano` / `skill_faltante` | motivo corregido: el texto sí obliga (lo que faltaba era la vía) |
-| 19 | `ane-121871` | `datos_insuficientes` / `cobertura_insuficiente` | `revisar_a_mano` / `skill_faltante` | motivo corregido: el texto sí obliga (lo que faltaba era la vía) |
-| 20 | `ane-121876` | `calificada` / `cumple_umbral` | `revisar_a_mano` / `skill_faltante` | motivo corregido: el texto sí obliga (lo que faltaba era la vía) |
-| 21 | `ane-121880` | `calificada` / `cumple_umbral` | `revisar_a_mano` / `skill_faltante` | motivo corregido: el texto sí obliga (lo que faltaba era la vía) |
-| 22 | `ane-121883` | `datos_insuficientes` / `cobertura_insuficiente` | `calificada` / `cumple_umbral` | motivo corregido: el texto sí obliga (lo que faltaba era la vía) |
-| 23 | `ane-121893` | `sin_requisitos` / `sin_requisitos_mapeados` | `revisar_a_mano` / `skill_faltante` | motivo corregido: el texto sí obliga (lo que faltaba era la vía) |
-| 24 | `ane-121894` | `calificada` / `cumple_umbral` | `revisar_a_mano` / `skill_faltante` | motivo corregido: el texto sí obliga (lo que faltaba era la vía) |
-| 25 | `ane-121895` | `calificada` / `cumple_umbral` | `revisar_a_mano` / `skill_faltante` | motivo corregido: el texto sí obliga (lo que faltaba era la vía) |
-| 26 | `ane-121897` | `calificada` / `cumple_umbral` | `revisar_a_mano` / `skill_faltante` | motivo corregido: el texto sí obliga (lo que faltaba era la vía) |
-| 27 | `ane-121901` | `calificada` / `cumple_umbral` | `revisar_a_mano` / `skill_faltante` | motivo corregido: el texto sí obliga (lo que faltaba era la vía) |
-| 28 | `ane-121906` | `calificada` / `cumple_umbral` | `revisar_a_mano` / `skill_faltante` | motivo corregido: el texto sí obliga (lo que faltaba era la vía) |
-| 29 | `ane-121908` | `calificada` / `cumple_umbral` | `revisar_a_mano` / `skill_faltante` | motivo corregido: el texto sí obliga (lo que faltaba era la vía) |
-| 30 | `ane-121913` | `calificada` / `cumple_umbral` | `revisar_a_mano` / `skill_faltante` | motivo corregido: el texto sí obliga (lo que faltaba era la vía) |
-| 31 | `greenhouse-smartsheet-8212528` | `calificada` / `cumple_umbral` | `revisar_a_mano` / `skill_faltante` | motivo corregido: el texto sí obliga (lo que faltaba era la vía) |
-| 32 | `harvie-4369` | `datos_insuficientes` / `educacion_no_cumple` | `revisar_a_mano` / `educacion_no_cumple` | motivo corregido: el texto sí obliga (lo que faltaba era la vía) |
-| 33 | `harvie-540` | `datos_insuficientes` / `cobertura_insuficiente` | `revisar_a_mano` / `skill_faltante` | motivo corregido: el texto sí obliga (lo que faltaba era la vía) |
-| 34 | `harvie-6141` | `calificada` / `cumple_umbral` | `revisar_a_mano` / `skill_faltante` | motivo corregido: el texto sí obliga (lo que faltaba era la vía) |
-| 35 | `harvie-6262` | `calificada` / `cumple_umbral` | `revisar_a_mano` / `skill_faltante` | motivo corregido: el texto sí obliga (lo que faltaba era la vía) |
-| 36 | `harvie-6496` | `calificada` / `cumple_umbral` | `datos_insuficientes` / `cobertura_insuficiente` | motivo corregido: el texto sí obliga (lo que faltaba era la vía) |
-| 37 | `indeed-177da67e37d99aa2` | `calificada` / `cumple_umbral` | `revisar_a_mano` / `skill_faltante` | motivo corregido: el texto sí obliga (lo que faltaba era la vía) |
-| 38 | `indeed-2b7311343b5642f9` | `calificada` / `cumple_umbral` | `revisar_a_mano` / `skill_faltante` | motivo corregido: el texto sí obliga (lo que faltaba era la vía) |
-| 39 | `indeed-42f48294e3c180c2` | `calificada` / `cumple_umbral` | `revisar_a_mano` / `skill_faltante` | motivo corregido: el texto sí obliga (lo que faltaba era la vía) |
-| 40 | `indeed-56bec786f17d874a` | `calificada` / `cumple_umbral` | `revisar_a_mano` / `skill_faltante` | motivo corregido: el texto sí obliga (lo que faltaba era la vía) |
-| 41 | `indeed-b2da9359f7319e8d` | `calificada` / `cumple_umbral` | `revisar_a_mano` / `skill_faltante` | motivo corregido: el texto sí obliga (lo que faltaba era la vía) |
-| 42 | `indeed-d0195fea3eeea026` | `calificada` / `cumple_umbral` | `revisar_a_mano` / `skill_faltante` | motivo corregido: el texto sí obliga (lo que faltaba era la vía) |
-| 43 | `indeed-fa049c24db4013d7` | `calificada` / `cumple_umbral` | `revisar_a_mano` / `skill_faltante` | motivo corregido: el texto sí obliga (lo que faltaba era la vía) |
-| 44 | `workday-Accounting-Intern_202611-128401` | `calificada` / `cumple_umbral` | `revisar_a_mano` / `skill_faltante` | motivo corregido: el texto sí obliga (lo que faltaba era la vía) |
-| 45 | `workday-Ayudante-de-cocina-Alling-Heredia_JR100993` | `calificada` / `cumple_umbral` | `revisar_a_mano` / `skill_faltante` | motivo corregido: el texto sí obliga (lo que faltaba era la vía) |
-| 46 | `workday-Clerk-III--Accounts-Receivable_R2618915-1` | `calificada` / `cumple_umbral` | `revisar_a_mano` / `skill_faltante` | motivo corregido: el texto sí obliga (lo que faltaba era la vía) |
-| 47 | `workday-Customer-Service-Representative--Night-shift-_R57596` | `calificada` / `cumple_umbral` | `revisar_a_mano` / `skill_faltante` | motivo corregido: el texto sí obliga (lo que faltaba era la vía) |
-| 48 | `workday-Inside-Account-Manager-ll_R45839` | `calificada` / `cumple_umbral` | `revisar_a_mano` / `skill_faltante` | motivo corregido: el texto sí obliga (lo que faltaba era la vía) |
-| 49 | `workday-Manufacturing-Engineer--Grecia--Costa-Rica-_R-089554-1` | `calificada` / `cumple_umbral` | `revisar_a_mano` / `skill_faltante` | motivo corregido: el texto sí obliga (lo que faltaba era la vía) |
-| 50 | `workday-Maquinista-I_R78947-1` | `calificada` / `cumple_umbral` | `revisar_a_mano` / `skill_faltante` | motivo corregido: el texto sí obliga (lo que faltaba era la vía) |
-| 51 | `workday-Operador-Especializado-en-CNC-III_R-107939` | `calificada` / `cumple_umbral` | `revisar_a_mano` / `skill_faltante` | motivo corregido: el texto sí obliga (lo que faltaba era la vía) |
-| 52 | `workday-Operador-de-Maquina-I_R75756-1` | `calificada` / `cumple_umbral` | `revisar_a_mano` / `skill_faltante` | motivo corregido: el texto sí obliga (lo que faltaba era la vía) |
-| 53 | `workday-Outbound-Sales-Representative_R57146` | `calificada` / `cumple_umbral` | `revisar_a_mano` / `skill_faltante` | motivo corregido: el texto sí obliga (lo que faltaba era la vía) |
-| 54 | `workday-PILERO---ALING-BELEN--_JR100992-1` | `calificada` / `cumple_umbral` | `revisar_a_mano` / `skill_faltante` | motivo corregido: el texto sí obliga (lo que faltaba era la vía) |
-| 55 | `workday-Payroll-Product-Instructor_JR-0110643` | `datos_insuficientes` / `cobertura_insuficiente` | `revisar_a_mano` / `skill_faltante` | motivo corregido: el texto sí obliga (lo que faltaba era la vía) |
-| 56 | `workday-PingOne-Developer---IAM-Developer_R53516` | `calificada` / `cumple_umbral` | `revisar_a_mano` / `skill_faltante` | motivo corregido: el texto sí obliga (lo que faltaba era la vía) |
-| 57 | `workday-Sr-Inside-Sales-Representative_R39905` | `calificada` / `cumple_umbral` | `revisar_a_mano` / `skill_faltante` | motivo corregido: el texto sí obliga (lo que faltaba era la vía) |
-| 58 | `workday-Sr-Systems-Engineer_R57326` | `calificada` / `cumple_umbral` | `revisar_a_mano` / `skill_faltante` | motivo corregido: el texto sí obliga (lo que faltaba era la vía) |
-| 59 | `workday-Supply-Chain-Supply-Demand-Planning-BSA-Project-Manager_1209590-2` | `calificada` / `cumple_umbral` | `revisar_a_mano` / `skill_faltante` | motivo corregido: el texto sí obliga (lo que faltaba era la vía) |
-| 60 | `workday-Technical-Success-Support--Specialist_R0013696` | `calificada` / `cumple_umbral` | `revisar_a_mano` / `skill_faltante` | motivo corregido: el texto sí obliga (lo que faltaba era la vía) |
+| 1 | `ane-121815` | `sin_requisitos` / `sin_requisitos_mapeados` | `calificada` / `cumple_umbral` | motivo corregido: el texto sí obliga (lo que faltaba era la vía) |
 
 ### 7.1. Frase literal de cada cambio
 
-- **1. `ane-121787`** — `calificada/cumple_umbral` → `revisar_a_mano/skill_faltante`
-- **2. `ane-121790`** — `calificada/cumple_umbral` → `revisar_a_mano/skill_faltante`
-- **3. `ane-121797`** — `calificada/cumple_umbral` → `revisar_a_mano/skill_faltante`
-- **4. `ane-121807`** — `calificada/cumple_umbral` → `revisar_a_mano/skill_faltante`
-  > Nivel académico: Bachiller universitario (Requerido).
-- **5. `ane-121808`** — `datos_insuficientes/cobertura_insuficiente` → `revisar_a_mano/skill_faltante`
-- **6. `ane-121813`** — `calificada/cumple_umbral` → `revisar_a_mano/skill_faltante`
-- **7. `ane-121822`** — `calificada/cumple_umbral` → `revisar_a_mano/skill_faltante`
-- **8. `ane-121823`** — `datos_insuficientes/cobertura_insuficiente` → `revisar_a_mano/skill_faltante`
-- **9. `ane-121826`** — `revisar_a_mano/idioma_no_comparable` → `revisar_a_mano/skill_faltante`
-- **10. `ane-121828`** — `revisar_a_mano/idioma_no_comparable` → `revisar_a_mano/skill_faltante`
-- **11. `ane-121838`** — `datos_insuficientes/cobertura_insuficiente` → `revisar_a_mano/skill_faltante`
-  > Channel: Voice Requirements: Advanced English level-B2 Full Flexibility High School Diploma Onsite Positions (Pavas) Candidate Profile: Projects a sophisticated and professional vocal presence, serving as a trusted ambassador for the brand.
-- **12. `ane-121840`** — `calificada/cumple_umbral` → `revisar_a_mano/skill_faltante`
-- **13. `ane-121846`** — `calificada/cumple_umbral` → `revisar_a_mano/skill_faltante`
-- **14. `ane-121848`** — `calificada/cumple_umbral` → `revisar_a_mano/skill_faltante`
-- **15. `ane-121855`** — `sin_requisitos/sin_requisitos_mapeados` → `revisar_a_mano/skill_faltante`
-- **16. `ane-121856`** — `calificada/cumple_umbral` → `revisar_a_mano/skill_faltante`
-- **17. `ane-121857`** — `calificada/cumple_umbral` → `revisar_a_mano/skill_faltante`
-- **18. `ane-121858`** — `calificada/cumple_umbral` → `revisar_a_mano/skill_faltante`
-- **19. `ane-121871`** — `datos_insuficientes/cobertura_insuficiente` → `revisar_a_mano/skill_faltante`
-- **20. `ane-121876`** — `calificada/cumple_umbral` → `revisar_a_mano/skill_faltante`
-- **21. `ane-121880`** — `calificada/cumple_umbral` → `revisar_a_mano/skill_faltante`
-- **22. `ane-121883`** — `datos_insuficientes/cobertura_insuficiente` → `calificada/cumple_umbral`
-  > Nivel académico: Bachiller universitario (Requerido).
-- **23. `ane-121893`** — `sin_requisitos/sin_requisitos_mapeados` → `revisar_a_mano/skill_faltante`
-- **24. `ane-121894`** — `calificada/cumple_umbral` → `revisar_a_mano/skill_faltante`
-- **25. `ane-121895`** — `calificada/cumple_umbral` → `revisar_a_mano/skill_faltante`
-- **26. `ane-121897`** — `calificada/cumple_umbral` → `revisar_a_mano/skill_faltante`
-- **27. `ane-121901`** — `calificada/cumple_umbral` → `revisar_a_mano/skill_faltante`
-- **28. `ane-121906`** — `calificada/cumple_umbral` → `revisar_a_mano/skill_faltante`
-- **29. `ane-121908`** — `calificada/cumple_umbral` → `revisar_a_mano/skill_faltante`
-- **30. `ane-121913`** — `calificada/cumple_umbral` → `revisar_a_mano/skill_faltante`
-- **31. `greenhouse-smartsheet-8212528`** — `calificada/cumple_umbral` → `revisar_a_mano/skill_faltante`
-- **32. `harvie-4369`** — `datos_insuficientes/educacion_no_cumple` → `revisar_a_mano/educacion_no_cumple`
-  > Buscamos ESTUDIANTES de LICENCIATURA que estén finalizando carrera y quieran desarrollarse, poner en práctica sus conocimientos en su Trabajo Final de Graduación, Práctica Profesional o Pasantía.
-- **33. `harvie-540`** — `datos_insuficientes/cobertura_insuficiente` → `revisar_a_mano/skill_faltante`
-- **34. `harvie-6141`** — `calificada/cumple_umbral` → `revisar_a_mano/skill_faltante`
-  > Mejora continua Proponer mejoras en procesos de control, registro y conciliación de activos fijos y obras en proceso, contribuyendo a la eficiencia operativa y al fortalecimiento del control patrimonial Técnico medio, diplomado contable, estudiante avanzado bachiller universitario contable.
-- **35. `harvie-6262`** — `calificada/cumple_umbral` → `revisar_a_mano/skill_faltante`
-- **36. `harvie-6496`** — `calificada/cumple_umbral` → `datos_insuficientes/cobertura_insuficiente`
-- **37. `indeed-177da67e37d99aa2`** — `calificada/cumple_umbral` → `revisar_a_mano/skill_faltante`
-- **38. `indeed-2b7311343b5642f9`** — `calificada/cumple_umbral` → `revisar_a_mano/skill_faltante`
-  > Education High School Diploma or 2 years of proven experience as Customer Service or Tech Support Representative Experience Proficiency in [certain foreign language] Knowledge of various software and applications (minimum: Windows ™ environment and Microsoft® Office package) Desired Core Skills Professional Competencies Basic Service Knowledge.
-- **39. `indeed-42f48294e3c180c2`** — `calificada/cumple_umbral` → `revisar_a_mano/skill_faltante`
-- **40. `indeed-56bec786f17d874a`** — `calificada/cumple_umbral` → `revisar_a_mano/skill_faltante`
-  > Posted Date : 19th Oct, 2026 Job Category : Costa Rica Job title: Technical Support Associate Work Location: Ultra Lag Experience: 6+ months in technical support roles Education Qualification: High school Diploma Responsibilities: Handle technical support inquiries from customers via phone or the company’s web-based support website (ticket-based) from initial contact through resolution.
-- **41. `indeed-b2da9359f7319e8d`** — `calificada/cumple_umbral` → `revisar_a_mano/skill_faltante`
-- **42. `indeed-d0195fea3eeea026`** — `calificada/cumple_umbral` → `revisar_a_mano/skill_faltante`
-- **43. `indeed-fa049c24db4013d7`** — `calificada/cumple_umbral` → `revisar_a_mano/skill_faltante`
-- **44. `workday-Accounting-Intern_202611-128401`** — `calificada/cumple_umbral` → `revisar_a_mano/skill_faltante`
-- **45. `workday-Ayudante-de-cocina-Alling-Heredia_JR100993`** — `calificada/cumple_umbral` → `revisar_a_mano/skill_faltante`
-- **46. `workday-Clerk-III--Accounts-Receivable_R2618915-1`** — `calificada/cumple_umbral` → `revisar_a_mano/skill_faltante`
-  > Education: High School Diploma, GED, or equivalent experience required.
-- **47. `workday-Customer-Service-Representative--Night-shift-_R57596`** — `calificada/cumple_umbral` → `revisar_a_mano/skill_faltante`
-  > Qualifications, Required Knowledge Skills & Abilities and Working Conditions Education & Certifications: High School Diploma Required.
-- **48. `workday-Inside-Account-Manager-ll_R45839`** — `calificada/cumple_umbral` → `revisar_a_mano/skill_faltante`
-- **49. `workday-Manufacturing-Engineer--Grecia--Costa-Rica-_R-089554-1`** — `calificada/cumple_umbral` → `revisar_a_mano/skill_faltante`
-  > Responsible for ensuring personal and Company compliance with all Federal, State, local and Company regulations, policies, and procedures Performs other duties assigned as needed Qualifications / Requirements: Education and Requirements: University/Bachelors Degree or Equivalent.
-- **50. `workday-Maquinista-I_R78947-1`** — `calificada/cumple_umbral` → `revisar_a_mano/skill_faltante`
-  > A Day in the Life Noveno grado completo o Bachillerato en educación media.
-- **51. `workday-Operador-Especializado-en-CNC-III_R-107939`** — `calificada/cumple_umbral` → `revisar_a_mano/skill_faltante`
-  > Cualificaciones / Requisitos: Experiencia y educación Bachillerato en Educacion media Técnico en mecánica de precisión De 2 a 4 años de experiencia en CNC.
-- **52. `workday-Operador-de-Maquina-I_R75756-1`** — `calificada/cumple_umbral` → `revisar_a_mano/skill_faltante`
-  > A Day in the Life Requisitos mínimos: Bachillerato en educación media.
-- **53. `workday-Outbound-Sales-Representative_R57146`** — `calificada/cumple_umbral` → `revisar_a_mano/skill_faltante`
-- **54. `workday-PILERO---ALING-BELEN--_JR100992-1`** — `calificada/cumple_umbral` → `revisar_a_mano/skill_faltante`
-- **55. `workday-Payroll-Product-Instructor_JR-0110643`** — `datos_insuficientes/cobertura_insuficiente` → `revisar_a_mano/skill_faltante`
-- **56. `workday-PingOne-Developer---IAM-Developer_R53516`** — `calificada/cumple_umbral` → `revisar_a_mano/skill_faltante`
-- **57. `workday-Sr-Inside-Sales-Representative_R39905`** — `calificada/cumple_umbral` → `revisar_a_mano/skill_faltante`
-- **58. `workday-Sr-Systems-Engineer_R57326`** — `calificada/cumple_umbral` → `revisar_a_mano/skill_faltante`
-  > Associate Degree with Systems Engineering or Related field of study required.
-- **59. `workday-Supply-Chain-Supply-Demand-Planning-BSA-Project-Manager_1209590-2`** — `calificada/cumple_umbral` → `revisar_a_mano/skill_faltante`
-- **60. `workday-Technical-Success-Support--Specialist_R0013696`** — `calificada/cumple_umbral` → `revisar_a_mano/skill_faltante`
+- **1. `ane-121815`** — `sin_requisitos/sin_requisitos_mapeados` → `calificada/cumple_umbral`

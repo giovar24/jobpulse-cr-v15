@@ -83,12 +83,31 @@ OK del usuario** (solo la migración 024: respaldo
 matching cambió**: 705 avisos, corrida vigente `20261106_182554`,
 `educacion_no_confirmada` 31 intacto).
 
+**Después (corrida real con IA, 2026-11-06)**: se corrió el orquestador
+completo sobre la **BD real** (`analisis → ia → reanalisis → backfill → paso5
+→ evidencia`, con respaldo previo `pre_ia_20261106_215042.db`) para medir si
+la IA sobre los **datos crudos que ya existen** mejoraba la extracción de
+código. Resultado: **la mejora fue mínima** — requisitos 2857 → **2858** (+1),
+todos con `codigo_canonico` (**100 %**, ya lo estaba), avisos sin requisito
+8 → **7**, matching: calificada 190 → **191**, `sin_requisitos` 9 → **8**,
+`educacion_no_confirmada` **31 (intacto)**. El pase de IA llenó **29 campos**
+(`work_mode` +13, `employment_type` +12, `languages` +4) y **no** halló nada en
+1.051 casos ("el aviso no lo dice", no son errores). Corrida vigente
+**`20261106_220243`** · evidencia OK (137 verificaciones) · `db check` ok. El
+único aviso que cambió fue `ane-121815` (`sin_requisitos` → `calificada`,
++1 requisito: el idioma del propio aviso). **Conclusión: el cuello de botella
+ya no es la extracción** (está al 100 %) sino **el corpus** (705 avisos, los
+24 de ANE sin entrar) y la **interpretación** (`ambiguous`/`unknown` en
+`job_field_status`).
+
 **Estado final de la BD real**: **esquema 24**, 705 avisos, 129 sitios,
 706 conceptos canónicos, cola de taxonomía **1225** (las pendientes reales),
-**2857 requisitos vigentes sin huecos**, corrida Paso 5 vigente
-**`20261106_182554`** (calificada 190 · revisar 376 · descartada 96 ·
-datos_insuf 34 · sin_requisitos 9 · `educacion_no_confirmada` **31**, sin
-cambios), `integrity_check ok` y 0 violaciones de FK.
+**2858 requisitos vigentes sin huecos** (100 % con `codigo_canonico`), corrida
+Paso 5 vigente **`20261106_220243`** (calificada 191 · revisar 376 ·
+descartada 96 · datos_insuf 34 · sin_requisitos 8 ·
+`educacion_no_confirmada` **31**, sin cambios), `integrity_check ok` y 0
+violaciones de FK. `pipeline_etapa` con **1 corrida** (`pipe_20261106_215235`,
+6 etapas).
 
 > ℹ️ Esta sesión continúa la del **2026-11-05** (`docs/HANDOFF_SESION_2026-11-05.md`):
 > Ola 1 y Ola 2 de O12 ya estaban hechas y pusheadas.
@@ -373,7 +392,7 @@ ok`, 0 violaciones de FK). Estado **sin cambios**: 705 avisos · 706 conceptos
 | `educacion_no_confirmada` | 31 casos | ⏳ **ABIERTO** (firma de una 2ª persona) |
 | O5.3 (re-barrido de descripciones basura) | 43 descripciones <200 chars (35 de ANE) | 🟢 **HECHO Y APLICADO (2026-11-06)**: el corpus ya coincidía con la fuente; el hueco real era el **parser** (campos descartados). Parser ampliado + `scrape ane --revisitar` + re-análisis por texto nuevo. En la BD real: texto ANE 115.601 → 141.967 chars, **9 de 705 cambian de estado**, `educacion_no_confirmada` 31 → 31, corrida `20261106_152304` |
 | Ola 4.2 (curación de la taxonomía) | Cola `concepto_no_normalizado`: 1988 filas, 1976 sin resolver | 🟢 **HECHO Y APLICADO (2026-11-06)**: filtro `es_variante_encolable` + migración 023 (tanda 1) + `taxonomy curate`. En la BD real: etiquetas que resuelven 241 → **560**, cola 1988 → **1225**, requisitos 2483 (1 sin código) → **2857 (0 sin código)**, **58 de 705 cambian de estado**, `educacion_no_confirmada` 31 → 31, corrida `20261106_182554` |
-| Ola 4.3 (métricas por etapa) | Auditar por qué una corrida dio menos | 🟢 **HECHO Y APLICADO (2026-11-06)**: tabla `pipeline_etapa` (migración 024, esquema 24) + instrumentación en `pipeline.ejecutar` + `pipeline_metricas.py` + `… pipeline etapas`. Medido sobre copia: paso5 705 avisos / 2866 requisitos, evidencia 137 verificaciones, 0 errores. En la BD real: **solo la migración** (nada del matching cambió) |
+| Ola 4.3 (métricas por etapa) | Auditar por qué una corrida dio menos | 🟢 **HECHO Y APLICADO (2026-11-06)**: tabla `pipeline_etapa` (migración 024, esquema 24) + instrumentación en `pipeline.ejecutar` + `pipeline_metricas.py` + `… pipeline etapas`. Medido sobre copia: paso5 705 avisos / 2866 requisitos, evidencia 137 verificaciones, 0 errores. En la BD real: migración + **corrida real** (`pipe_20261106_215235`, 6 etapas) |
 | O6.4 (dedupe slugs ES/EN) | — | ⏳ Parcial |
 | O4 (calibración gate-vs-IA) | — | 🟡 Proponer cerrar como *superseded* |
 | O8.2 / O8.4 / O9 / pestañas nuevas UI v2 | — | ⏳ Pendiente (Ola 4) |
@@ -382,9 +401,12 @@ ok`, 0 violaciones de FK). Estado **sin cambios**: 705 avisos · 706 conceptos
 dato**: 4.1 (parser de ANE + re-barrido + re-análisis: **HECHO Y APLICADO**) ·
 4.2 curación de la taxonomía (`concepto_no_normalizado`: **HECHO Y APLICADO**
 — esquema 23, cola 1988 → **1225**, 2857 requisitos sin huecos, corrida
-`20261106_182554`) · 4.3 métricas por etapa (**HECHO Y APLICADO** — esquema 24, solo la migración;
-la tabla se llena con la próxima corrida real) · 4.2 segunda tanda de
-curación (`veces >= 2`).
+`20261106_182554`) · 4.3 métricas por etapa (**HECHO Y APLICADO** — esquema 24;
+ya llenada con una **corrida real**: `pipe_20261106_215235`, 6 etapas, y la
+corrida del Paso 5 `20261106_220243`) · 4.2 segunda tanda de
+curación (`veces >= 2`) · **corrida en limpio con scrape → otro día** (la
+medida de hoy sobre los datos crudos dio +1 requisito: la extracción ya
+está al 100 %; lo que falta es **corpus** e **interpretación**).
 
 ---
 
@@ -422,6 +444,14 @@ python -m pytest tests/test_conceptos.py tests/test_taxonomia.py `
 # Estado de la BD y evidencia (exit 0 = todo cuadra)
 .\.venv\Scripts\python.exe -X utf8 -m jobpulse_v15 db check
 .\.venv\Scripts\python.exe -X utf8 verificar_evidencia.py
+
+# Métricas por etapa (Ola 4.3)
+.\.venv\Scripts\python.exe -X utf8 -m jobpulse_v15 pipeline etapas --limite 5
+.\.venv\Scripts\python.exe -X utf8 -m jobpulse_v15 pipeline etapas --json
+
+# Corrida real del pipeline (el MISMO orquestador que la CLI y la UI v2)
+#   sin 'scrape' = sobre los datos crudos que ya existen
+.\.venv\Scripts\python.exe -X utf8 -c "from jobpulse_v15 import pipeline; ..."
 
 # Health de los sitios (los que piden login)
 .\.venv\Scripts\python.exe -X utf8 -m jobpulse_v15 site list --needs-review
@@ -465,6 +495,7 @@ python -m pytest tests/test_conceptos.py tests/test_taxonomia.py `
 | `tests/test_pipeline_metricas.py` (nuevo) · `tests/test_pipeline.py` (+4) | **NUEVOS** de la Ola 4.3 |
 | `docs/SITIOS_PROBLEMATICOS.md` | Reescrito: 4 sitios, `requires_login`, sesión de ANE, rate-limit de LinkedIn |
 | `docs/PLAN_MEJORAS.md` · `DESARROLLO_v15.md` · `AGENTS.md` | Olas 4.1 y 4.2 aplicadas a la BD real (esquema 23); Ola 4.3 hecha (esquema 24 al abrir la BD) |
+| `docs/FLUJO_CLI_VS_UI.md` | **§5** el flujo anotado de la corrida real (etapa por etapa) · **§6** comparación con el flujo de la UI (CLI ↔ UI v2 ↔ UI clásica), **sin tocar la UI** |
 
 ---
 
@@ -478,15 +509,19 @@ python -m pytest tests/test_conceptos.py tests/test_taxonomia.py `
   canónicos, 2669 `job_match` (4 corridas; 1 válida).
   `integrity_check ok`, 0 violaciones de FK.
   **Requisitos vigentes**: 2483 (1 sin `codigo_canonico`) → **2857 (0 sin
-  código)**. **Cola `concepto_no_normalizado`**: 1988 → **1225** (las
+  código)** → **2858 (0 sin código**, tras la corrida real con IA).
+  **Cola `concepto_no_normalizado`**: 1988 → **1225** (las
   pendientes reales; `veces` = nº de avisos que piden cada variante).
-  Corrida Paso 5 vigente `20261106_182554` (aplicada por la Ola 4.2):
-  calificada 190 · revisar 376 · descartada 96 · datos_insuf 34 ·
-  sin_requisitos 9 · `educacion_no_confirmada` 31 (intacto).
-  Corrida anterior (sigue en la BD, `valida=0`): `20261106_152304`
+  Corrida Paso 5 vigente **`20261106_220243`** (tras la corrida real con IA):
+  calificada 191 · revisar 376 · descartada 96 · datos_insuf 34 ·
+  sin_requisitos 8 · `educacion_no_confirmada` 31 (intacto).
+  Corridas anteriores (siguen en la BD, `valida=0`): `20261106_182554`
+  (Ola 4.2: calificada 190 · revisar 376 · descartada 96 · datos_insuf 34 ·
+  sin_requisitos 9), `20261106_152304`
   (Ola 4.1: calificada 237 · revisar 320 · descartada 96 · datos_insuf 41 ·
   sin_requisitos 11) y `20261104_231932`.
-- **Respaldo**: `data/backups/pre_ola43_20261106_210124.db` (antes de la 024),
+- **Respaldo**: `data/backups/pre_ia_20261106_215042.db` (antes de la corrida
+  real con IA), `data/backups/pre_ola43_20261106_210124.db` (antes de la 024),
   `data/backups/pre_ola42_20261106_182411.db` (antes de la Ola
   4.2), `data/backups/pre_ola4_20261106_151857.db` (antes de la Ola
   4.1), `data/backups/pre_mig022_20261106_130349.db` (antes de la 022) y
@@ -530,8 +565,33 @@ python -m pytest tests/test_conceptos.py tests/test_taxonomia.py `
   respaldo `pre_ola43_20261106_210124.db`): esquema 23 → **24**, `db check` ok
   (`integrity ok`, 0 violaciones de FK) y **nada más cambió** (705 avisos,
   corrida vigente `20261106_182554`, `educacion_no_confirmada` 31).
-  `pipeline_etapa` tiene **0 filas**: se llenará con la próxima corrida real
-  del pipeline.
+  `pipeline_etapa` tiene **1 corrida** (`pipe_20261106_215235`, 6 etapas):
+  la de la corrida real con IA (abajo).
+- **Corrida real con IA (2026-11-06, aplicada)**: orquestador completo sobre
+  la BD real (`analisis → ia → reanalisis → backfill → paso5 → evidencia`),
+  respaldo `data/backups/pre_ia_20261106_215042.db`. **Qué mejoró** (medido
+  antes/después con `estado_extraccion.py`): requisitos vigentes 2857 →
+  **2858** (+1, todos con `codigo_canonico`: la cobertura estaba y sigue al
+  **100 %**); variantes con código 546 → 546; cola de taxonomía 1225 → 1225
+  (**+0**: la IA no aportó variantes nuevas); avisos sin ningún requisito 8 →
+  **7**; campos `work_mode` 375 → **388** (+13), `employment_type` 648 → **660**
+  (+12), `languages` 677 → **681** (+4), `city`/`region`/`skills`/`salary` +0.
+  Matching: corrida `20261106_182554` → **`20261106_220243`**, calificada 190 →
+  **191**, `sin_requisitos` 9 → **8**, resto igual, `educacion_no_confirmada`
+  **31 (intacto)**; evidencia OK (137 verificaciones literales) y `db check`
+  ok. El único cambio es `ane-121815` (`sin_requisitos` → `calificada`, con
+  **un** requisito: "español nativo", `ambiguous`, `origin='source_field'` →
+  es el caso degenerado que el propio repo avisa: 1 requisito cubierto saca
+  100). **Diagnóstico del pase IA**: `enriched=25` · `failed=1051` (**"no
+  mencionado", NO son errores**: en el log no hay ni un "IA extract {campo}
+  fallo tras 3 intentos") · `skipped=198`. La 10 min de la etapa se las lleva
+  el modelo local; el resto del pipeline, 2 s.
+- **Corrección de la instrumentación (2026-11-06)**: la Ola 4.3 contaba el
+  `failed` del pase IA como **errores** (1051), pero en el pase IA `failed` =
+  "el modelo no halló el campo". Se corrigió `pipeline_metricas` (los errores
+  reales vienen en `stats_ia["error"]`; el `failed` va al detalle como
+  `no_encontrado`) y se corrigió la fila ya escrita de la corrida
+  `pipe_20261106_215235` (1051 → 0, con nota en el `detalle_json`).
 
 ---
 
@@ -548,22 +608,26 @@ python -m pytest tests/test_conceptos.py tests/test_taxonomia.py `
 2. **Ola 4 — seguir** (`docs/PLAN_MEJORAS.md`): ~~4.3 métricas por etapa~~ →
    **HECHO Y APLICADO A LA BD REAL (2026-11-06)**: tabla `pipeline_etapa`
    (migración 024, esquema 24), instrumentación en `pipeline.ejecutar` +
-   `pipeline_metricas.py`, comando `… pipeline etapas`. En la BD real se
-   aplicó **solo la migración** (respaldo `pre_ola43_20261106_210124.db`,
-   `db check` ok); la tabla está vacía y se llenará con la próxima corrida real
-   del pipeline · 4.2 segunda tanda de curación (la cola tiene 1225
+   `pipeline_metricas.py`, comando `… pipeline etapas`. Ya se aplicó con una
+   **corrida real** (`pipe_20261106_215235`): 6 etapas registradas, la IA
+   corrijo su contador de "errores" (los 1051 `failed` son "no mencionado",
+   no fallos) · 4.2 segunda tanda de curación (la cola tiene 1225
    pendientes: la siguiente tanda es la que cubre `veces >= 2`).
-3. **Los 24 avisos ANE nuevos** (122031+) que se detectaron al medir: el
-   usuario decidió **no** meterlos en la Ola 4.1 (entran en el barrido normal,
-   con su pase de IA). Si se quieren ya: `scrape ane --site ane-cr` (24
-   nuevos) → `analysis extract-pending` → `run_enriquecimiento.py` → re-análisis
-   → backfill → `run_paso5.py`.
+3. **Corrida en limpio con scrape → OTRO DÍA** (decisión del usuario): hoy se
+   midió la IA sobre los datos crudos que ya existen (705 avisos, **sin**
+   `scrape`) y la mejora fue mínima (+1 requisito). La corrida en limpio
+   (barrido completo, incluidos los 24 ANE 122031+ que se detectaron) queda
+   para otro día, **con el aviso de que el modelo local tarda ~10 min por
+   700 avisos**. Si se quiere adelantar solo lo de ANE:
+   `scrape ane --site ane-cr` (24 nuevos) → `analysis extract-pending` →
+   `run_enriquecimiento.py` → re-análisis → backfill → `run_paso5.py`.
 4. (Opcional, con permiso del usuario) migrar la **UI clásica** al orquestador
    `pipeline.py` (usa las mismas implementaciones por etapa, pero mantiene su
-   propio flujo; la UI clásica no se toca sin pedirlo).
+   propio flujo; la UI clásica no se toca sin pedirlo). La comparación
+   completa CLI ↔ UI está en `docs/FLUJO_CLI_VS_UI.md` §6.
 5. `educacion_no_confirmada` (31 casos): **NO** actualizar estados hasta que
    una **segunda persona** firme `docs/PASO5_REVISION_PENDIENTES.md` (ya
-   regenerada para la corrida `20261106_182554`).
+   regenerada para la corrida `20261106_220243`).
 6. Decidir si el **rate-limit de LinkedIn** sube de 1,5 s según la carga real
    (medido: 10 peticiones sin espera → 429).
 
