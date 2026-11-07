@@ -118,8 +118,42 @@ class TestContadores(Base):
             },
         )
         self.assertEqual(
-            contadores, {"avisos": 8, "requisitos": 0, "errores": 1}
+            contadores, {"avisos": 8, "requisitos": 0, "errores": 0}
         )
+
+    def test_ia_no_confunte_no_mentcionado_con_error(self):
+        """"failed" = el modelo no hallo el campo; un error real viene en
+        `stats_ia["error"]`."""
+        contadores = pipeline_metricas.contadores_etapa(
+            "ia",
+            {"stats_ia": {"ciclos": [{"enriched": 0, "failed": 326}]}},
+        )
+        self.assertEqual(contadores["errores"], 0)
+        contadores = pipeline_metricas.contadores_etapa(
+            "ia", {"stats_ia": {"error": "TimeoutError: el backend no respondio"}}
+        )
+        self.assertEqual(contadores["errores"], 1)
+
+    def test_el_detalle_de_la_ia_distingue_no_mentcionado_de_error(self):
+        detalle = pipeline_metricas.detalle_etapa(
+            "ia",
+            {
+                "stats_ia": {
+                    "ciclos": [
+                        {
+                            "total": 417,
+                            "enriched": 25,
+                            "failed": 326,
+                            "skipped": 66,
+                        }
+                    ],
+                    "completo": {"total": 453, "enriched": 0, "failed": 387},
+                }
+            },
+        )
+        self.assertEqual(detalle["enriquecidos"], 25)
+        self.assertEqual(detalle["no_encontrado"], 713)
+        self.assertEqual(detalle["sin_cambio"], 66)
 
     def test_reanalisis_suma_los_dos_motivos(self):
         contadores = pipeline_metricas.contadores_etapa(

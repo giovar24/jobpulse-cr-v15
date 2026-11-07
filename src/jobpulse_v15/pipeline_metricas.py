@@ -145,10 +145,14 @@ def contadores_etapa(nombre: str, resultado: Mapping[str, Any]) -> dict[str, int
         enriquecidos = sum(_int(c.get("enriched")) for c in ciclos) + _int(
             completo.get("enriched")
         )
-        fallidos = sum(_int(c.get("failed")) for c in ciclos) + _int(
-            completo.get("failed")
-        )
-        return {"avisos": enriquecidos, "requisitos": 0, "errores": fallidos}
+        # OJO: `failed` en el pase IA NO es un error de red: cuenta "el
+        # modelo no encontró el campo" ("no mencionado"). Los errores REALES
+        # vienen en `stats_ia["error"]` (y se loguean como "IA extract
+        # {campo} fallo tras 3 intentos"). Contar `failed` como errores
+        # inflaría la auditoría con lo que es, sencillamente, "el aviso no
+        # lo dice".
+        errores = 1 if stats.get("error") else 0
+        return {"avisos": enriquecidos, "requisitos": 0, "errores": errores}
     if nombre == "reanalisis":
         return {
             "avisos": _int(r.get("reanalizados")) + _int(r.get("texto_reanalizados")),
@@ -215,10 +219,23 @@ def detalle_etapa(nombre: str, resultado: Mapping[str, Any]) -> dict[str, Any]:
             "requisitos_guardados": _int(r.get("requisitos_guardados")),
         }
     if nombre == "ia":
+        stats = r.get("stats_ia") or {}
+        ciclos = list(stats.get("ciclos") or [])
+        completo = stats.get("completo") or {}
         avance = r.get("avance") or {}
         return {
             "estado": r.get("estado"),
             "motivo": r.get("motivo"),
+            "enriquecidos": sum(_int(c.get("enriched")) for c in ciclos)
+            + _int(completo.get("enriched")),
+            # "no_encontrado" = el modelo NO halló el campo en el texto
+            # (NO es un error); "sin_cambio" = lo devolvió, pero ya estaba.
+            "no_encontrado": sum(_int(c.get("failed")) for c in ciclos)
+            + _int(completo.get("failed")),
+            "sin_cambio": sum(_int(c.get("skipped")) for c in ciclos)
+            + _int(completo.get("skipped")),
+            "total": sum(_int(c.get("total")) for c in ciclos)
+            + _int(completo.get("total")),
             "campos_llenados": _int(avance.get("campos_llenados")),
             "por_campo": avance.get("por_campo") or {},
         }
