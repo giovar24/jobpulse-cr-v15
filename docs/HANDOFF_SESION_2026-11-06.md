@@ -635,6 +635,9 @@ python -m pytest tests/test_conceptos.py tests/test_taxonomia.py `
 
 ## 9. Commits de esta sesión
 
+- `b92f17e` — `fix(o5.3): la metrica de la etapa IA no cuenta 'no mencionado' como error` (pusheado) — en el pase IA `failed` = "el modelo no halló el campo" (NO un error de red); los errores reales vienen en `stats_ia["error"]`. El `failed` va al detalle como `no_encontrado` (+ `enriquecidos`/`sin_cambio`/`total`). **5 tests nuevos**.
+- `d0e1f11` — `docs(o5.3): corrida real con IA sobre la BD real (medida) y comparacion con el flujo de la UI` (pusheado) — evidencia regenerada (corrida `20261106_220243`, 137 verificaciones) + hoja de firma (31 casos) + `docs/FLUJO_CLI_VS_UI.md` §5/§6 + bitácora. **La UI NO se tocó**.
+
 - `6afba1b` — `feat(o5.3): Ola 4.3 - metricas por etapa del pipeline (pipeline_etapa)` (pusheado) — tabla `pipeline_etapa` (migración 024, esquema 24), módulo `pipeline_metricas`, instrumentación en `pipeline.ejecutar`, comando `pipeline etapas`, línea de métricas en la UI v2; medido sobre copia (paso5 705 avisos / 2866 requisitos; evidencia 137 verificaciones; `educacion_no_confirmada` 31 → 31 intacto). Suite: **1159 passed + 980 subtests**.
 
 - `84af033` — `docs(o5.3): Ola 4.2 aplicada a la BD real (taxonomia curada, corrida 20261106_182554)` — respaldo + migración 023 (esquema 23) + cola 1988 → **1225** + re-análisis de los 705 avisos + **2857 requisitos (0 sin código)** + evidencia OK (137) + `db check` ok; resultado **idéntico al medido en la copia** (58 avisos cambian de estado; `educacion_no_confirmada` 31 → 31).
