@@ -35,8 +35,8 @@ caro de descubrir**; lo puntual vive en los handoffs.
 
 - **App/CLI/scripts** → venv: `.\.venv\Scripts\python.exe -X utf8 …`
 - **Tests** → python del **sistema**: `python -m pytest tests/ -q`
-  (pytest **no** está en el venv; ~11 min la suite completa; baseline verificado
-  2026-11-05: **922 passed + 241 subtests**).
+  (pytest **no** está en el venv; ~17 min la suite completa; baseline verificado
+  2026-11-07: **1164 passed + 980 subtests** — 1021,90 s).
 - **`-X utf8` en todo comando que imprima datos de la BD**: sin él, un `\uf0b7`
   o un `\x85` en una descripción rompe la salida (los saves sí se completan).
   Para CSV por consola: `[Console]::OutputEncoding = UTF8` antes.
@@ -146,11 +146,17 @@ incompleta.
 
 ## Scraping y sitios
 
-- **La CLI NO abre Brave**: los scrapers de navegador (ANE, Indeed, LinkedIn,
-  Elempleo) reciben el `port` CDP del caller y el fetcher **nunca** crea un
-  navegador. Antes de `scrape ane|linkedin|indeed` levanta CDP:
-  `python -c "from jobpulse_v15.browser_manager import asegurar_brave; asegurar_brave(9222)"`
-  (o usa `run_full_flow.py`, que sí lo abre y lo cierra).
+- **Los subcomandos `scrape <plataforma>` NO abren Brave**: los scrapers de
+  navegador (ANE, Indeed, LinkedIn, Elempleo) reciben el `port` CDP del caller
+  y el fetcher **nunca** crea un navegador. Antes de `scrape ane|linkedin|indeed`
+  levanta CDP:
+  `python -c "from jobpulse_v15.browser_manager import asegurar_brave; asegurar_brave(9222)"`.
+  **En cambio** `scraper.ejecutar_barrido` (la etapa `scrape` del pipeline, o
+  sea `run_full_flow.py`, la UI v2 y `pipeline.ejecutar`) **sí abre Brave bajo
+  demanda** y lo cierra **solo si esta corrida lo abrió** (O7.2).
+- **No hay subcomando `scrape elempleo` ni `scrape harvie`**: esos fetchers
+  existen en `scraper.FETCHERS` pero solo corren vía `ejecutar_barrido` (sitio
+  registrado con esa plataforma), no por CLI directa.
 - Brave debe usar el **perfil real**: `--user-data-dir` = raíz `User Data`
   (NUNCA `User Data\Default`) + `--profile-directory={perfil}`. Si el Brave
   diario corre sin CDP, Chromium **delega** el puerto y nada abre: ciérralo
@@ -345,7 +351,8 @@ anteriores `valida=0`); nunca `UPDATE` in-place.
   devuelve `None`) y el cliente degrada `json_schema` → `json_object` → sin
   `response_format` cuando el proveedor rechaza el modo estricto.
 - **Privacidad**: con IA no local el TEXTO de los avisos sale de la máquina →
-  aviso + confirmación obligatoria (UI) / `--confirmar-externo` (CLI).
+  aviso + confirmación obligatoria (UI v2) / `--confirmar-externo` — flag de
+  `run_enriquecimiento.py`, **no** del CLI `jobpulse_v15`.
 - Límites **opt-in y ajustables**: `IA_MAX_LLAMADAS`/`IA_RPM`/`IA_MAX_VACANTES`
   (avisos por corrida; vacío = **sin tope**, no hay valores fijos).
 
@@ -376,18 +383,19 @@ anteriores `valida=0`); nunca `UPDATE` in-place.
 $py = ".\.venv\Scripts\python.exe"
 & $py -X utf8 -m jobpulse_v15 --help
 & $py -X utf8 -m jobpulse_v15 site list --needs-review
-& $py -X utf8 -m jobpulse_v15 site mark-reviewed --id <site_id>
+& $py -X utf8 -m jobpulse_v15 site mark-reviewed --id <site_id> | --all-needs-review
 & $py -X utf8 -m jobpulse_v15 init-areas [--classify]
 & $py -X utf8 -m jobpulse_v15 areas list | areas classify [--dry-run]
 & $py -X utf8 -m jobpulse_v15 enrich posting-language [--apply]
 & $py -X utf8 -m jobpulse_v15 enrich profile-canonico [--apply]
 & $py -X utf8 -m jobpulse_v15 taxonomy curate [--apply] [--limit N]
 & $py -X utf8 -m jobpulse_v15 pipeline etapas [--limite N] [--corrida ID] [--json]
-& $py -X utf8 -m jobpulse_v15 viabilidad list [--banda aplicar] | top --limit 20
+& $py -X utf8 -m jobpulse_v15 viabilidad list [--banda aplicar] | top [--limit N]  # --limit por defecto: 50
 & $py -X utf8 -m jobpulse_v15 postulaciones correo --dias 90 [--apply]
 & $py -X utf8 -m jobpulse_v15 postulaciones workday --apply
 & $py -X utf8 -m jobpulse_v15 db check
 & $py -X utf8 tools\estado_bd.py | tools\progreso_enriquecimiento.py | tools\huecos_restantes.py
+& $py -X utf8 tools\corrida_medicion.py [--sin-ia]  # corre el pipeline SOBRE el corpus actual (sin scrape) para medir una etapa; ESCRIBE en la BD → respalda antes
 # Medir el efecto de una corrida (ANTES -> corrida -> DESPUES -> comparar)
 & $py -X utf8 tools\estado_extraccion.py antes antes.json
 & $py -X utf8 tools\comparar_extraccion.py antes.json despues.json
