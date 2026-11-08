@@ -207,8 +207,14 @@ class ConfiguracionTab(BaseTab):
 
         self._widgets["ia_base_url"] = self._fila_form(
             form, 1, "Base URL:", ttk.Entry(form, font=theme.font(9)))
+        # Combobox EDITABLE (no readonly): se puede escribir "auto" o un
+        # modelo que no esté en la lista; «Listar modelos» lo rellena.
+        combo_modelo = ttk.Combobox(
+            form, state="normal", width=26, font=theme.font(9),
+        )
         self._widgets["ia_model"] = self._fila_form(
-            form, 2, "Modelo:", ttk.Entry(form, font=theme.font(9)))
+            form, 2, "Modelo:", combo_modelo,
+            hint=t("escribe o elige tras «Listar modelos»"))
 
         key_entry = ttk.Entry(form, show="*", font=theme.font(9))
         self._widgets["ia_api_key"] = self._fila_form(
@@ -1071,7 +1077,8 @@ class ConfiguracionTab(BaseTab):
         return config
 
     def listar_modelos(self) -> None:
-        """Lista los modelos que expone el endpoint (GET /models)."""
+        """Lista los modelos del endpoint (GET /models) y los carga en el
+        desplegable «Modelo:» para que se pueda elegir uno."""
         config = self._config_ia()
         # "auto" = detección automática: el cliente no exige modelo para listar.
         config["modelo"] = config.get("modelo") or "auto"
@@ -1091,12 +1098,23 @@ class ConfiguracionTab(BaseTab):
                     texto += f"\n... y {len(modelos) - 30} más"
                 if not texto:
                     texto = "No se encontraron modelos."
+                else:
+                    texto = (f"{len(modelos)} modelos cargados en el "
+                             f"desplegable «Modelo:»:\n\n{texto}")
                 self._programar(
-                    lambda: self._info("Modelos disponibles", texto))
+                    lambda: self._mostrar_modelos(modelos, texto))
             except Exception as exc:  # noqa: BLE001
                 self._programar(lambda: self._error("Error", str(exc)))
 
         self._lanzar_hilo(tarea)
+
+    def _mostrar_modelos(self, modelos: list[str], texto: str) -> None:
+        """Rellena el combobox «Modelo:» (hilo principal) y avisa."""
+        if modelos:
+            # configure(values=…) no toca el texto actual: se conserva
+            # lo que el usuario tenga escrito ("auto" o un alias suyo).
+            self._widgets["ia_model"].configure(values=list(modelos))
+        self._info("Modelos disponibles", texto)
 
     def probar_ia(self) -> None:
         config = self._config_ia()

@@ -874,6 +874,14 @@ class TestConfiguracionTab(unittest.TestCase):
                          "IA_API_KEY", "IA_MAX_LLAMADAS", "IA_RPM",
                          "BRAVE_BIN", "BRAVE_PERFIL", "BRAVE_CDP_PORT")}
         self.addCleanup(self._restaurar_env_ia)
+        # Esta clase prueba la tarjeta de IA LOCAL: el endpoint debe ser local
+        # SIEMPRE. Si otro test importó `jobpulse_v15.cli` (que hace
+        # load_dotenv() al importar), os.environ trae el .env REAL del
+        # desarrollador (p.ej. https://ollama.com/v1) y la tarjeta se pinta
+        # como "IA externa" -> falla por el entorno, no por el código.
+        os.environ["IA_BASE_URL"] = "http://127.0.0.1:8081/v1"
+        os.environ["IA_PROVEEDOR"] = "custom"
+        os.environ["IA_MODEL"] = "gemma4-e2b-qat"
         config_mod._HANDLE_SERVIDOR = None  # el global no se hereda entre tests
         config_mod._HANDLE_BRAVE = None
         parches = [
@@ -1063,6 +1071,8 @@ class TestConfiguracionTab(unittest.TestCase):
 
     def test_listar_modelos_devuelve_la_lista_del_endpoint(self):
         self.root.update()
+        # El usuario tiene "auto" escrito: debe seguir tras listar.
+        self.pestana._widgets["ia_model"].set("auto")
 
         class ClienteFalso:
             def __init__(self, config):
@@ -1077,6 +1087,12 @@ class TestConfiguracionTab(unittest.TestCase):
         texto = self.showinfo.call_args.args[1]
         self.assertIn("modelo-a", texto)
         self.assertIn("modelo-b", texto)
+        # El combobox «Modelo:» queda con las opciones para ELEGIR una.
+        valores = str(self.pestana._widgets["ia_model"].cget("values"))
+        self.assertIn("modelo-a", valores)
+        self.assertIn("modelo-b", valores)
+        # Y el valor escrito por el usuario se conserva ("auto", etc.).
+        self.assertEqual(self.pestana._widgets["ia_model"].get(), "auto")
 
     def test_cambiar_el_esquema_guarda_y_reconstruye_la_app(self):
         self.root.update()
