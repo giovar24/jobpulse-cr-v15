@@ -1,4 +1,4 @@
-# Paso 5 — HOJA DE REVISIÓN PENDIENTE (corrida `20261107_171903`)
+# Paso 5 — HOJA DE REVISIÓN PENDIENTE (corrida `20261107_225916`)
 
 > Documento GENERADO por `generar_revision_pendientes.py` — contiene
 > **solo textos literales de la BD, sin ningún veredicto**.
@@ -32,29 +32,12 @@ depende de ellas y hay que decidirlas **con una fuente**, no por impulso:
    la carrera) cuenta como requisito universitario cumplido? A día de hoy
    el módulo NO define qué pasa con estudios parciales.
 
-## Casos a revisar (31)
+## Casos a revisar (29)
 
 Columnas de la tabla de firmas: `veredicto` (bloqueo real / no bloqueo /
 dudoso), `criterio que lo justifica`, `revisor`, `fecha`.
 
-### 1. `indeed-bf3386c86f36686f` — Technical Support Engineer II - Costa Rica, Colombia, Mexico
-
-| veredicto | criterio | revisor | fecha |
-|---|---|---|---|
-|   |   |   |   |
-
-**Texto 1 (verbatim):**
-
-> Technical Support Engineer I, addressing concerns promptly and professionally to ensure customer satisfaction. Participate in customer video calls when appropriate to troubleshoot complex technical issues live, helping reduce back-and-forth communication and speed up resolution for high-priority or advanced customer cases. EDUCATION AND EXPERIENCE Bachelor's or Master's degree in Computer Science or a related field or equivalent experience. 3+ years of Support Engineering, Software Engineering experience. Thorough knowledge with consuming RESTful and GraphQL APIs. Working knowledge of at least one modern JavaScript framework such as Vue.js, React, Next.js, or Nuxt.js and their fundamental principles. Ability to debug an
-
-**Requisito(s) `education` extraído(s) por el extractor** — la
-citas son literales del texto de la oferta:
-
-- `value_text="Bachelor's"` · `requirement_level='inferred'` · evidencia: > EDUCATION AND EXPERIENCE Bachelor's or Master's degree in Computer Science or a related field or equivalent experience.
-
----
-
-### 2. `recruitee-transperfect-2770002` — Client Service Executive
+### 1. `recruitee-transperfect-2770002` — Client Service Executive
 
 | veredicto | criterio | revisor | fecha |
 |---|---|---|---|
@@ -71,7 +54,45 @@ citas son literales del texto de la oferta:
 
 ---
 
-### 3. `workday-Accounts-Payable-Representative_J-020440` — Accounts Payable Representative
+### 2. `workable-cynet-corp-9613AEDBB4` — Pricing Analyst (Remote in Costa Rica)
+
+| veredicto | criterio | revisor | fecha |
+|---|---|---|---|
+|   |   |   |   |
+
+**Texto 1 (verbatim):**
+
+> trategies that anticipate changes in federal funding, reimbursement models, and regulatory requirements. Tools & Reporting - Develop and maintain pricing tools, templates, and models to improve efficiency and accuracy. - Support scenario modelling, profitability analysis, and executive reporting to guide strategic decision-making. Qualifications - Bachelor’s degree in Finance, Economics, Business, Data Analytics, or a related field (or equivalent work experience). - 2+ years of experience in pricing or financial analysis within staffing, government contracting, or healthcare services. - Familiarity with SCA wage determinations, FAR cost principles, and federal procurement processes strongly preferred. - Stro
+
+**Requisito(s) `education` extraído(s) por el extractor** — la
+citas son literales del texto de la oferta:
+
+- `value_text='Bachelor'` · `requirement_level='inferred'` · evidencia: > Qualifications - Bachelor’s degree in Finance, Economics, Business, Data Analytics, or a related field (or equivalent work experience).
+
+---
+
+### 3. `workday-Accounting-Analyst_JR-0111160-1` — Accounting Analyst
+
+| veredicto | criterio | revisor | fecha |
+|---|---|---|---|
+|   |   |   |   |
+
+**Texto 1 (verbatim):**
+
+> Building trusted relationships with business partners, acting as a go-to resource for accounting questions Supporting other Corporate Accounting areas and initiatives as priorities evolve over time About You Basic Qualifications 4+ years of experience in accounting, with a solid foundation in US GAAP 4+ years of experience using a large ERP system Bachelor's degree in Accounting, Finance, or a related discipline, or equivalent practical experience Other Qualifications Thorough understanding of Generally Accepted Accounting Principles (GAAP), with the ability to apply these principles to ensure accurate, consistent, and transparent financial statements, as well as to stay current with changes or updates to th
+
+**Texto 2 (verbatim):**
+
+> ave the opportunity to come together in our offices for important moments that matter. Workday is committed to providing reasonable accommodations for qualified individuals during our application process, in order to perform one or more essential functions of their job, as well as regarding the use of AI tools for employment decision-making to any degree. Please see below for more details including how to request an accommodation as a qualified veteran, due to a disability or for religious reasons, or as otherwise provided under applicable law. Workday prohibits taking adverse action against any candidate or employee for reporting a possible violation of this policy, requesting one or more work ac
+
+**Requisito(s) `education` extraído(s) por el extractor** — la
+citas son literales del texto de la oferta:
+
+- `value_text="Bachelor's degree"` · `requirement_level='ambiguous'` · evidencia: > In this role, you will be responsible for: Analyzing financial data and applying accounting judgment to prepare journal entries for accruals, reclassifications, adjustments, and other items required by management Owning month-end reconciliations end-to-end — investigating variances, identifying root causes, and partnering with cross-functional teams to drive timely resolution Performing flux analysis for balance sheet and P&L accounts, providing clear, well-supported explanations of variances in monthly activity Partnering closely with FP&A, Procurement, Prepaids, Treasury, International Accounting, External Reporting, and SOX teams to resolve accounting questions and ensure accurate recording of transactions Identifying opportunities for process improvement and simplification, and driving them to completion to build efficiencies across the team Supporting SOX compliance and monitoring efforts, proactively flagging and helping remediate control gaps during audits Building trusted relationships with business partners, acting as a go-to resource for accounting questions Supporting other Corporate Accounting areas and initiatives as priorities evolve over time About You Basic Qualifications 4+ years of experience in accounting, with a solid foundation in US GAAP 4+ years of experience using a large ERP system Bachelor's degree in Accounting, Finance, or a related discipline, or equivalent practical experience Other Qualifications Thorough understanding of Generally Accepted Accounting Principles (GAAP), with the ability to apply these principles to ensure accurate, consistent, and transparent financial statements, as well as to stay current with changes or updates to these standards Proficient in Excel, including formulas and pivot tables, along with familiarity with Google Workspace tools (Sheets, Docs, Drive, Slides) Comfortable using AI tools to support accounting analysis and drive efficiency in day-to-day work Detail-oriented, with the ability to manage complex information, spot errors or inconsistencies, and maintain a high level of accuracy and consistency across all work Skilled at identifying and improving processes, using analytical tools to measure performance and find opportunities to enhance efficiency and productivity Analytical and solution-oriented, with the ability to understand underlying processes and bring thoughtful recommendations to the team Organized and effective at managing tight deadlines, delivering timely and accurate work in a fast-paced environment Excellent written and verbal communication skills, with the ability to share ideas clearly and collaborate effectively across cross-functional teams Flexible and open to learning new things, with an enthusiasm for growing in a dynamic, evolving environment Public accounting, software, and/or SaaS industry experience preferred Our Approach to Flexible Work With Flex Work, we’re combining the best of both worlds: in-person time and remote.
+
+---
+
+### 4. `workday-Accounts-Payable-Representative_J-020440` — Accounts Payable Representative
 
 | veredicto | criterio | revisor | fecha |
 |---|---|---|---|
@@ -88,7 +109,7 @@ citas son literales del texto de la oferta:
 
 ---
 
-### 4. `workday-Analyst-Payroll_R273170` — Analyst Payroll
+### 5. `workday-Analyst-Payroll_R273170` — Analyst Payroll
 
 | veredicto | criterio | revisor | fecha |
 |---|---|---|---|
@@ -105,7 +126,7 @@ citas son literales del texto de la oferta:
 
 ---
 
-### 5. `workday-Audience-Management_26999789` — Audience Management
+### 6. `workday-Audience-Management_26999789` — Audience Management
 
 | veredicto | criterio | revisor | fecha |
 |---|---|---|---|
@@ -122,7 +143,7 @@ citas son literales del texto de la oferta:
 
 ---
 
-### 6. `workday-Buyer-Planner-Sr_31163601` — Buyer Planner Sr
+### 7. `workday-Buyer-Planner-Sr_31163601` — Buyer Planner Sr
 
 | veredicto | criterio | revisor | fecha |
 |---|---|---|---|
@@ -136,23 +157,6 @@ citas son literales del texto de la oferta:
 citas son literales del texto de la oferta:
 
 - `value_text='Bachelor Degree'` · `requirement_level='required'` · evidencia: > Required Qualifications Bachelor Degree, engineering, science or closely related discipline is desired, or equivalent technical.
-
----
-
-### 7. `workday-Cardiac-Specialist-II_R18282-1` — Cardiac Specialist II
-
-| veredicto | criterio | revisor | fecha |
-|---|---|---|---|
-|   |   |   |   |
-
-**Texto 1 (verbatim):**
-
-> chieve operational and quality objectives. Assist with User Acceptance Testing (UAT) and system validation activities. Support investigations, edit checks, and quality management activities to maintain data integrity. Create, maintain, and improve workflow documentation, training materials, tracking logs, and procedural documents. What We Look For Bachelor's degree, ECG certification, or an equivalent combination of education and relevant experience required. Minimum of 2 to 3 years of experience processing cardiac safety data in a core laboratory, clinical research environment, or related healthcare setting. Strong knowledge of cardiovascular anatomy, physiology, ECG interpretation, and cardiac rhythm analy
-
-**Requisito(s) `education` extraído(s) por el extractor** — la
-citas son literales del texto de la oferta:
-
-- `value_text="Bachelor's degree"` · `requirement_level='required'` · evidencia: > What We Look For Bachelor's degree, ECG certification, or an equivalent combination of education and relevant experience required.
 
 ---
 
@@ -296,7 +300,7 @@ citas son literales del texto de la oferta:
 
 ---
 
-### 15. `workday-HR-Benefits-Operations-Analyst_261003280` — HR Benefits Operations Analyst
+### 15. `workday-Governance-Reporting---Analysis-Sr-Analyst---C12---HEREDIA_261007965` — Governance Reporting & Analysis Sr. Analyst - C12 - HEREDIA
 
 | veredicto | criterio | revisor | fecha |
 |---|---|---|---|
@@ -304,12 +308,12 @@ citas son literales del texto de la oferta:
 
 **Texto 1 (verbatim):**
 
-> years relevant experience Proficient in Microsoft Office with an emphasis on MS Excel Ability to meet deadlines while dealing with multiple priorities. Proven organization and time management skills Demonstrated problem-solving and decision-making skills Consistently demonstrates clear and concise written and verbal communication skills Education: Bachelor’s degree/University degree or equivalent experience This job description provides a high-level review of the types of work performed. Other job-related duties may be assigned as required. Experience in HR roles Advanced English Language required. Portuguese is a plus. Knowledge in Workday, Service Now (desirable) ------------------------------------------------------ Job Fa
+> nt (presentation decks), and Word (writing and editing procedural and technical documentation). Project management knowledge and experience working with diverse groups of stakeholders to achieve milestones and deadlines. Proven ability to manage multiple, concurrent large-scale projects from ideation through testing and implementation. Education : Bachelor's/University degree or equivalent experience ------------------------------------------------------ Job Family Group: Controls Governance & Oversight ------------------------------------------------------ Job Family: Governance Reporting & Analysis ------------------------------------------------------ Time Type: Full time --------------------------------------------
 
 **Requisito(s) `education` extraído(s) por el extractor** — la
 citas son literales del texto de la oferta:
 
-- `value_text='Bachelor'` · `requirement_level='inferred'` · evidencia: > Proven organization and time management skills Demonstrated problem-solving and decision-making skills Consistently demonstrates clear and concise written and verbal communication skills Education: Bachelor’s degree/University degree or equivalent experience This job description provides a high-level review of the types of work performed.
+- `value_text="Bachelor's"` · `requirement_level='inferred'` · evidencia: > Education : Bachelor's/University degree or equivalent experience ------------------------------------------------------ Job Family Group: Controls Governance & Oversight ------------------------------------------------------ Job Family: Governance Reporting & Analysis ------------------------------------------------------ Time Type: Full time ------------------------------------------------------ Most Relevant Skills Analytical Thinking, Constructive Debate, Controls Lifecycle, Data Analysis, Digital Skills (Including AI), Escalation Management, Governance, Management Reporting, Needs Assessment, Risk Management Lifecycle.
 
 ---
 
@@ -330,24 +334,7 @@ citas son literales del texto de la oferta:
 
 ---
 
-### 17. `workday-IT-Security-Engineer-II_R-01372831` — IT Security Engineer II
-
-| veredicto | criterio | revisor | fecha |
-|---|---|---|---|
-|   |   |   |   |
-
-**Texto 1 (verbatim):**
-
-> on plans developed by risk owners and ensure plans are completed appropriately Perform ad-hoc risk analysis as assigned Perform other duties as assigned REQUIREMENTS 3+ years' experience in risk analysis, information risk management, data privacy, information technology, or equivalent with exposure to cybersecurity and/or information security risk Bachelor's Degree in Risk Management, Information Assurance, Information Security, Cybersecurity, IT, Data Privacy or similar area or equivalent work experience Experience with risk analysis Ability to explain complex risk management topics to a broad audience General understanding of cybersecurity technologies and controls with the ability to bridge the gap betwee
-
-**Requisito(s) `education` extraído(s) por el extractor** — la
-citas son literales del texto de la oferta:
-
-- `value_text="Bachelor's Degree"` · `requirement_level='preferred'` · evidencia: > Key Responsibilities: Providing key input and assistance in the development and implementation of a global cybersecurity risk management program Maintaining and executing the risk management policy throughout the entire risk lifecycle Executing various risk analysis processes within the team including intake and analysis of reported risks, risk measurement, risk response, and ensuring teams are properly managing plans to reduce risk Execute third party security assessments and analyze identified risks to help with strategic decisions around third party management Ensure consistency of security practice and standards across the organization Conduct Information Security assessments including and documenting controls, identifying potential gaps and or inconsistencies and making sound recommendations for improvement and/or mitigation Collaborate on the technical definitions and oversee implementation of security controls and requirements for systems, infrastructure and solutions Carry out information security risk assessments on technology solutions in line with the company risk management program Conduct third-party risk management activities including vendor/supplier assessments and risk analysis Intake and analysis of identified cyber security issues and risks from a variety of sources including security assessments, compliance checks, automated vulnerability systems, and other internally or externally reported risks Complete analyses and reports to develop a comprehensive view of risk across the company Assist and track for accurate risk measurement and response activities, provide necessary information and analysis to help business leaders prioritize risks Review and track action plans developed by risk owners and ensure plans are completed appropriately Perform ad-hoc risk analysis as assigned Perform other duties as assigned REQUIREMENTS 3+ years' experience in risk analysis, information risk management, data privacy, information technology, or equivalent with exposure to cybersecurity and/or information security risk Bachelor's Degree in Risk Management, Information Assurance, Information Security, Cybersecurity, IT, Data Privacy or similar area or equivalent work experience Experience with risk analysis Ability to explain complex risk management topics to a broad audience General understanding of cybersecurity technologies and controls with the ability to bridge the gap between governance and technical concepts Excellent writing skills, with experience as a writer or technical editor is considered a plus Demonstrated ability to complete work with minimal direction and self-identify tasks Excellent written and verbal communication skills with experience presenting to senior leadership Strong interpersonal, organizational, and excellent documentation skills Excellent customer service skills Relevant certifications such as CRISC, CISSP or CISA are considered a plus Understanding of various risk management frameworks such as the NIST Risk Management Framework or Center for Internet Security Risk Assessment Methodology will be considered plus
-
----
-
-### 18. `workday-Network-Support-Engineer_1211197` — Network Support Engineer
+### 17. `workday-Network-Support-Engineer_1211197` — Network Support Engineer
 
 | veredicto | criterio | revisor | fecha |
 |---|---|---|---|
@@ -364,7 +351,7 @@ citas son literales del texto de la oferta:
 
 ---
 
-### 19. `workday-Operations-Engineer_R0007464` — Operations Engineer
+### 18. `workday-Operations-Engineer_R0007464` — Operations Engineer
 
 | veredicto | criterio | revisor | fecha |
 |---|---|---|---|
@@ -381,7 +368,7 @@ citas son literales del texto de la oferta:
 
 ---
 
-### 20. `workday-Principal-Cybersecurity-Engineer_R0007423` — Principal Cybersecurity Engineer
+### 19. `workday-Premium-Support-Engineer-Expert_1210068` — Senior Premium Network Support Engineer – ClearPass & Wireless
 
 | veredicto | criterio | revisor | fecha |
 |---|---|---|---|
@@ -389,16 +376,16 @@ citas son literales del texto de la oferta:
 
 **Texto 1 (verbatim):**
 
-> ive Directory audit data), partnering with SOC and Detection Engineering to close coverage gaps. · Author and maintain Splunk SPL content — alerts, scheduled searches, and lookup- generating pipelines — to support threat detection, compliance reporting, and operational dashboards for the Windows and endpoint environment. Required Qualifications: · Bachelor’s degree in Computer Science, Information Security, or a related field, or equivalent professional experience. · 8+ years of progressive experience in information security or systems engineering, with at least 5 years focused specifically on Windows security engineering or Windows infrastructure hardening. · Deep expertise in Windows Server and Active Dire
+> irectory (AD), LDAP, PKI, SAML, OAuth, and third-party security solutions. Provides domain-specific expertise and overall engineering leadership and perspective to cross- organization projects, programs, and activities. Ready to learn and adopt to WLAN technologies - Wireless Access Points, ArubaOS 8, ArubaOS 10. Education and Experience Required: Bachelor's or Master's degree in Mechanical, Electrical, or other Engineering, Computer Science, or equivalent. Typically 6-10 years experience. Advanced English Level. Knowledge and Skills Required Strong proficiency in RADIUS, TACACS+, and LDAP for secure authentication and access control. In-depth understanding of 802.1X, PKI, firewalls, VPNs, endpoint security, and encrypt
 
 **Requisito(s) `education` extraído(s) por el extractor** — la
 citas son literales del texto de la oferta:
 
-- `value_text='Bachelor'` · `requirement_level='required'` · evidencia: > Required Qualifications: · Bachelor’s degree in Computer Science, Information Security, or a related field, or equivalent professional experience.
+- `value_text="Bachelor's"` · `requirement_level='required'` · evidencia: > Education and Experience Required: Bachelor's or Master's degree in Mechanical, Electrical, or other Engineering, Computer Science, or equivalent.
 
 ---
 
-### 21. `workday-Principal-Engineer--Quality_Req-51750` — Principal Engineer, Quality
+### 20. `workday-Principal-Engineer--Quality_Req-51750` — Principal Engineer, Quality
 
 | veredicto | criterio | revisor | fecha |
 |---|---|---|---|
@@ -419,7 +406,7 @@ citas son literales del texto de la oferta:
 
 ---
 
-### 22. `workday-Production-Supervisor-I_31163511` — Production Supervisor I
+### 21. `workday-Production-Supervisor-I_31163511` — Production Supervisor I
 
 | veredicto | criterio | revisor | fecha |
 |---|---|---|---|
@@ -441,29 +428,7 @@ citas son literales del texto de la oferta:
 
 ---
 
-### 23. `workday-Production-Supervisor-I_31163518` — Production Supervisor I
-
-| veredicto | criterio | revisor | fecha |
-|---|---|---|---|
-|   |   |   |   |
-
-**Texto 1 (verbatim):**
-
-> lated information. Build positive, outgoing relations with the other production supervisors in sharing of product, process or equipment related information. Execute and monitor continuous improvement processes to increase quality, reduce cost and improve overall team productivity in own production line Required Qualifications 80% completeness of a bachelor’s degree program from a four-year college or university in Business Administration, Engineering or other technical/scientific experience. 0-2 years supervisory experience. Preferably in a medical device, pharmaceutical, or electronic industry. Computer skills. Demonstrated proficiency on manufacturing systems used to collect data and control/monitor processes. , For example SFA, SAP, Kronos, or similar
-
-**Texto 2 (verbatim):**
-
-> d or applicable to medical industry. For example CQE, 6Sigma black belt, lean coach, problem solving techniques, etc. Flexibility to work on different shifts schedule and areas is preferred. Demonstrated capacity to effectively lead/influence peers and other functions towards organizational goals. Basic Command of English. Preferred Qualifications Bachelor’s degree in business administration, Engineering or similar field. Experience leading teams. Knowledge of Costa Rica laws applicable to direct labor operators is a plus. Apply Now Follow your career aspirations to Abbott for diverse opportunities with a company that can help you build your future and live your best life. Abbott is an Equal Opportunity Empl
-
-**Requisito(s) `education` extraído(s) por el extractor** — la
-citas son literales del texto de la oferta:
-
-- `value_text='Bachelor'` · `requirement_level='preferred'` · evidencia: > Preferred Qualifications Bachelor’s degree in business administration, Engineering or similar field.
-- `value_text='bachelor'` · `requirement_level='required'` · evidencia: > Execute and monitor continuous improvement processes to increase quality, reduce cost and improve overall team productivity in own production line Required Qualifications 80% completeness of a bachelor’s degree program from a four-year college or university in Business Administration, Engineering or other technical/scientific experience.
-
----
-
-### 24. `workday-Sales-Specialist_R-117581` — Sales Specialist
+### 22. `workday-Sales-Specialist_R-117581` — Sales Specialist
 
 | veredicto | criterio | revisor | fecha |
 |---|---|---|---|
@@ -480,7 +445,7 @@ citas son literales del texto de la oferta:
 
 ---
 
-### 25. `workday-Security-Governance---Compliance-Specialist_2022361-1` — Security Governance & Compliance Specialist
+### 23. `workday-Security-Governance---Compliance-Specialist_2022361-1` — Security Governance & Compliance Specialist
 
 | veredicto | criterio | revisor | fecha |
 |---|---|---|---|
@@ -497,7 +462,7 @@ citas son literales del texto de la oferta:
 
 ---
 
-### 26. `workday-Security-Governance---Compliance-Specialist_2023168-1` — Security Governance & Compliance Specialist
+### 24. `workday-Security-Governance---Compliance-Specialist_2023168-1` — Security Governance & Compliance Specialist
 
 | veredicto | criterio | revisor | fecha |
 |---|---|---|---|
@@ -514,7 +479,7 @@ citas son literales del texto de la oferta:
 
 ---
 
-### 27. `workday-Senior-Client-Services-Executive_R2025-244318` — Senior Client Services Executive
+### 25. `workday-Senior-Client-Services-Executive_R2025-244318` — Senior Client Services Executive
 
 | veredicto | criterio | revisor | fecha |
 |---|---|---|---|
@@ -531,7 +496,24 @@ citas son literales del texto de la oferta:
 
 ---
 
-### 28. `workday-Senior-Project-Manager_R13442` — Senior Project Manager
+### 26. `workday-Senior-Engineer---WLAN_1210063-2` — Senior Engineer – WLAN
+
+| veredicto | criterio | revisor | fecha |
+|---|---|---|---|
+|   |   |   |   |
+
+**Texto 1 (verbatim):**
+
+> al programs, initiatives, and customer-impacting escalations. Drives innovation by evaluating and integrating new wireless technologies, tools, and methodologies within the engineering organization. Provides guidance, coaching, and mentoring to junior engineers to support skill development and knowledge transfer. Education and Experience Required: Bachelor’s or Master’s degree in Computer Science, Electrical Engineering, Computer Engineering, or a related discipline, or equivalent practical experience. Typically 6–10 years of relevant experience in enterprise networking, with a strong focus on wireless LAN technologies. Advanced English Level. Advanced knowledge of Aruba WLAN architectures, enterprise wireless design pr
+
+**Requisito(s) `education` extraído(s) por el extractor** — la
+citas son literales del texto de la oferta:
+
+- `value_text='Bachelor'` · `requirement_level='required'` · evidencia: > Education and Experience Required: Bachelor’s or Master’s degree in Computer Science, Electrical Engineering, Computer Engineering, or a related discipline, or equivalent practical experience.
+
+---
+
+### 27. `workday-Senior-Project-Manager_R13442` — Senior Project Manager
 
 | veredicto | criterio | revisor | fecha |
 |---|---|---|---|
@@ -548,7 +530,7 @@ citas son literales del texto de la oferta:
 
 ---
 
-### 29. `workday-Senior-Specialist--Technical-Training_R576356` — Senior Specialist, Technical Training
+### 28. `workday-Senior-Specialist--Technical-Training_R576356` — Senior Specialist, Technical Training
 
 | veredicto | criterio | revisor | fecha |
 |---|---|---|---|
@@ -565,24 +547,7 @@ citas son literales del texto de la oferta:
 
 ---
 
-### 30. `workday-SeniorTechnician--Laboratory--Microbiology-_Req-51330` — SeniorTechnician, Laboratory (Microbiology)
-
-| veredicto | criterio | revisor | fecha |
-|---|---|---|---|
-|   |   |   |   |
-
-**Texto 1 (verbatim):**
-
-> ocedures and executing PM (preventative maintenance) per established schedule • Support laboratory investigations and propose recommendations for manager view • Prepare data summaries for laboratory reports or technical studies using existing templates as a model as well as review and approve basic laboratory data • Execute testing or instructions associated to equipment and process validation protocols • May train, coach, and guide lower-level technicians on new procedures, assess work techniques and provide feedback on procedures • Other incidental duties What you’ll need (Required): • Technical or Diploma Degree in Laboratory Science, Mircrobiology Laboratory or Related fields with 3 years of previous experience working in a laboratory Required, or Bachelor's Degree or Equivalent in Chemistry and /or Microbiology Preferred. • Availability to work from Monday to Friday from 8.00 a.m. to 05.00 p.m. What else we look for (preferred): • Good written and verbal communication, interpersonal, and relationship building skills • Able to read, comprehend, write and speak English • Good computer skills, including usage
-
-**Requisito(s) `education` extraído(s) por el extractor** — la
-citas son literales del texto de la oferta:
-
-- `value_text="Bachelor's Degree"` · `requirement_level='ambiguous'` · evidencia: > • Assist in testing validation/revalidation activities for critical systems and equipment under close supervision • May maintain basic equipment by following procedures and executing PM (preventative maintenance) per established schedule • Support laboratory investigations and propose recommendations for manager view • Prepare data summaries for laboratory reports or technical studies using existing templates as a model as well as review and approve basic laboratory data • Execute testing or instructions associated to equipment and process validation protocols • May train, coach, and guide lower-level technicians on new procedures, assess work techniques and provide feedback on procedures • Other incidental duties What you’ll need (Required): • Technical or Diploma Degree in Laboratory Science, Mircrobiology Laboratory or Related fields with 3 years of previous experience working in a laboratory Required, or Bachelor's Degree or Equivalent in Chemistry and /or Microbiology Preferred.
-
----
-
-### 31. `workday-SharePoint-Application-Developer_R55630-1` — SharePoint Application Developer
+### 29. `workday-SharePoint-Application-Developer_R55630-1` — SharePoint Application Developer
 
 | veredicto | criterio | revisor | fecha |
 |---|---|---|---|

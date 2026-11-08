@@ -1,4 +1,4 @@
-# Paso 5 — Evidencia del bloqueante educativo (corrida `20261107_171903`)
+# Paso 5 — Evidencia del bloqueante educativo (corrida `20261107_225916`)
 
 > Documento GENERADO por `generar_evidencia_paso5.py` (no editado a mano).
 > Todo el texto citado es **literal** de `jobs.requirements_raw` +
@@ -94,82 +94,29 @@ resultados sin tocar el código.
 
 ```
 corrida          filas  valida=1
-20261104_220600  554    0
-20261104_231932  705    0
-20261106_152304  705    0
-20261106_182554  705    0
-20261106_220243  705    0
-20261107_133939  705    0
-20261107_171903  705    705
+20261107_225916  735    735
 ```
 
-## 3. Conteo por estado y motivo (corrida vigente `20261107_171903`)
+## 3. Conteo por estado y motivo (corrida vigente `20261107_225916`)
 
 ```
-calificada             | cumple_umbral                          | 188
-datos_insuficientes    | cobertura_insuficiente                 | 28
+calificada             | cumple_umbral                          | 220
+datos_insuficientes    | cobertura_insuficiente                 | 36
 datos_insuficientes    | educacion_no_cumple                    | 2
-datos_insuficientes    | skill_faltante                         | 3
-descartada             | titulo_universitario_en_curso_requerido | 22
+datos_insuficientes    | skill_faltante                         | 4
+descartada             | titulo_universitario_en_curso_requerido | 23
 descartada             | titulo_universitario_requerido         | 74
-revisar_a_mano         | educacion_no_confirmada                | 31
-revisar_a_mano         | educacion_no_cumple                    | 49
-revisar_a_mano         | experiencia_no_verificable             | 2
-revisar_a_mano         | skill_faltante                         | 298
-sin_requisitos         | sin_requisitos_mapeados                | 8
+revisar_a_mano         | educacion_no_confirmada                | 29
+revisar_a_mano         | educacion_no_cumple                    | 54
+revisar_a_mano         | experiencia_no_verificable             | 3
+revisar_a_mano         | idioma_no_comparable                   | 1
+revisar_a_mano         | skill_faltante                         | 278
+sin_requisitos         | sin_requisitos_mapeados                | 11
 ```
 
-## 4. Las 96 `descartada` — evidencia literal
+## 4. Las 97 `descartada` — evidencia literal
 
-### 1. `ane-121783` — Concurso Mixto N°238-2026 Agente Censal: Persona encargada de recolección de datos
-
-- motivo en BD: `titulo_universitario_requerido`
-- detección textual: `confirmado` (término: `'Bachiller universitario'`) · obligatorio=True · en_curso=False · suave=False
-- requisitos `education` extraídos:
-  - `value_text='Bachillerato Universitario'` · `requirement_level='inferred'` · `education_status='unspecified'`
-    - evidencia literal del requisito: > Bachillerato Universitario en Economía Agrícola, Agronomía, Economía, Administración, Geografía, Planificación y sus atinencias.
-
-> Nivel académico: Bachiller universitario (Requerido).
->
-> contexto: ...orio nacional.. Habilidades importantes a tener en cuenta: Comunicación asertiva, Desarrollo de relaciones, Disposición, Orientación a la calidad, Profesionalismo, Trabajo en equipo. Nivel académico: Bachiller universitario (Requerido). Experiencia laboral: Sin experiencia Las funciones del puesto están orientadas a la ejecución y gestión de procesos de recolección de datos, actualización cartográfica de fincas, así com...
-
-### 2. `ane-121784` — Concurso Mixto N°238-2026 Agente Censal: Persona encargada de recolección de datos
-
-- motivo en BD: `titulo_universitario_requerido`
-- detección textual: `confirmado` (término: `'Bachiller universitario'`) · obligatorio=True · en_curso=False · suave=False
-- requisitos `education` extraídos:
-  - `value_text='Bachillerato Universitario'` · `requirement_level='inferred'` · `education_status='unspecified'`
-    - evidencia literal del requisito: > Bachillerato Universitario en Economía Agrícola, Agronomía, Economía, Administración, Geografía, Planificación y sus atinencias.
-
-> Nivel académico: Bachiller universitario (Requerido).
->
-> contexto: ...orio nacional.. Habilidades importantes a tener en cuenta: Comunicación asertiva, Desarrollo de relaciones, Disposición, Orientación a la calidad, Profesionalismo, Trabajo en equipo. Nivel académico: Bachiller universitario (Requerido). Experiencia laboral: Sin experiencia Las funciones del puesto están orientadas a la ejecución y gestión de procesos de recolección de datos, actualización cartográfica de fincas, así com...
-
-### 3. `ane-121786` — Concurso Mixto N°238-2026 Agente Censal: Persona encargada de recolección de datos
-
-- motivo en BD: `titulo_universitario_requerido`
-- detección textual: `confirmado` (término: `'Bachiller universitario'`) · obligatorio=True · en_curso=False · suave=False
-- requisitos `education` extraídos:
-  - `value_text='Bachillerato Universitario'` · `requirement_level='inferred'` · `education_status='unspecified'`
-    - evidencia literal del requisito: > Bachillerato Universitario en Economía Agrícola, Agronomía, Economía, Administración, Geografía, Planificación y sus atinencias.
-
-> Nivel académico: Bachiller universitario (Requerido).
->
-> contexto: ...orio nacional.. Habilidades importantes a tener en cuenta: Comunicación asertiva, Desarrollo de relaciones, Disposición, Orientación a la calidad, Profesionalismo, Trabajo en equipo. Nivel académico: Bachiller universitario (Requerido). Experiencia laboral: Sin experiencia Las funciones del puesto están orientadas a la ejecución y gestión de procesos de recolección de datos, actualización cartográfica de fincas, así com...
-
-### 4. `ane-121788` — Concurso Mixto N°238-2026 Agente Censal: Persona encargada de recolección de datos
-
-- motivo en BD: `titulo_universitario_requerido`
-- detección textual: `confirmado` (término: `'Bachiller universitario'`) · obligatorio=True · en_curso=False · suave=False
-- requisitos `education` extraídos:
-  - `value_text='Bachillerato Universitario'` · `requirement_level='inferred'` · `education_status='unspecified'`
-    - evidencia literal del requisito: > Bachillerato Universitario en Economía Agrícola, Agronomía, Economía, Administración, Geografía, Planificación y sus atinencias.
-
-> Nivel académico: Bachiller universitario (Requerido).
->
-> contexto: ...orio nacional.. Habilidades importantes a tener en cuenta: Comunicación asertiva, Desarrollo de relaciones, Disposición, Orientación a la calidad, Profesionalismo, Trabajo en equipo. Nivel académico: Bachiller universitario (Requerido). Experiencia laboral: Sin experiencia Las funciones del puesto están orientadas a la ejecución y gestión de procesos de recolección de datos, actualización cartográfica de fincas, así com...
-
-### 5. `ane-121789` — Audiólogo CARTAGO
+### 1. `ane-122048` — Ingeniero Civil
 
 - motivo en BD: `titulo_universitario_requerido`
 - detección textual: `confirmado` (término: `'Licenciatura'`) · obligatorio=True · en_curso=False · suave=False
@@ -179,21 +126,9 @@ sin_requisitos         | sin_requisitos_mapeados                | 8
 
 > Nivel académico: Licenciatura (Requerido).
 >
-> contexto: ...al.. Habilidades importantes a tener en cuenta: Adaptabilidad, Comunicación asertiva, Disposición, Enfoque a resultados, Profesionalismo, Resolución de conflictos, Trabajo en equipo. Nivel académico: Licenciatura (Requerido). Experiencia laboral: De 1 a menos de 2 años (Requerido) 1. Atención presencial y telefónica de pacientes 2. Coordinación de citas de pacientes y manejo de expedientes 3. Manejo de invent...
+> contexto: ...torio nacional.. Habilidades importantes a tener en cuenta: Adaptabilidad, Disposición, Enfoque a resultados, Liderazgo, Orientación a la calidad, Profesionalismo, Trabajo en equipo. Nivel académico: Licenciatura (Requerido). Experiencia laboral: De 1 a menos de 12 meses (Requerido) Inspección de obras civiles en concreto y acero. Inspección de obras de infraestructura habitacional y comercial. Mantenimiento...
 
-### 6. `ane-121804` — Gerente de Recursos Humanos
-
-- motivo en BD: `titulo_universitario_requerido`
-- detección textual: `confirmado` (término: `'Licenciatura'`) · obligatorio=True · en_curso=False · suave=False
-- requisitos `education` extraídos:
-  - `value_text='Licenciatura'` · `requirement_level='required'` · `education_status='unspecified'`
-    - evidencia literal del requisito: > Nivel académico: Licenciatura (Requerido).
-
-> Nivel académico: Licenciatura (Requerido).
->
-> contexto: ...legislación laboral. Programas de cómputo: Windows - MEDIO. Habilidades importantes a tener en cuenta: Comunicación asertiva, Desarrollo de relaciones, Liderazgo, Trabajo en equipo. Nivel académico: Licenciatura (Requerido). Experiencia laboral: De 2 a menos de 5 años Liderar gestión del Talento humano, impulsar capacitación, dirigir procesos de reclutamiento y selección. Gestionar relaciones laborales. | Oc...
-
-### 7. `ane-121911` — Abogada Junior
+### 2. `ane-122056` — Gestor/a en Soporte Tecnológico
 
 - motivo en BD: `titulo_universitario_requerido`
 - detección textual: `confirmado` (término: `'Licenciatura'`) · obligatorio=True · en_curso=False · suave=False
@@ -203,9 +138,33 @@ sin_requisitos         | sin_requisitos_mapeados                | 8
 
 > Nivel académico: Licenciatura (Requerido).
 >
-> contexto: ...ís Este puesto requiere disponibilidad para realizar giras o trasladarse dentro del territorio nacional.. Habilidades importantes a tener en cuenta: Adaptabilidad, Trabajo en equipo. Nivel académico: Licenciatura (Requerido). Experiencia laboral: Sin experiencia *Excelente redacción y ortografía. * Capacidad de organización y análisis. * Proactividad, responsabilidad y disposición para aprender. * No se requi...
+> contexto: ...ogramas de cómputo: SQL Server - MEDIO (Requerido), Visual Basic/Visual Basic.net - MEDIO (Requerido), C/C++ V.3/Borlan C++ V.5/C#.net - MEDIO (Requerido). Licencias de conducir: B1. Nivel académico: Licenciatura (Requerido). Experiencia laboral: De 2 a menos de 5 años (Requerido) Ejecutar labores estratégicas y especializadas de diseño, arquitectura, administración, optimización, seguridad, continuidad opera...
 
-### 8. `ashby-greenlight-workforce-solutions-204564b1-633d-4e73-845e-ba9cc0a7d9f1` — Senior Accountant
+### 3. `ane-122063` — Coordinador Servicio Ciudadano
+
+- motivo en BD: `titulo_universitario_requerido`
+- detección textual: `confirmado` (término: `'Licenciatura'`) · obligatorio=True · en_curso=False · suave=False
+- requisitos `education` extraídos:
+  - `value_text='Licenciatura'` · `requirement_level='required'` · `education_status='unspecified'`
+    - evidencia literal del requisito: > Nivel académico: Licenciatura (Requerido).
+
+> Nivel académico: Licenciatura (Requerido).
+>
+> contexto: ...9-1-1 Cualquier consulta comunicarse mediante correo electrónico gfajardo@911.go.cr o vía telefónica al 2225-2723 con la funcionaria Gidget Fajardo Vargas. Licencias de conducir: B1. Nivel académico: Licenciatura (Requerido). Experiencia laboral: De 5 a menos de 10 años (Requerido). Estudio técnico: Técnico universitario Coordinar tácticamente la operación del Proceso de Servicio Ciudadano mediante la supervi...
+
+### 4. `ane-122085` — Contador Auxiliar
+
+- motivo en BD: `titulo_universitario_requerido`
+- detección textual: `confirmado` (término: `'Licenciatura'`) · obligatorio=True · en_curso=False · suave=False
+- requisitos `education` extraídos:
+  - `value_text='Licenciatura'` · `requirement_level='required'` · `education_status='unspecified'`
+    - evidencia literal del requisito: > Nivel académico: Licenciatura (Requerido).
+
+> Nivel académico: Licenciatura (Requerido).
+>
+> contexto: ...r en cuenta: Adaptabilidad, Aprendizaje permanente, Comunicación asertiva, Disposición, Enfoque a resultados, Liderazgo, Orientación a la calidad, Profesionalismo, Trabajo en equipo. Nivel académico: Licenciatura (Requerido). Experiencia laboral: De 2 a menos de 5 años (Requerido). Estudio técnico: Diplomado universitario Funciones principales • Controlar cuentas por cobrar y dar seguimiento a facturas y cobr...
+
+### 5. `ashby-greenlight-workforce-solutions-204564b1-633d-4e73-845e-ba9cc0a7d9f1` — Senior Accountant
 
 - motivo en BD: `titulo_universitario_requerido`
 - detección textual: `confirmado` (término: `'Bachelor’s'`) · obligatorio=True · en_curso=False · suave=False
@@ -217,7 +176,7 @@ sin_requisitos         | sin_requisitos_mapeados                | 8
 >
 > contexto: ...ssigned control activities. Identify opportunities to improve, standardize, and automate close procedures. Assist with special projects and other accounting responsibilities as needed. Qualifications Bachelor’s degree in Accounting. 3–5 years of progressive accounting experience, preferably including significant general ledger and month-end close responsibilities. Strong knowledge of U.S. GAAP and accountin...
 
-### 9. `cinde-4887` — Engineering Consultant Apprentice- TMV execution - Medical Device #2612
+### 6. `cinde-4887` — Engineering Consultant Apprentice- TMV execution - Medical Device #2612
 
 - motivo en BD: `titulo_universitario_en_curso_requerido`
 - detección textual: `confirmado` (término: `'Bachillerato universitario'`) · obligatorio=True · en_curso=False · suave=False
@@ -229,7 +188,7 @@ sin_requisitos         | sin_requisitos_mapeados                | 8
 >
 > contexto: ...Categoría: Calidad. Nivel: Profesional Jr.. Experiencia: de 1 a 2 años. Formación: Bachillerato universitario incompleto. Idiomas: Inglés-B2+. Modalidad: Presencial What you'll do Support Stack Analysis Support the design of plastic parts in SolidWorks. Support the development of Test Methods: Protocols gene...
 
-### 10. `cinde-4888` — IT Software Developer II
+### 7. `cinde-4888` — IT Software Developer II
 
 - motivo en BD: `titulo_universitario_requerido`
 - detección textual: `confirmado` (término: `'Bachillerato universitario'`) · obligatorio=True · en_curso=False · suave=False
@@ -243,7 +202,7 @@ sin_requisitos         | sin_requisitos_mapeados                | 8
 >
 > contexto: ...Categoría: Desarrollo Web. Nivel: Profesional. Experiencia: de 3 a 5 años. Formación: Bachillerato universitario completo. Idiomas: Inglés-B2. Modalidad: 100% virtual Software Engineer – Platform Automation & Integrations Location: San José, Costa Rica (Hybrid) About the Role We are looking for a highly motivat...
 
-### 11. `cinde-4889` — IT Systems Engineer II
+### 8. `cinde-4889` — IT Systems Engineer II
 
 - motivo en BD: `titulo_universitario_requerido`
 - detección textual: `confirmado` (término: `'Bachillerato universitario'`) · obligatorio=True · en_curso=False · suave=False
@@ -257,7 +216,7 @@ sin_requisitos         | sin_requisitos_mapeados                | 8
 >
 > contexto: ...Categoría: Soporte Técnico. Nivel: Profesional. Experiencia: de 3 a 5 años. Formación: Bachillerato universitario completo. Idiomas: Inglés-B2. Modalidad: 100% virtual IT SYSTEMS ENGINEER II JOB DESCRIPTION – APPSTERS World Fuel is a global energy management and solutions provider delivering fuel, logistics, and...
 
-### 12. `cinde-4890` — Cloud Engineer III
+### 9. `cinde-4890` — Cloud Engineer III
 
 - motivo en BD: `titulo_universitario_requerido`
 - detección textual: `confirmado` (término: `'Bachillerato universitario'`) · obligatorio=True · en_curso=False · suave=False
@@ -269,7 +228,7 @@ sin_requisitos         | sin_requisitos_mapeados                | 8
 >
 > contexto: ...Categoría: Soporte Técnico. Nivel: Profesional Sr.. Experiencia: de 5 a 8 años. Formación: Bachillerato universitario completo. Idiomas: Inglés-B2. Modalidad: 100% virtual AWS FinOps Engineer III Job Description At World Fuel Services, our employees are key to our global success. We are industry leaders because of t...
 
-### 13. `cinde-4892` — AI Finance Intern
+### 10. `cinde-4892` — AI Finance Intern
 
 - motivo en BD: `titulo_universitario_en_curso_requerido`
 - detección textual: `confirmado` (término: `'Bachillerato universitario'`) · obligatorio=True · en_curso=False · suave=False
@@ -283,7 +242,7 @@ sin_requisitos         | sin_requisitos_mapeados                | 8
 >
 > contexto: ...Categoría: Finanzas / Análisis Financiero. Nivel: Otro. Experiencia: sin experiencia. Formación: Bachillerato universitario incompleto. Idiomas: Inglés-B2+. Modalidad: 100% virtual We are looking for highly motivated university students in Costa Rica who are passionate about Artificial Intelligence, Data Analytics, and pr...
 
-### 14. `cinde-4896` — Lead Data Engineer
+### 11. `cinde-4896` — Lead Data Engineer
 
 - motivo en BD: `titulo_universitario_en_curso_requerido`
 - detección textual: `confirmado` (término: `'Bachillerato universitario'`) · obligatorio=True · en_curso=False · suave=False
@@ -295,7 +254,7 @@ sin_requisitos         | sin_requisitos_mapeados                | 8
 >
 > contexto: ...Categoría: Informática / Sistemas. Nivel: Profesional. Experiencia: de 3 a 5 años. Formación: Bachillerato universitario incompleto. Idiomas: Inglés-B2. Modalidad: Híbrido. Vacantes: 3 We are looking for a Lead Data Engineer who will be responsible for defining data engineering standards, building reusable patterns, me...
 
-### 15. `cinde-4897` — Full Stack Lead Engineer
+### 12. `cinde-4897` — Full Stack Lead Engineer
 
 - motivo en BD: `titulo_universitario_en_curso_requerido`
 - detección textual: `confirmado` (término: `'Bachillerato universitario'`) · obligatorio=True · en_curso=False · suave=False
@@ -307,7 +266,7 @@ sin_requisitos         | sin_requisitos_mapeados                | 8
 >
 > contexto: ...Categoría: Informática / Sistemas. Nivel: Profesional. Experiencia: de 3 a 5 años. Formación: Bachillerato universitario incompleto. Idiomas: Inglés-B2. Modalidad: Híbrido. Vacantes: 5 We are seeking an experienced Full Stack Lead Engineer to drive engineering excellence, mentor technical talent, and support the delive...
 
-### 16. `cinde-4898` — Lead Software Engineer
+### 13. `cinde-4898` — Lead Software Engineer
 
 - motivo en BD: `titulo_universitario_requerido`
 - detección textual: `confirmado` (término: `'Licenciatura'`) · obligatorio=True · en_curso=False · suave=False
@@ -319,7 +278,7 @@ sin_requisitos         | sin_requisitos_mapeados                | 8
 >
 > contexto: ...Categoría: Diseño de Software. Nivel: Supervisores/Líderes de Equipo. Experiencia: de 5 a 8 años. Formación: Licenciatura. Idiomas: Inglés-C1;Español-C2. Modalidad: Híbrido We are looking for an experienced Lead Software Engineer / Chapter Lead who combines strong hands-on technical expertise with engineering leadership...
 
-### 17. `cinde-4901` — Regulatory Affairs Specialist
+### 14. `cinde-4901` — Regulatory Affairs Specialist
 
 - motivo en BD: `titulo_universitario_requerido`
 - detección textual: `confirmado` (término: `'Bachillerato universitario'`) · obligatorio=True · en_curso=False · suave=False
@@ -333,7 +292,67 @@ sin_requisitos         | sin_requisitos_mapeados                | 8
 >
 > contexto: ...Categoría: Calidad. Nivel: Profesional. Experiencia: de 1 a 2 años. Formación: Bachillerato universitario completo. Idiomas: Inglés-B2+. Modalidad: Presencial POSITION SUMMARY: The Regulatory Affairs Specialist I is an entry-level member of LifeSync's Global Quality & Regulatory Affairs organization, bas...
 
-### 18. `greenhouse-smartsheet-8273999` — Content Designer II (Remote Eligible - Costa Rica)
+### 15. `elempleo-879447` — Gestor de riesgos (unidad modelos matematicos y metodologias de riesgo)
+
+- motivo en BD: `titulo_universitario_requerido`
+- detección textual: `confirmado` (término: `'Licenciatura'`) · obligatorio=True · en_curso=False · suave=False
+- requisitos `education` extraídos:
+  - `value_text='Licenciatura'` · `requirement_level='inferred'` · `education_status='unspecified'`
+    - evidencia literal del requisito: > Requisitos: -Licenciatura Universitaria (Incorporado al Colegio Profesional respectivo) o Bachillerato Universitario con Maestría e incorporado al Colegio de Profesionales respectivo.
+
+> Requisitos: -Licenciatura Universitaria (Incorporado al Colegio Profesional respectivo) o Bachillerato Universitario con Maestría e incorporado al Colegio de Profesionales respectivo.
+>
+> contexto: ...elos, metodologías, técnicas y herramientas relacionadas a la gestión del riesgo, con el fin de apoyar al área en el fortalecimiento del Sistema de Gestión Integral del Riesgo del CFBCR. Requisitos: -Licenciatura Universitaria (Incorporado al Colegio Profesional respectivo) o Bachillerato Universitario con Maestría e incorporado al Colegio de Profesionales respectivo. -Experiencia en puestos profesionales. Ma...
+
+### 16. `elempleo-880226` — Desarrollador(a) fullstack (react / java quarkus)
+
+- motivo en BD: `titulo_universitario_requerido`
+- detección textual: `confirmado` (término: `'Bachillerato universitario'`) · obligatorio=True · en_curso=False · suave=False
+- requisitos `education` extraídos:
+  - `value_text='Bachillerato universitario'` · `requirement_level='inferred'` · `education_status='unspecified'`
+    - evidencia literal del requisito: > Requisitos: Bachillerato universitario en Ingeniería en Sistemas, Informática, Ingeniería de Software o carrera afín.
+
+> Requisitos: Bachillerato universitario en Ingeniería en Sistemas, Informática, Ingeniería de Software o carrera afín.
+>
+> contexto: ...ítico, iniciativa y pasión por la tecnología, interesada en desarrollar aplicaciones web e integraciones que conecten nuestros sistemas con entidades bancarias y plataformas de servicios. Requisitos: Bachillerato universitario en Ingeniería en Sistemas, Informática, Ingeniería de Software o carrera afín. Al menos 2 años de experiencia en desarrollo de software, preferiblemente Fullstack. Conocimientos en React, Java, JavaS...
+
+### 17. `elempleo-880266` — Analista de proveeduría - interno
+
+- motivo en BD: `titulo_universitario_requerido`
+- detección textual: `confirmado` (término: `'Licenciatura'`) · obligatorio=True · en_curso=False · suave=False
+- requisitos `education` extraídos:
+  - `value_text='Licenciatura'` · `requirement_level='inferred'` · `education_status='unspecified'`
+    - evidencia literal del requisito: > Misión del Puesto: Gestionar los procesos operativos asociados a las diversas contrataciones que se realizan, con el propósito de brindar un servicio eficiente y de calidad a los clientes internos y externos de INS Servicios SA Requisitos Indispensables: Título de Bachillerato en Administración de empresas, carrera afín a las ciencias económicas o Licenciatura en Derecho.
+
+> Misión del Puesto: Gestionar los procesos operativos asociados a las diversas contrataciones que se realizan, con el propósito de brindar un servicio eficiente y de calidad a los clientes internos y externos de INS Servicios SA Requisitos Indispensables: Título de Bachillerato en Administración de empresas, carrera afín a las ciencias económicas o Licenciatura en Derecho.
+>
+> contexto: ...eficiente y de calidad a los clientes internos y externos de INS Servicios SA Requisitos Indispensables: Título de Bachillerato en Administración de empresas, carrera afín a las ciencias económicas o Licenciatura en Derecho. Conocimiento intermedio en la aplicación de paquetes office (Word y Excel) Incorporado al Colegio Profesional respectivo De 2 a 3 años de experiencia en Contratación Pública. (LGCP y su R...
+
+### 18. `elempleo-880270` — System design engineer
+
+- motivo en BD: `titulo_universitario_requerido`
+- detección textual: `confirmado` (término: `'Bachelor’s'`) · obligatorio=True · en_curso=False · suave=False
+- requisitos `education` extraídos:
+  - `value_text='Bachelor'` · `requirement_level='inferred'` · `education_status='unspecified'`
+    - evidencia literal del requisito: > - Provide technical leadership on a cross-functional engineering team - Define and analyze system requirements, clinical workflows, and input/output processes by using systems engineering methods and techniques - Apply critical thinking to solve systems integration problems and make recommendations - Utilize architecture design tools to develop and document system-level interactions - Create design documentation such as requirements rationale, requirements tracing, system change analysis within our quality system - Writing reports for and working with internal regulatory team to satisfy the requirements for external regulatory agencies - Apply project management principles to plan, track, execute, and report status of projects within a range of team sizes - Support system risk management activities, such as FMEA’s and risk/hazard analysis -Requirements- Education: Bachelor’s degree or higher in Electrical Engineering, Computer Engineering, Electromechanical Engineering, Systems Engineering, Computer Science, or related field.
+
+> ...ples to plan, track, execute, and report status of projects within a range of team sizes - Support system risk management activities, such as FMEA’s and risk/hazard analysis -Requirements- Education: Bachelor’s degree or higher in Electrical Engineering, Computer Engineering, Electromechanical Engineering, Systems Engineering, Computer Science, or related field....
+>
+> contexto: ...ples to plan, track, execute, and report status of projects within a range of team sizes - Support system risk management activities, such as FMEA’s and risk/hazard analysis -Requirements- Education: Bachelor’s degree or higher in Electrical Engineering, Computer Engineering, Electromechanical Engineering, Systems Engineering, Computer Science, or related field. Experience: 3+ years of experience in similar...
+
+### 19. `elempleo-880274` — Senior recruiter
+
+- motivo en BD: `titulo_universitario_requerido`
+- detección textual: `confirmado` (término: `"Bachelor's"`) · obligatorio=True · en_curso=False · suave=False
+- requisitos `education` extraídos:
+  - `value_text="Bachelor's degree"` · `requirement_level='required'` · `education_status='unspecified'`
+    - evidencia literal del requisito: > Requirements: Education: *Bachelor's degree in Business Administration with an emphasis in Human Resources or similar Experience: *Minimum of 5 years of experience in senior-level recruitment positions.
+
+> Requirements: Education: *Bachelor's degree in Business Administration with an emphasis in Human Resources or similar Experience: *Minimum of 5 years of experience in senior-level recruitment positions.
+>
+> contexto: ...have strong sourcing, interviewing, and stakeholder management skills, with a proven ability to fill positions efficiently while ensuring an excellent candidate experience. Requirements: Education: *Bachelor's degree in Business Administration with an emphasis in Human Resources or similar Experience: *Minimum of 5 years of experience in senior-level recruitment positions. *Previous experience recruiting a...
+
+### 20. `greenhouse-smartsheet-8273999` — Content Designer II (Remote Eligible - Costa Rica)
 
 - motivo en BD: `titulo_universitario_requerido`
 - detección textual: `confirmado` (término: `'Bachelor’s'`) · obligatorio=True · en_curso=False · suave=False
@@ -345,7 +364,7 @@ sin_requisitos         | sin_requisitos_mapeados                | 8
 >
 > contexto: ...a track record of using research to inform content decisions. Communication: Excellent collaboration skills and the ability to champion the "why" behind content decisions to stakeholders. Education: Bachelor’s degree in a related field Support other duties as assigned Perks & Benefits: Fully paid Health & Life insurance for full-time employees and family members Monthly stipend to support your work and pro...
 
-### 19. `harvie-4463` — Líder de Iniciativas Comerciales de Repuestos Automotrices
+### 21. `harvie-4463` — Líder de Iniciativas Comerciales de Repuestos Automotrices
 
 - motivo en BD: `titulo_universitario_requerido`
 - detección textual: `confirmado` (término: `'Licenciatura'`) · obligatorio=True · en_curso=False · suave=False
@@ -357,7 +376,7 @@ sin_requisitos         | sin_requisitos_mapeados                | 8
 >
 > contexto: ...iniciativas Impulsar la mejora continua de los procesos comerciales del negocio de repuestos, promoviendo mejores prácticas, innovación y el uso de herramientas analíticas. Requisitos Indispensables: Licenciatura en Administración de Empresas o Ingeniería Industrial. Conocimiento certificado en SQL, VBA y Power BI. Nivel de inglés 85% . Experiencia: Al menos 2 años en áreas comerciales. Al menos 2 años en neg...
 
-### 20. `harvie-5872` — Ingeniero (a) de Procesos Jr
+### 22. `harvie-5872` — Ingeniero (a) de Procesos Jr
 
 - motivo en BD: `titulo_universitario_requerido`
 - detección textual: `confirmado` (término: `'Licenciatura'`) · obligatorio=True · en_curso=False · suave=False
@@ -369,7 +388,7 @@ sin_requisitos         | sin_requisitos_mapeados                | 8
 >
 > contexto: ...ilizando metodologías de uso ingenieril y filosofía Toyota , apoyándose en el uso de software como Microsoft visio o power BI para el manejo y extracción de la información. Requisitos Indispensables: Licenciatura en Ingeniería Industrial. Certificación Scrum Master. Inglés Intermedio. Licencia de conducir B1. Certificación en Administración de Proyectos: CAPM, PMP, o afines (deseable). Experiencia: 1+ años en...
 
-### 21. `harvie-6147` — Product Manager Digital
+### 23. `harvie-6147` — Product Manager Digital
 
 - motivo en BD: `titulo_universitario_requerido`
 - detección textual: `confirmado` (término: `'Bachillerato Universitario'`) · obligatorio=True · en_curso=False · suave=False
@@ -381,7 +400,7 @@ sin_requisitos         | sin_requisitos_mapeados                | 8
 >
 > contexto: ...mejora del ERP: Liderar la planificación, ejecución y adopción de nuevas capacidades del ERP, coordinando implementadores, socios tecnológicos y usuarios clave (key users). Requisitos indispensables: Bachillerato Universitario en Contaduría Pública, Finanzas, Administración de Empresas, Administración de Proyectos, Ingenierías, Logística, o áreas afines. Se valorará formación complementaria en finanzas, contabilidad, caden...
 
-### 22. `harvie-6476` — C-077 Negociador Comercial IV (Gerente Administrativo Centro de Control Fronterizo Peñas Blancas)
+### 24. `harvie-6476` — C-077 Negociador Comercial IV (Gerente Administrativo Centro de Control Fronterizo Peñas Blancas)
 
 - motivo en BD: `titulo_universitario_requerido`
 - detección textual: `confirmado` (término: `'Licenciatura'`) · obligatorio=True · en_curso=False · suave=False
@@ -393,7 +412,7 @@ sin_requisitos         | sin_requisitos_mapeados                | 8
 >
 > contexto: ...e iniciativas de alto impacto. 👤Perfil que buscamos Visión estratégica y capacidad de liderazgo para gestionar negociaciones comerciales internacionales de alto nivel. Requisitos 🎓Formación Académica Licenciatura universitaria en Derecho, Economía, Administración de Empresas, Aduanera, Comercio Internacional, Relaciones Internacionales, Agronomía, Economía Agrícola, Ciencias Políticas, Ingenierías o carrera a...
 
-### 23. `harvie-6508` — Analista Operativo de Carrocería
+### 25. `harvie-6508` — Analista Operativo de Carrocería
 
 - motivo en BD: `titulo_universitario_requerido`
 - detección textual: `confirmado` (término: `'Licenciatura'`) · obligatorio=True · en_curso=False · suave=False
@@ -405,7 +424,7 @@ sin_requisitos         | sin_requisitos_mapeados                | 8
 >
 > contexto: ...ientales significativos pertinentes a su área de trabajo, implementando los ajustes, mejoras y disposiciones según corresponda. Ejecutar otras funciones propias del puesto. Requisitos indispensables: Licenciatura en Ingeniería Industrial, Administración de Empresas, Contaduría o carreras afines Conocimientos avanzados de Excel y manejo de Bases de Datos, Power BI. Con buenas bases sobre procesos analíticos y...
 
-### 24. `indeed-25f9df220ed96621` — Soporte Técnico de Sitio (Presencial - Coyol)
+### 26. `indeed-25f9df220ed96621` — Soporte Técnico de Sitio (Presencial - Coyol)
 
 - motivo en BD: `titulo_universitario_requerido`
 - detección textual: `confirmado` (término: `'bachillerato universitario'`) · obligatorio=True · en_curso=False · suave=False
@@ -416,30 +435,6 @@ sin_requisitos         | sin_requisitos_mapeados                | 8
 > Formación: Certificado de colegio técnico profesional o bachillerato universitario avanzado en tecnologías de la información o carreras afines.
 >
 > contexto: ...en soporte técnico en campo. Experiencia en manejo y control de inventarios TI. Experiencia en servicio al cliente y atención a usuario final. Formación: Certificado de colegio técnico profesional o bachillerato universitario avanzado en tecnologías de la información o carreras afines. Requisito indispensable: Licencia de Conducir B1 con 2 años de emisión. Maneja de herramientas ITSM y metodología ITIL para la gestión de...
-
-### 25. `indeed-b09051a8e22fd452` — Production Supervisor 1 CR (L-S 6:00am a 2:00pm)
-
-- motivo en BD: `titulo_universitario_requerido`
-- detección textual: `confirmado` (término: `'Bachillerato Universitario'`) · obligatorio=True · en_curso=False · suave=False
-- requisitos `education` extraídos:
-  - `value_text='Bachillerato Universitario'` · `requirement_level='inferred'` · `education_status='unspecified'`
-    - evidencia literal del requisito: > Education: Bachillerato Universitario en Ing.
-
-> Education: Bachillerato Universitario en Ing.
->
-> contexto: ...Education: Bachillerato Universitario en Ing. Industrial, Mecánica, Electromecánica, Adm. de Empresas o carrera afín. Specialized Knowledge : Conocimiento de normativa ISO 13485:2003 y FDA. Manejo de personal, comunicación asertiva, cono...
-
-### 26. `indeed-cb48f74088f3fa2a` — Administrador de Base de Datos
-
-- motivo en BD: `titulo_universitario_requerido`
-- detección textual: `confirmado` (término: `'Bachillerato Universitario'`) · obligatorio=True · en_curso=False · suave=False
-- requisitos `education` extraídos:
-  - `value_text='Bachillerato Universitario'` · `requirement_level='inferred'` · `education_status='unspecified'`
-    - evidencia literal del requisito: > Requisitos: Bachillerato Universitario en informática, ingeniería de sistemas, computación o en una carrera afín con el cargo.
-
-> Requisitos: Bachillerato Universitario en informática, ingeniería de sistemas, computación o en una carrera afín con el cargo.
->
-> contexto: ...fesionales relacionadas con la creación, administración, mantenimiento, control, disponibilidad y mejora continua de las bases de datos de la cooperativa, brindando soporte especializado. Requisitos: Bachillerato Universitario en informática, ingeniería de sistemas, computación o en una carrera afín con el cargo. Preferiblemente con formación comprobable en administración de bases de datos, respaldo y restauración, monitor...
 
 ### 27. `recruitee-primeworks-2683696` — Hospitality/Hotel Sales Representative
 
@@ -579,19 +574,7 @@ sin_requisitos         | sin_requisitos_mapeados                | 8
 >
 > contexto: ...ur office in AFZ, Heredia on Mondays, Wednesdays, and Thursdays. Please note that there may be occasions where additional office days are required, due specific business needs. Minimum Qualifications Bachelor Accounting Degree required 7+ years of accounting experience 2+ years of supervisory or people leadership experience Advanced English Skills and knowledge Strong analytical skills Proficient with MS...
 
-### 37. `workday-Analista-de-CPFR_887589` — Analista de CPFR
-
-- motivo en BD: `titulo_universitario_requerido`
-- detección textual: `confirmado` (término: `'Licenciatura'`) · obligatorio=True · en_curso=False · suave=False
-- requisitos `education` extraídos:
-  - `value_text='Licenciatura'` · `requirement_level='inferred'` · `education_status='unspecified'`
-    - evidencia literal del requisito: > Para tener éxito en este puesto, necesitarás las siguientes calificaciones: Licenciatura o bachillerato universitario en Administración de Empresas, Ingeniería Industrial, Logística, Supply Chain o una carrera afín.
-
-> Para tener éxito en este puesto, necesitarás las siguientes calificaciones: Licenciatura o bachillerato universitario en Administración de Empresas, Ingeniería Industrial, Logística, Supply Chain o una carrera afín.
->
-> contexto: ...tes foros, participando activamente en las conversaciones y respondiendo a las necesidades de los principales stakeholders. Para tener éxito en este puesto, necesitarás las siguientes calificaciones: Licenciatura o bachillerato universitario en Administración de Empresas, Ingeniería Industrial, Logística, Supply Chain o una carrera afín. 3+ años de experiencia en posiciones de CPFR . Experiencia previa maneja...
-
-### 38. `workday-Analyst--Compensation_Req-51280` — Analyst, Compensation
+### 37. `workday-Analyst--Compensation_Req-51280` — Analyst, Compensation
 
 - motivo en BD: `titulo_universitario_requerido`
 - detección textual: `confirmado` (término: `"Bachelor's"`) · obligatorio=True · en_curso=False · suave=False
@@ -603,7 +586,7 @@ sin_requisitos         | sin_requisitos_mapeados                | 8
 >
 > contexto: ...tion. Support continuous improvement initiatives that enhance compensation programs, tools, and operational effectiveness. Perform other duties as assigned by management. What You'll Need (Required): Bachelor's degree in human resources, Business Administration, Finance, Economics, or a related field and minimum 3 years of experience in Compensation, Human Resources, or related roles. What Else We Look For...
 
-### 39. `workday-Associate-Manager--Technical-Training_R576351` — Associate Manager, Technical Training
+### 38. `workday-Associate-Manager--Technical-Training_R576351` — Associate Manager, Technical Training
 
 - motivo en BD: `titulo_universitario_requerido`
 - detección textual: `confirmado` (término: `'Bachelor’s'`) · obligatorio=True · en_curso=False · suave=False
@@ -615,7 +598,7 @@ sin_requisitos         | sin_requisitos_mapeados                | 8
 >
 > contexto: ...g records and qualification evidence as needed. Provide support for NC/CAPAs related to training outcomes or training processes. Perform additional duties and projects as assigned. What You Will Need Bachelor’s degree in Business, Education, Human Resources, or related discipline. Minimum of 5 years of experience in medical device, supporting quality, compliance, manufacturing, operations, or technical trai...
 
-### 40. `workday-Associate-Manager-Technical-Services_R567836` — Associate Manager Technical Services
+### 39. `workday-Associate-Manager-Technical-Services_R567836` — Associate Manager Technical Services
 
 - motivo en BD: `titulo_universitario_requerido`
 - detección textual: `confirmado` (término: `'Bachelor’s'`) · obligatorio=True · en_curso=False · suave=False
@@ -627,7 +610,7 @@ sin_requisitos         | sin_requisitos_mapeados                | 8
 >
 > contexto: ...as the operational backup for the Technical Services leader, ensuring continuity of decision-making, prioritization, and execution across the organization. What You Will Need Required Qualifications Bachelor’s degree in Engineering or a related technical field. Minimum 7 years of experience in Quality Engineering, Technical Services, Microbiology, Sterilization, Calibrations, Receiving Inspection, or relat...
 
-### 41. `workday-Business-Analyst--Contract-Pricing-and-Accuracy_R265403` — Business Analyst, Contract Pricing and Accuracy
+### 40. `workday-Business-Analyst--Contract-Pricing-and-Accuracy_R265403` — Business Analyst, Contract Pricing and Accuracy
 
 - motivo en BD: `titulo_universitario_requerido`
 - detección textual: `confirmado` (término: `'Bachelor’s'`) · obligatorio=True · en_curso=False · suave=False
@@ -639,7 +622,7 @@ sin_requisitos         | sin_requisitos_mapeados                | 8
 >
 > contexto: ...em. Create and maintain user guides, and conduct workshops as needed. Generate reports and dashboards to provide insights into contract status, compliance, and performance. QUALIFICATIONS AND SKILLS: Bachelor’s degree in Industrial Engineering, Business Administration, or a related field. 3 years of experience as a Business Analyst or similar role with emphasis on areas such as contract management, pricing...
 
-### 42. `workday-Business-Operations---Customer-Delivery-Intern_3170188-1` — Business Operations & Customer Delivery Intern
+### 41. `workday-Business-Operations---Customer-Delivery-Intern_3170188-1` — Business Operations & Customer Delivery Intern
 
 - motivo en BD: `titulo_universitario_en_curso_requerido`
 - detección textual: `confirmado` (término: `"bachelor's"`) · obligatorio=True · en_curso=True · suave=False
@@ -651,7 +634,7 @@ sin_requisitos         | sin_requisitos_mapeados                | 8
 >
 > contexto: ...hnology journey to drive business outcomes, enhance employee experiences, and accelerate innovation. Education and Experience Required: Currently enrolled in a four-year college and graduating with a bachelor's degree in February 2028 Must be enrolled full time at an accredited university. Preferred Majors/Programs: Business Administration Finance Economics Industrial Engineering Business Analytics Data Ana...
 
-### 43. `workday-Business-Process-Automation---Data-Analytics-Intern_3170183-1` — Business Process Automation & Data Analytics Intern
+### 42. `workday-Business-Process-Automation---Data-Analytics-Intern_3170183-1` — Business Process Automation & Data Analytics Intern
 
 - motivo en BD: `titulo_universitario_en_curso_requerido`
 - detección textual: `confirmado` (término: `"bachelor's"`) · obligatorio=True · en_curso=True · suave=False
@@ -663,7 +646,7 @@ sin_requisitos         | sin_requisitos_mapeados                | 8
 >
 > contexto: ...hnology journey to drive business outcomes, enhance employee experiences, and accelerate innovation. Education and Experience Required: Currently enrolled in a four-year college and graduating with a bachelor's degree in February 2028 Must be enrolled full time at an accredited university. Preferred Majors/Programs: Computer Science Data Engineering / Data Analytics Industrial Engineering Process Engineerin...
 
-### 44. `workday-Buyer-GPC_R571353` — Buyer GPC
+### 43. `workday-Buyer-GPC_R571353` — Buyer GPC
 
 - motivo en BD: `titulo_universitario_requerido`
 - detección textual: `confirmado` (término: `'Bachelor’s'`) · obligatorio=True · en_curso=False · suave=False
@@ -675,7 +658,7 @@ sin_requisitos         | sin_requisitos_mapeados                | 8
 >
 > contexto: ...oject progress, and operational results. Support strategic initiatives, including product lifecycle management, cost reduction projects, and supply chain optimization efforts. Required Qualifications Bachelor’s degree in Supply Chain Management, Business Administration, Industrial Engineering, Operations Management, or a related field. Minimum 3 years of experience in purchasing, supply planning, materials...
 
-### 45. `workday-Buyer-Procurement-Operations_J-020161` — Buyer Procurement Operations
+### 44. `workday-Buyer-Procurement-Operations_J-020161` — Buyer Procurement Operations
 
 - motivo en BD: `titulo_universitario_requerido`
 - detección textual: `confirmado` (término: `"Bachelor's"`) · obligatorio=True · en_curso=False · suave=False
@@ -687,7 +670,7 @@ sin_requisitos         | sin_requisitos_mapeados                | 8
 >
 > contexto: ...ur office in AFZ, Heredia on Mondays, Wednesdays, and Thursdays. Please note that there may be occasions where additional office days are required, due specific business needs. Minimum Qualifications Bachelor's degree in Logistics, Supply Chain, Engineering, Business Administration, or a related field. Experience/educational requirements may be waived for internal candidates. 1+ years of direct experience i...
 
-### 46. `workday-Continuous-Improvement-Intern_J-020427` — Continuous Improvement Intern
+### 45. `workday-Continuous-Improvement-Intern_J-020427` — Continuous Improvement Intern
 
 - motivo en BD: `titulo_universitario_en_curso_requerido`
 - detección textual: `confirmado` (término: `"Bachelor's"`) · obligatorio=True · en_curso=True · suave=False
@@ -699,7 +682,7 @@ sin_requisitos         | sin_requisitos_mapeados                | 8
 >
 > contexto: ...when additional office days are required due to specific business needs. The candidate must have an unrestricted right to work for Huntsman in Costa Rica. Minimum Qualifications Currently pursuing a Bachelor's or Licentiate degree in Industrial Engineering, with more than 75% of the degree program completed. Demonstrated interest in Continuous Improvement, problem-solving, and process optimization. Written...
 
-### 47. `workday-Contract-Administrator--Internship-_1213007` — Contract Administrator (Internship)
+### 46. `workday-Contract-Administrator--Internship-_1213007` — Contract Administrator (Internship)
 
 - motivo en BD: `titulo_universitario_en_curso_requerido`
 - detección textual: `confirmado` (término: `"Bachelor's"`) · obligatorio=True · en_curso=True · suave=False
@@ -715,7 +698,7 @@ sin_requisitos         | sin_requisitos_mapeados                | 8
 >
 > contexto: ...and are a force for good. If you are looking to stretch and grow your career our culture will embrace you. Open up opportunities with HPE. Job Description: Job Family Definition: Students pursuing a Bachelor's degree in Business Administration, Industrial Engineering, Finance, Accounting or related fields. Assists in various tasks aligned with their field of study, including research, collaboration on team...
 
-### 48. `workday-Contract-Pricing-Team-Lead_R265399` — Contract Pricing Team Lead
+### 47. `workday-Contract-Pricing-Team-Lead_R265399` — Contract Pricing Team Lead
 
 - motivo en BD: `titulo_universitario_requerido`
 - detección textual: `confirmado` (término: `"Bachelor's"`) · obligatorio=True · en_curso=False · suave=False
@@ -726,6 +709,18 @@ sin_requisitos         | sin_requisitos_mapeados                | 8
 > Qualifications and Skills Bachelor's degree in Business Administration or a related field required.
 >
 > contexto: ...ghts clearly and effectively. Support change management efforts tied to process or system enhancements. Provide training and support to end-users on new tools and workflows. Qualifications and Skills Bachelor's degree in Business Administration or a related field required. Excellent communication skills in English (B2+ or higher) and ability to collaborate across functions and geographies. Minimum 5 years o...
+
+### 48. `workday-Controls-Application-Engineer-II_WD30284064` — Controls Application Engineer II
+
+- motivo en BD: `titulo_universitario_requerido`
+- detección textual: `confirmado` (término: `'Bachelor’s'`) · obligatorio=True · en_curso=False · suave=False
+- requisitos `education` extraídos:
+  - `value_text='Bachelor'` · `requirement_level='inferred'` · `education_status='unspecified'`
+    - evidencia literal del requisito: > Qualifications Bachelor’s degree in Electronics, Mechatronics, Electrical, or Electromechanical Engineering.
+
+> Qualifications Bachelor’s degree in Electronics, Mechatronics, Electrical, or Electromechanical Engineering.
+>
+> contexto: ...n packages, and by using feedback to strengthen future work. Win as one team by collaborating with diverse perspectives and supporting both internal partners and external stakeholders. Qualifications Bachelor’s degree in Electronics, Mechatronics, Electrical, or Electromechanical Engineering. 2 to 3 years of experience in engineering-related activities. Ability to meet deadlines while maintaining a positive...
 
 ### 49. `workday-Data-Analytics-Intern_1210982` — Data Analytics Intern
 
@@ -743,19 +738,7 @@ sin_requisitos         | sin_requisitos_mapeados                | 8
 >
 > contexto: ...up opportunities with HPE. Job Description: Job Family Definition: Students or recent graduates of college, university, or other accredited academic programs, pursuing diplomas or degrees (Associate, Bachelor’s, Master’s, or PhD) in any field. Assists in various tasks aligned with their field of study, including research, collaboration on team initiatives and projects, problem-solving, and creative thinking...
 
-### 50. `workday-Digital-Campaign-Delivery-Associate_202609-122817` — Digital Campaign Delivery Associate
-
-- motivo en BD: `titulo_universitario_requerido`
-- detección textual: `confirmado` (término: `"Bachelor's"`) · obligatorio=True · en_curso=False · suave=False
-- requisitos `education` extraídos:
-  - `value_text="Bachelor's degree"` · `requirement_level='inferred'` · `education_status='unspecified'`
-    - evidencia literal del requisito: > Further requirements ● Bachelor's degree in Marketing, Business, Communications, or a related field.
-
-> Further requirements ● Bachelor's degree in Marketing, Business, Communications, or a related field.
->
-> contexto: ...ficiently, ensuring timely and high- quality delivery. You excel at collaborating with diverse stakeholders and adapting to their feedback to meet their needs and expectations. Further requirements ● Bachelor's degree in Marketing, Business, Communications, or a related field. ● Strong understanding of digital marketing principles and campaign management. ● Excellent organizational and multitasking abilitie...
-
-### 51. `workday-Director--Corporate-Accounting_JR-0111126` — Director, Corporate Accounting
+### 50. `workday-Director--Corporate-Accounting_JR-0111126` — Director, Corporate Accounting
 
 - motivo en BD: `titulo_universitario_requerido`
 - detección textual: `confirmado` (término: `'Bachelor’s'`) · obligatorio=True · en_curso=False · suave=False
@@ -767,7 +750,7 @@ sin_requisitos         | sin_requisitos_mapeados                | 8
 >
 > contexto: ...accounting operations and decision-making. Ensure work is appropriately prioritized, documented, controlled, and aligned with broader Accounting and Finance goals. About You Required Qualifications: Bachelor’s degree in Accounting, Finance, or a related field required. 10+ years of progressive accounting experience, including significant corporate accounting leadership experience. Solid working knowledge o...
 
-### 52. `workday-Director--Manufacturing-Engineering_REQ-2026-18566` — Director, Manufacturing Engineering
+### 51. `workday-Director--Manufacturing-Engineering_REQ-2026-18566` — Director, Manufacturing Engineering
 
 - motivo en BD: `titulo_universitario_requerido`
 - detección textual: `confirmado` (término: `'Bachelor’s'`) · obligatorio=True · en_curso=False · suave=False
@@ -781,7 +764,7 @@ sin_requisitos         | sin_requisitos_mapeados                | 8
 >
 > contexto: ...training systems, and a culture of accountability, inclusion, continuous improvement, and operational excellence. Perform other duties and lead additional projects as required. Education & Experience Bachelor’s degree in Manufacturing, Mechanical, Electrical, Industrial, or a related Engineering discipline required; master’s degree or MBA preferred. 10+ years of progressive experience in high-volume manufac...
 
-### 53. `workday-Director--Manufacturing-Operations_REQ-2026-18565-1` — Director, Manufacturing Operations
+### 52. `workday-Director--Manufacturing-Operations_REQ-2026-18565-1` — Director, Manufacturing Operations
 
 - motivo en BD: `titulo_universitario_requerido`
 - detección textual: `confirmado` (término: `'Bachelor’s'`) · obligatorio=True · en_curso=False · suave=False
@@ -795,7 +778,7 @@ sin_requisitos         | sin_requisitos_mapeados                | 8
 >
 > contexto: ...ional forums; communicate performance, priorities, risks, and resource needs to executive leadership. Perform other duties and lead additional business initiatives as required. Education & Experience Bachelor’s degree in Engineering, Manufacturing, Operations, Business, or a related discipline required; master’s degree or MBA preferred. 10+ years pf progressive experience in high-volume manufacturing or ope...
 
-### 54. `workday-Director--Quality-Operations_REQ-2026-18476` — Director, Quality Operations
+### 53. `workday-Director--Quality-Operations_REQ-2026-18476` — Director, Quality Operations
 
 - motivo en BD: `titulo_universitario_requerido`
 - detección textual: `confirmado` (término: `"Bachelor's"`) · obligatorio=True · en_curso=False · suave=False
@@ -809,7 +792,7 @@ sin_requisitos         | sin_requisitos_mapeados                | 8
 >
 > contexto: ...aunch of our new greenfield site, this role will start as remote. Candidates are expected to transition to an onsite work arrangement once the facility is ready Required Experience & Qualifications • Bachelor's degree in Engineering, Science, or related discipline; advanced degree preferred. • 12+ years of progressive medical device quality leadership experience, including significant manufacturing quality...
 
-### 55. `workday-Document-Control-Intern_1210991` — Document Control Intern
+### 54. `workday-Document-Control-Intern_1210991` — Document Control Intern
 
 - motivo en BD: `titulo_universitario_en_curso_requerido`
 - detección textual: `confirmado` (término: `'Bachelor’s'`) · obligatorio=True · en_curso=True · suave=False
@@ -823,7 +806,7 @@ sin_requisitos         | sin_requisitos_mapeados                | 8
 >
 > contexto: ...up opportunities with HPE. Job Description: Job Family Definition: Students or recent graduates of college, university, or other accredited academic programs, pursuing diplomas or degrees (Associate, Bachelor’s, Master’s, or PhD) in any field. Assists in various tasks aligned with their field of study, including research, collaboration on team initiatives and projects, problem-solving, and creative thinking...
 
-### 56. `workday-Embedded-Software-Engineer-Internship_1214117` — Embedded Software Engineer Internship
+### 55. `workday-Embedded-Software-Engineer-Internship_1214117` — Embedded Software Engineer Internship
 
 - motivo en BD: `titulo_universitario_en_curso_requerido`
 - detección textual: `confirmado` (término: `'Bachelor’s'`) · obligatorio=True · en_curso=True · suave=False
@@ -837,7 +820,7 @@ sin_requisitos         | sin_requisitos_mapeados                | 8
 >
 > contexto: ...up opportunities with HPE. Job Description: Job Family Definition: Students or recent graduates of college, university, or other accredited academic programs, pursuing diplomas or degrees (Associate, Bachelor’s, Master’s, or PhD) in any field. Assists in various tasks aligned with their field of study, including research, collaboration on team initiatives and projects, problem-solving, and creative thinking...
 
-### 57. `workday-Finance-Accounting-Group-Manager---C14_261004389` — Finance Accounting Group Manager - C14
+### 56. `workday-Finance-Accounting-Group-Manager---C14_261004389` — Finance Accounting Group Manager - C14
 
 - motivo en BD: `titulo_universitario_requerido`
 - detección textual: `confirmado` (término: `'Bachelor’s'`) · obligatorio=True · en_curso=False · suave=False
@@ -849,7 +832,7 @@ sin_requisitos         | sin_requisitos_mapeados                | 8
 >
 > contexto: ...rtered Accountant (CA) or equivalent combination of education, desired but not required. 6+ years of experience in accounting management with commensurate stakeholder management experience Education: Bachelor’s/University degree, Master’s degree preferred ------------------------------------------------------ Job Family Group: Finance ------------------------------------------------------ Job Family: Financ...
 
-### 58. `workday-Finance-Intern-CARICAM_549690` — Finance Intern CARICAM
+### 57. `workday-Finance-Intern-CARICAM_549690` — Finance Intern CARICAM
 
 - motivo en BD: `titulo_universitario_en_curso_requerido`
 - detección textual: `confirmado` (término: `'Bachelor’s'`) · obligatorio=True · en_curso=True · suave=False
@@ -861,7 +844,7 @@ sin_requisitos         | sin_requisitos_mapeados                | 8
 >
 > contexto: ...a compilation. Participate in continuous improvement initiatives. Why you? Basic Qualifications: We are looking for professionals with these required skills to achieve our goals: Currently pursuing a Bachelor’s degree in Accounting, Finance, or a related field. Technical High School degree in Accounting (highly desirable). Basic knowledge of IFRS or US GAAP. Advanced Excel skills. Intermediate proficiency i...
 
-### 59. `workday-Finance-SOX-Testing-Analyst_R274171` — Finance SOX Testing Analyst
+### 58. `workday-Finance-SOX-Testing-Analyst_R274171` — Finance SOX Testing Analyst
 
 - motivo en BD: `titulo_universitario_requerido`
 - detección textual: `confirmado` (término: `"Bachelor's"`) · obligatorio=True · en_curso=False · suave=False
@@ -873,7 +856,7 @@ sin_requisitos         | sin_requisitos_mapeados                | 8
 >
 > contexto: ...ntation to support compliance and audit requirements. Monitor status of remediation plans and retesting as needed. Stay updated on SOX regulations and internal control best practices. Qualifications: Bachelor's degree in Accounting, Finance, Information Systems, or related field. 2–5 years of experience in SOX testing, internal audit, or external audit. Excellent communication skills in English (B2+ or high...
 
-### 60. `workday-Fraud-Prevention-Analyst_3170439-1` — Fraud Prevention Analyst
+### 59. `workday-Fraud-Prevention-Analyst_3170439-1` — Fraud Prevention Analyst
 
 - motivo en BD: `titulo_universitario_requerido`
 - detección textual: `confirmado` (término: `'University degree'`) · obligatorio=True · en_curso=False · suave=False
@@ -885,19 +868,7 @@ sin_requisitos         | sin_requisitos_mapeados                | 8
 >
 > contexto: ...ybrid work model, requiring three (3) days on-site at the AFZ location, with the remaining days working remotely, in alignment with business needs and team collaboration requirements. Qualifications: University degree or comparable proven experience desired. Very Fluent English (90%+) (oral and written). Strong written and verbal communication skills. Intermediate skills required with Microsoft Excel, PowerPoint,...
 
-### 61. `workday-Global-Supply-Chain-Data-Analyst--Temporary-_J-019858` — Supply Chain Data Analyst (Temporary)
-
-- motivo en BD: `titulo_universitario_requerido`
-- detección textual: `confirmado` (término: `'Bachelor’s'`) · obligatorio=True · en_curso=False · suave=False
-- requisitos `education` extraídos:
-  - `value_text='Bachelor'` · `requirement_level='required'` · `education_status='unspecified'`
-    - evidencia literal del requisito: > Minimum Qualifications • Bachelor’s degree in Supply Chain Management, Business Analytics, Industrial Engineering, or a related field.
-
-> Bachelor’s degree in Supply Chain Management, Business Analytics, Industrial Engineering, or a related field.
->
-> contexto: ...s, and Thursdays. Please note that there may be occasions where additional office days are required, especially during corporate visits or when specific business needs arise. Minimum Qualifications • Bachelor’s degree in Supply Chain Management, Business Analytics, Industrial Engineering, or a related field. • 5+ years of experience in supply chain analytics or a related role. • Strong proficiency in data a...
-
-### 62. `workday-Ingeniero-de-Manufactura_20186958` — Ingeniero de Manufactura
+### 60. `workday-Ingeniero-de-Manufactura_20186958` — Ingeniero de Manufactura
 
 - motivo en BD: `titulo_universitario_requerido`
 - detección textual: `confirmado` (término: `'Bachelor’s'`) · obligatorio=True · en_curso=False · suave=False
@@ -909,7 +880,7 @@ sin_requisitos         | sin_requisitos_mapeados                | 8
 >
 > contexto: ...ross-functional teams. Ensure compliance with GMP, FDA, ISO 13485, and applicable regulatory requirements. Provide technical leadership, training, and support to manufacturing personnel. Requirements Bachelor’s Degree in Industrial Engineering, Mechanical Engineering, Electromechanical Engineering, Electrical/Electronic Engineering, or related engineering discipline. 3+ years of manufacturing engineering ex...
 
-### 63. `workday-Intern---Bachelor-s-Tech_1216552` — Intern - Bachelor's Tech
+### 61. `workday-Intern---Bachelor-s-Tech_1216552` — Intern - Bachelor's Tech
 
 - motivo en BD: `titulo_universitario_en_curso_requerido`
 - detección textual: `confirmado` (término: `'Bachelor’s'`) · obligatorio=True · en_curso=True · suave=False
@@ -927,7 +898,7 @@ sin_requisitos         | sin_requisitos_mapeados                | 8
 >
 > contexto: ...l embrace you. Open up opportunities with HPE. Job Description: Job Family Definition: Students of college, university, or other accredited academic programs, pursuing diplomas or degrees (Associate, Bachelor’s, Master’s, or PhD) in Engineering, Computer Science, Information Technology, or a related technical field. Assists in various tasks aligned with their field of study, including research, collaboratio...
 
-### 64. `workday-Intern---Bachelors-Tech_1214221` — Intern - Bachelors Tech
+### 62. `workday-Intern---Bachelors-Tech_1214221` — Intern - Bachelors Tech
 
 - motivo en BD: `titulo_universitario_en_curso_requerido`
 - detección textual: `confirmado` (término: `'Bachelor’s'`) · obligatorio=True · en_curso=True · suave=False
@@ -943,7 +914,7 @@ sin_requisitos         | sin_requisitos_mapeados                | 8
 >
 > contexto: ...up opportunities with HPE. Job Description: Job Family Definition: Students or recent graduates of college, university, or other accredited academic programs, pursuing diplomas or degrees (Associate, Bachelor’s, Master’s, or PhD) in any field. Assists in various tasks aligned with their field of study, including research, collaboration on team initiatives and projects, problem-solving, and creative thinking...
 
-### 65. `workday-Inventory-Analyst---Fixed-Term-9-Months_450413` — Inventory Analyst - Fixed Term 9 Months
+### 63. `workday-Inventory-Analyst---Fixed-Term-9-Months_450413` — Inventory Analyst - Fixed Term 9 Months
 
 - motivo en BD: `titulo_universitario_requerido`
 - detección textual: `confirmado` (término: `'Bachelor’s'`) · obligatorio=True · en_curso=False · suave=False
@@ -955,7 +926,7 @@ sin_requisitos         | sin_requisitos_mapeados                | 8
 >
 > contexto: ...bal teams to drive process improvements, automation, data quality, and operational efficiency. Why You? Basic Qualifications We are seeking professionals with the following skills and qualifications: Bachelor’s degree in Accounting, Business Administration, Finance, or a related field. Strong accounting fundamentals and understanding of financial processes. Candidates who have solid accounting knowledge but...
 
-### 66. `workday-Leader--Customer-Support_2022544-1` — Leader, Customer Support
+### 64. `workday-Leader--Customer-Support_2022544-1` — Leader, Customer Support
 
 - motivo en BD: `titulo_universitario_requerido`
 - detección textual: `confirmado` (término: `"Bachelor's"`) · obligatorio=False · en_curso=False · suave=False
@@ -967,7 +938,7 @@ sin_requisitos         | sin_requisitos_mapeados                | 8
 >
 > contexto: ...artners. · A people leader who coaches through change, develops capability, encourages responsible use of AI and automation, and creates psychological safety. Our minimum requirements for this role · Bachelor's degree and 7 years of related experience, or a master's degree and 4 years of related experience, or a PhD and 1 year of related experience. · Previous supervisory or team lead experience. · At least...
 
-### 67. `workday-Manager--Business-Continuity_Req-49141` — Manager, Business Continuity
+### 65. `workday-Manager--Business-Continuity_Req-49141` — Manager, Business Continuity
 
 - motivo en BD: `titulo_universitario_requerido`
 - detección textual: `confirmado` (término: `"Bachelor's"`) · obligatorio=True · en_curso=False · suave=False
@@ -979,7 +950,7 @@ sin_requisitos         | sin_requisitos_mapeados                | 8
 >
 > contexto: ...ior leaders and serve as a BCM subject matter expert to adjacent resilience and risk initiatives, including strategic sourcing resilience and IT resilience assessments. What you'll need (Required): • Bachelor's degree in business administration, Supply Chain Management, Emergency Management, Risk Management, Engineering, or related field, with 8+ years' experience • Master's degree with 6+ years of relevant...
 
-### 68. `workday-Master-Data-Analyst_R-01358585` — Master Data Analyst
+### 66. `workday-Master-Data-Analyst_R-01358585` — Master Data Analyst
 
 - motivo en BD: `titulo_universitario_requerido`
 - detección textual: `confirmado` (término: `'Bachelor’s'`) · obligatorio=True · en_curso=False · suave=False
@@ -990,6 +961,30 @@ sin_requisitos         | sin_requisitos_mapeados                | 8
 > REQUIRED QUALIFICATIONS Education: Bachelor’s degree in supply chain, Business Administration, Information Technology, or related field Experience: Minimum 2 years of experience with SAP in Operations/Warehouse/ Manufacturing or related environment, preferably in the pharmaceutical industry.
 >
 > contexto: ...ment reports, support performance tracking (data accuracy, reporting accuracy, standards alignment, timely updates), and act as backup for the Supply Chain Analyst. REQUIRED QUALIFICATIONS Education: Bachelor’s degree in supply chain, Business Administration, Information Technology, or related field Experience: Minimum 2 years of experience with SAP in Operations/Warehouse/ Manufacturing or related environm...
+
+### 67. `workday-Payroll-Intern_J-020465` — Payroll Intern
+
+- motivo en BD: `titulo_universitario_en_curso_requerido`
+- detección textual: `confirmado` (término: `"Bachelor's"`) · obligatorio=True · en_curso=True · suave=False
+- requisitos `education` extraídos:
+  - `value_text="Bachelor's"` · `requirement_level='ambiguous'` · `education_status='unspecified'`
+    - evidencia literal del requisito: > Minimum Qualifications Currently pursuing a Bachelor's or Licentiate degree in Industrial Engineering, Business Administration or related field, with more than 75% of the degree program completed.
+
+> Minimum Qualifications Currently pursuing a Bachelor's or Licentiate degree in Industrial Engineering, Business Administration or related field, with more than 75% of the degree program completed.
+>
+> contexto: ...edia on Mondays, Wednesdays, and Thursdays. Please note that there may be occasions where additional office days are required, due specific business needs. Minimum Qualifications Currently pursuing a Bachelor's or Licentiate degree in Industrial Engineering, Business Administration or related field, with more than 75% of the degree program completed. Written and spoken proficiency in English (B2+). Proficie...
+
+### 68. `workday-Payroll-Lead-Analyst_261008688` — Payroll Lead Analyst
+
+- motivo en BD: `titulo_universitario_requerido`
+- detección textual: `confirmado` (término: `'Bachelor’s'`) · obligatorio=True · en_curso=False · suave=False
+- requisitos `education` extraídos:
+  - `value_text='Bachelor'` · `requirement_level='preferred'` · `education_status='unspecified'`
+    - evidencia literal del requisito: > Education: Bachelor’s/University degree, Master’s degree preferred ------------------------------------------------------ Job Family Group: Operations - Services ------------------------------------------------------ Job Family: Payroll ------------------------------------------------------ Time Type: Full time ------------------------------------------------------ Most Relevant Skills Please see the requirements listed above.
+
+> ...Education: Bachelor’s/University degree, Master’s degree preferred ------------------------------------------------------ Job Family Group: Operations - Services -------------------------------------------------...
+>
+> contexto: ...calating, managing and reporting control issues with transparency. Recommended Qualifications: 6-10 years of experience in a related role with commensurate experience in people management. Education: Bachelor’s/University degree, Master’s degree preferred ------------------------------------------------------ Job Family Group: Operations - Services ------------------------------------------------------ Job...
 
 ### 69. `workday-Planner-II_31164664` — Planner II
 
@@ -1015,19 +1010,35 @@ sin_requisitos         | sin_requisitos_mapeados                | 8
 >
 > contexto: ...PIs. Generar planes de acción para solucionar los hallazgos encontrados en la gestión del puesto, y los procesos asociados. Para tener éxito en este puesto, necesitarás las siguientes calificaciones: Bachillerato Universitario en Ingeniería Industrial, Producción Industrial o carreras afines. Mínimo 1 año de experiencia en procesos de producción, análisis de datos estadísticos. Manejo intermedio de Excel. Nivel de Inglés:...
 
-### 71. `workday-Project-Manager-III_R-01373198` — Project Manager III
+### 71. `workday-Production-Supervisor-I_31165535` — Production Supervisor I
 
 - motivo en BD: `titulo_universitario_requerido`
-- detección textual: `confirmado` (término: `"Bachelor's"`) · obligatorio=True · en_curso=False · suave=False
+- detección textual: `confirmado` (término: `'bachelor’s'`) · obligatorio=True · en_curso=False · suave=False
 - requisitos `education` extraídos:
-  - `value_text="Bachelor's Degree"` · `requirement_level='preferred'` · `education_status='unspecified'`
-    - evidencia literal del requisito: > REQUIREMENTS • Advanced Degree plus 3 years of experience, or Bachelor's Degree plus 5 years of experience in project management leading complex, cross-functional initiatives • Preferred Fields of Study: Science, Engineering, Business Administration or related field • Project Management Professional (PMP) certification or equivalent preferred • Six Sigma/Lean certification a plus • Demonstrated expertise in project management methodologies, tools and best practices • Leadership abilities with proven success guiding teams through influence • Effective communication and interpersonal skills, with ability to work with all levels • Experience managing project budgets, timelines, risks and stakeholder expectations • Strong organizational and analytical skills with attention to detail • Ability to manage multiple high-priority projects simultaneously • Business acumen and strategic mindset • Problem-solving abilities and proactive approach to risk mitigation • Proficiency with MS Office suite and project management software • Experience in regulated industry (e.g.
+  - `value_text='Bachelor'` · `requirement_level='preferred'` · `education_status='unspecified'`
+    - evidencia literal del requisito: > Demonstrated capacity to effectively lead/influence peers and other functions Preferred Qualifications Bachelor’s degree in Business Administration, Engineering or similar field.
+  - `value_text='bachelor'` · `requirement_level='required'` · `education_status='unspecified'`
+    - evidencia literal del requisito: > On-Site position Required Qualifications 80% completeness of a bachelor’s degree program from a four-year college or university in Industrial Engineering, Administration or related field.
 
-> Advanced Degree plus 3 years of experience, or Bachelor's Degree plus 5 years of experience in project management leading complex, cross-functional initiatives
+> On-Site position Required Qualifications 80% completeness of a bachelor’s degree program from a four-year college or university in Industrial Engineering, Administration or related field.
 >
-> contexto: ...gement expertise and leadership will be critical in delivering impactful results that support business growth and operational excellence. REQUIREMENTS • Advanced Degree plus 3 years of experience, or Bachelor's Degree plus 5 years of experience in project management leading complex, cross-functional initiatives • Preferred Fields of Study: Science, Engineering, Business Administration or related field • Pro...
+> contexto: ...mechanisms to ensure that all processes are in compliance with standard procedures. Shift: A (Monday - Friday from 5:50 am to 3:15 pm). On-Site position Required Qualifications 80% completeness of a bachelor’s degree program from a four-year college or university in Industrial Engineering, Administration or related field. 0-2 years supervisory experience. Preferably in a medical device, pharmaceutical, or...
 
-### 72. `workday-Purchasing-Manager--Global-Procurement-Center_R572335` — Purchasing Manager, Global Procurement Center
+### 72. `workday-Production-Supervisor-I_31165743` — Production Supervisor I
+
+- motivo en BD: `titulo_universitario_requerido`
+- detección textual: `confirmado` (término: `'bachelor’s'`) · obligatorio=True · en_curso=False · suave=False
+- requisitos `education` extraídos:
+  - `value_text='Bachelor'` · `requirement_level='preferred'` · `education_status='unspecified'`
+    - evidencia literal del requisito: > Demonstrated capacity to effectively lead/influence peers and other functions Preferred Qualifications • Bachelor’s degree in Business Administration, Engineering or similar field.
+  - `value_text='bachelor'` · `requirement_level='required'` · `education_status='unspecified'`
+    - evidencia literal del requisito: > On-Site position Required Qualifications 80% completeness of a bachelor’s degree program from a four-year college or university in Industrial Engineering, Administration or related field.
+
+> On-Site position Required Qualifications 80% completeness of a bachelor’s degree program from a four-year college or university in Industrial Engineering, Administration or related field.
+>
+> contexto: ...Interprets daily production metrics and establishes mechanisms to ensure that all processes are in compliance with standard procedures. On-Site position Required Qualifications 80% completeness of a bachelor’s degree program from a four-year college or university in Industrial Engineering, Administration or related field. 0-2 years supervisory experience. Preferably in a medical device, pharmaceutical, or...
+
+### 73. `workday-Purchasing-Manager--Global-Procurement-Center_R572335` — Purchasing Manager, Global Procurement Center
 
 - motivo en BD: `titulo_universitario_requerido`
 - detección textual: `confirmado` (término: `'Bachelor’s'`) · obligatorio=True · en_curso=False · suave=False
@@ -1039,7 +1050,19 @@ sin_requisitos         | sin_requisitos_mapeados                | 8
 >
 > contexto: ...g development plans for managers and buyers. Ensure compliance with applicable quality and regulatory requirements and support internal and external audits. What You Will Need Required Qualifications Bachelor’s degree in Business, Supply Chain Management, Engineering, or a related field. Minimum 8 years of experience in Supply Chain, Purchasing, Procurement, Manufacturing, or a related field. Minimum 3 year...
 
-### 73. `workday-R-D-Process-Coordinator_R-106675` — R&D Process Coordinator
+### 74. `workday-Quality-Engineer-III_31166281` — Quality Engineer III
+
+- motivo en BD: `titulo_universitario_requerido`
+- detección textual: `confirmado` (término: `'Bachelor'`) · obligatorio=True · en_curso=False · suave=False
+- requisitos `education` extraídos:
+  - `value_text='Bachelor'` · `requirement_level='required'` · `education_status='unspecified'`
+    - evidencia literal del requisito: > Required Qualifications Bachelor´s Degree Engineering.
+
+> Required Qualifications Bachelor´s Degree Engineering.
+>
+> contexto: ...Inspection and Test Method Qualifications, typically with minimum mentorship from higher level engineering. Perform supervisor activities to Quality Technicians, if required. Required Qualifications Bachelor´s Degree Engineering. 2-4 years of experience in Quality or Engineering positions. At least 2 years of experience in quality or manufacturing engineering roles. Proficiency in computer applications (...
+
+### 75. `workday-R-D-Process-Coordinator_R-106675` — R&D Process Coordinator
 
 - motivo en BD: `titulo_universitario_requerido`
 - detección textual: `confirmado` (término: `'Licenciatura'`) · obligatorio=True · en_curso=False · suave=False
@@ -1051,7 +1074,7 @@ sin_requisitos         | sin_requisitos_mapeados                | 8
 >
 > contexto: ...arámetros de sanitización/CIP y materiales de capacitación Liderar procesos de control de cambios y evaluaciones de riesgo para modificaciones de formulación, procesos, packaging y equipos Requisitos Licenciatura/Ingeniería completa en Ingeniería Química, Mecánica, Industrial, de Manufactura, Alimentos o áreas relacionadas Más de 5 años de experiencia en ingeniería de procesos y/o ambientes de manufactura Exp...
 
-### 74. `workday-Security-Engineer_2025477` — Security Engineer
+### 76. `workday-Security-Engineer_2025477` — Security Engineer
 
 - motivo en BD: `titulo_universitario_requerido`
 - detección textual: `confirmado` (término: `'Bachelor’s'`) · obligatorio=True · en_curso=False · suave=False
@@ -1063,7 +1086,7 @@ sin_requisitos         | sin_requisitos_mapeados                | 8
 >
 > contexto: ...ithin the organization, conducting training sessions or "lunch-and-learns" to improve the overall security awareness and coding practices of cross-functional development teams. Minimum Qualifications Bachelor’s degree with 3+ years of related experience, or a Master’s degree with 3+ years of related experience working in cybersecurity engineering, infrastructure engineering, DevOps, or a large enterprise te...
 
-### 75. `workday-Senior-Analyst--Finance--Internal-Auditor-_Req-51202-1` — Senior Analyst, Finance (Internal Audit)
+### 77. `workday-Senior-Analyst--Finance--Internal-Auditor-_Req-51202-1` — Senior Analyst, Finance (Internal Audit)
 
 - motivo en BD: `titulo_universitario_requerido`
 - detección textual: `confirmado` (término: `"Bachelor's"`) · obligatorio=True · en_curso=False · suave=False
@@ -1075,7 +1098,7 @@ sin_requisitos         | sin_requisitos_mapeados                | 8
 >
 > contexto: ...ernal audit requests. • Support continuous improvement of audit methodologies, tools, analytics, and processes. • Perform other duties and special projects as assigned. What you'll need (Required): • Bachelor's Degree in related field is required • Minimum 5 years of previous related experience is required • Experience working in a medical device or a related manufacturing environment is required • Advance...
 
-### 76. `workday-Senior-Director--Quality-Engineering_Req-50066` — Senior Director, Quality Engineering
+### 78. `workday-Senior-Director--Quality-Engineering_Req-50066` — Senior Director, Quality Engineering
 
 - motivo en BD: `titulo_universitario_requerido`
 - detección textual: `confirmado` (término: `"Bachelor's"`) · obligatorio=True · en_curso=False · suave=False
@@ -1086,30 +1109,6 @@ sin_requisitos         | sin_requisitos_mapeados                | 8
 > ...What you'll need (Required): Bachelor's Degree in related field with at least 10 years experience in engineering and leadership positions in the medical device industry Experience in Quality Engineering, Quality Management, and/o...
 >
 > contexto: ...es. Provide quality engagement to audits including resources support, technical and procedural expertise, presentation of information, and effective resolution of issues. What you'll need (Required): Bachelor's Degree in related field with at least 10 years experience in engineering and leadership positions in the medical device industry Experience in Quality Engineering, Quality Management, and/or Regulato...
-
-### 77. `workday-Senior-Network-Engineer_R53343` — Senior Network Engineer
-
-- motivo en BD: `titulo_universitario_requerido`
-- detección textual: `confirmado` (término: `"Bachelor's"`) · obligatorio=True · en_curso=False · suave=False
-- requisitos `education` extraídos:
-  - `value_text="Bachelor's Degree"` · `requirement_level='ambiguous'` · `education_status='unspecified'`
-    - evidencia literal del requisito: > Bachelor's Degree with Network Engineering or Related field of study required.
-
-> Bachelor's Degree with Network Engineering or Related field of study required.
->
-> contexto: ...oject deadlines are met (10%) Mentors and develops more junior engineers (10%) Updates documentation with new findings (5%) Knowledge, Skills and Experience: 5 to 8 Years of relevant work experience. Bachelor's Degree with Network Engineering or Related field of study required. Other Education / Certifications: Active CCNA or CCNP. Able to execute instructions and to request clarification when needed. Able...
-
-### 78. `workday-Senior-Project-Accountant_J000703933` — Senior Project Accountant
-
-- motivo en BD: `titulo_universitario_requerido`
-- detección textual: `confirmado` (término: `'Bachelor’s'`) · obligatorio=False · en_curso=False · suave=False
-- requisitos `education` extraídos:
-  - `value_text='Bachelor'` · `requirement_level='required'` · `education_status='unspecified'`
-    - evidencia literal del requisito: > Ensure project invoices are accurate, approved, and sent on time • Compliance & Audits: Help maintain a strong control environment that is compliant with company policies and accounting standards Your Background: • Bachelor’s Degree in Accounting, Finance, or a closely related field • At least 5+ years of progressive project accounting experience or related accounting or finance roles • In collaboration with the Manager, Project Accounting establish priorities, meet deadlines, multi-task, and work independently, and execute objectives, under supervision where required.
-
-> Bachelor’s Degree in Accounting, Finance, or a closely related field
->
-> contexto: ...invoices are accurate, approved, and sent on time • Compliance & Audits: Help maintain a strong control environment that is compliant with company policies and accounting standards Your Background: • Bachelor’s Degree in Accounting, Finance, or a closely related field • At least 5+ years of progressive project accounting experience or related accounting or finance roles • In collaboration with the Manager,...
 
 ### 79. `workday-Senior-Quality-Engineer_R567778` — Quality Engineer
 
@@ -1187,7 +1186,19 @@ sin_requisitos         | sin_requisitos_mapeados                | 8
 >
 > contexto: ...by sharing information openly and early. Communicate with clarity so stakeholders understand trade-offs, dependencies, risks, and the technical approach required to move work forward. Qualifications Bachelor’s degree in IT or a similar technology-related discipline. Minimum 8 years of IT experience. Minimum 3 years of experience architecting integration solutions using APIs. Minimum 5 years of development...
 
-### 85. `workday-Storage-Hardware-Operations-Intern_1210994` — Storage Hardware Operations Intern
+### 85. `workday-Staff-Quality-Engineer--Onsite-_R576831` — Staff Quality Engineer (Onsite)
+
+- motivo en BD: `titulo_universitario_requerido`
+- detección textual: `confirmado` (término: `'Bachelor’s'`) · obligatorio=False · en_curso=False · suave=False
+- requisitos `education` extraídos:
+  - `value_text='Bachelor'` · `requirement_level='required'` · `education_status='unspecified'`
+    - evidencia literal del requisito: > What you will need Required • Bachelor’s degree in Engineering or a related technical field .
+
+> Bachelor’s degree in Engineering or a related technical field .
+>
+> contexto: ...ith Quality Assurance, Manufacturing, Engineering, Research & Development, and Regulatory teams to resolve quality issues and escalate risks requiring management review. What you will need Required • Bachelor’s degree in Engineering or a related technical field . • Minimum 5 years of Quality Engineering experience . • Professional proficiency in English and Spanish , written and verbal. • Working knowledge...
+
+### 86. `workday-Storage-Hardware-Operations-Intern_1210994` — Storage Hardware Operations Intern
 
 - motivo en BD: `titulo_universitario_en_curso_requerido`
 - detección textual: `confirmado` (término: `'Bachelor’s'`) · obligatorio=True · en_curso=True · suave=False
@@ -1203,7 +1214,7 @@ sin_requisitos         | sin_requisitos_mapeados                | 8
 >
 > contexto: ...up opportunities with HPE. Job Description: Job Family Definition: Students or recent graduates of college, university, or other accredited academic programs, pursuing diplomas or degrees (Associate, Bachelor’s, Master’s, or PhD) in any field. Assists in various tasks aligned with their field of study, including research, collaboration on team initiatives and projects, problem-solving, and creative thinking...
 
-### 86. `workday-Student-Intern--Collaboration-Services-System-Programmer_JR0287833` — Student Intern, Collaboration Services System Programmer
+### 87. `workday-Student-Intern--Collaboration-Services-System-Programmer_JR0287833` — Student Intern, Collaboration Services System Programmer
 
 - motivo en BD: `titulo_universitario_en_curso_requerido`
 - detección textual: `confirmado` (término: `"Bachelor's"`) · obligatorio=True · en_curso=True · suave=False
@@ -1215,7 +1226,7 @@ sin_requisitos         | sin_requisitos_mapeados                | 8
 >
 > contexto: ...d commitment to documenting solutions for future reuse. Qualifications: Minimum Qualifications : Minimum qualifications are required to be initially considered for this position. Currently pursuing a Bachelor's degree in Computer Science, Information Technology, Information Systems, Software Engineering, or a related field. Approximately two years remaining before graduation. Basic understanding of Microsof...
 
-### 87. `workday-Supplier-Quality-Engineer-III_31162905` — Supplier Quality Engineer III
+### 88. `workday-Supplier-Quality-Engineer-III_31162905` — Supplier Quality Engineer III
 
 - motivo en BD: `titulo_universitario_requerido`
 - detección textual: `confirmado` (término: `"Bachelor's"`) · obligatorio=True · en_curso=False · suave=False
@@ -1227,7 +1238,7 @@ sin_requisitos         | sin_requisitos_mapeados                | 8
 >
 > contexto: ...ed . Mentors employees by sharing technical expertise and providing feedback and guidance . As required , supervise technical personal for task execution Shift: Administrative Required Qualifications Bachelor's degree in engineering, Science, or equivalent field of study. 2 of experience in engineering related position. Intermediate command of English. Apply Now Follow your career aspirations to Abbott for...
 
-### 88. `workday-Switching-Technical-Support-Engineer-Intern---Switching-Support---EX-Products_1214133` — Switching Technical Support Engineer Intern | Switching Support – EX Products
+### 89. `workday-Switching-Technical-Support-Engineer-Intern---Switching-Support---EX-Products_1214133` — Switching Technical Support Engineer Intern | Switching Support – EX Products
 
 - motivo en BD: `titulo_universitario_en_curso_requerido`
 - detección textual: `confirmado` (término: `'Bachelor’s'`) · obligatorio=True · en_curso=True · suave=False
@@ -1243,7 +1254,7 @@ sin_requisitos         | sin_requisitos_mapeados                | 8
 >
 > contexto: ...up opportunities with HPE. Job Description: Job Family Definition: Students or recent graduates of college, university, or other accredited academic programs, pursuing diplomas or degrees (Associate, Bachelor’s, Master’s, or PhD) in any field. Assists in various tasks aligned with their field of study, including research, collaboration on team initiatives and projects, problem-solving, and creative thinking...
 
-### 89. `workday-Tax-Audit-Senior-Specialist_888004-1` — Tax Compliance Analyst III
+### 90. `workday-Tax-Audit-Senior-Specialist_888004-1` — Tax Compliance Analyst III
 
 - motivo en BD: `titulo_universitario_requerido`
 - detección textual: `confirmado` (término: `"Bachelor's"`) · obligatorio=True · en_curso=False · suave=False
@@ -1255,7 +1266,7 @@ sin_requisitos         | sin_requisitos_mapeados                | 8
 >
 > contexto: ...entic caring. You want to be part of a company actively dedicated to sustainability, inclusion, wellbeing, and career development. To succeed in this role, you will need the following qualifications: Bachelor's degree in finance, accounting, internal control or related field along with experience in USGAAP, preparing Income Tax Returns, Informative reports, compliance reports and attending tax audits. More...
 
-### 90. `workday-Technical-Consulting-Engineer_2024456` — Technical Consulting Engineer
+### 91. `workday-Technical-Consulting-Engineer_2024456` — Technical Consulting Engineer
 
 - motivo en BD: `titulo_universitario_requerido`
 - detección textual: `confirmado` (término: `'Bachelor’s'`) · obligatorio=True · en_curso=False · suave=False
@@ -1267,7 +1278,7 @@ sin_requisitos         | sin_requisitos_mapeados                | 8
 >
 > contexto: ...ineering fixes. Document technical findings, diagnostic procedures, and solutions in internal knowledge bases to improve incident readiness and peer-to-peer learning. Minimum Qualifications Possess a Bachelor’s degree in Computer Science, Engineering, Information Technology, or have work experience. Have 5 or more years of experience in an advanced technical support role supporting complex enterprise softwa...
 
-### 91. `workday-Technical-Support-Delivery-Intern_JR-0110629-1` — Technical Support Delivery Intern
+### 92. `workday-Technical-Support-Delivery-Intern_JR-0110629-1` — Technical Support Delivery Intern
 
 - motivo en BD: `titulo_universitario_en_curso_requerido`
 - detección textual: `confirmado` (término: `'Bachelor’s'`) · obligatorio=True · en_curso=True · suave=False
@@ -1279,7 +1290,7 @@ sin_requisitos         | sin_requisitos_mapeados                | 8
 >
 > contexto: ...living our Core Values. Let’s make work days brighter. Apply today to start your career as a member of the Workday Intern & Co-Op Program! #LI-DNI About You Basic Qualifications Currently pursuing a Bachelor’s degree in Computer Science, Information Technology, or related field, with an anticipated graduation date of June/July 2027 Must be able to commit to the full duration of the 23 week internship (Star...
 
-### 92. `workday-Technical-Support-Engineer-Intern---Wireless-Technologies_1214131` — Technical Support Engineer Intern – Wireless Technologies
+### 93. `workday-Technical-Support-Engineer-Intern---Wireless-Technologies_1214131` — Technical Support Engineer Intern – Wireless Technologies
 
 - motivo en BD: `titulo_universitario_en_curso_requerido`
 - detección textual: `confirmado` (término: `'Bachelor’s'`) · obligatorio=True · en_curso=True · suave=False
@@ -1295,7 +1306,7 @@ sin_requisitos         | sin_requisitos_mapeados                | 8
 >
 > contexto: ...up opportunities with HPE. Job Description: Job Family Definition: Students or recent graduates of college, university, or other accredited academic programs, pursuing diplomas or degrees (Associate, Bachelor’s, Master’s, or PhD) in any field. Assists in various tasks aligned with their field of study, including research, collaboration on team initiatives and projects, problem-solving, and creative thinking...
 
-### 93. `workday-Technical-Writing-Intern_1214060` — Technical Writing Intern
+### 94. `workday-Technical-Writing-Intern_1214060` — Technical Writing Intern
 
 - motivo en BD: `titulo_universitario_en_curso_requerido`
 - detección textual: `confirmado` (término: `'Bachelor’s'`) · obligatorio=True · en_curso=True · suave=False
@@ -1311,7 +1322,7 @@ sin_requisitos         | sin_requisitos_mapeados                | 8
 >
 > contexto: ...l embrace you. Open up opportunities with HPE. Job Description: Job Family Definition: Students of college, university, or other accredited academic programs, pursuing diplomas or degrees (Associate, Bachelor’s, Master’s, or PhD) in any field. Assists in various tasks aligned with their field of study, including research, collaboration on team initiatives and projects, problem-solving, and creative thinking...
 
-### 94. `workday-US-Marketing-Governance--Regulatory-and-Policy-Lead_25928925` — US Marketing Governance Regulatory and Policy Lead
+### 95. `workday-US-Marketing-Governance--Regulatory-and-Policy-Lead_25928925` — US Marketing Governance Regulatory and Policy Lead
 
 - motivo en BD: `titulo_universitario_requerido`
 - detección textual: `confirmado` (término: `"Bachelor's"`) · obligatorio=True · en_curso=False · suave=False
@@ -1323,7 +1334,7 @@ sin_requisitos         | sin_requisitos_mapeados                | 8
 >
 > contexto: ...nd work well as part of a team. Exceptional oral and written communication skills, with ability to synthesize complex concepts, and influence change. Proficient in Microsoft Office Suite. Education : Bachelor's/University degree, Master's degree preferred ------------------------------------------------------ Job Family Group: Controls Governance & Oversight -------------------------------------------------...
 
-### 95. `workday-VLSI-Engineer-Internship_1214036` — VLSI Engineer Internship
+### 96. `workday-VLSI-Engineer-Internship_1214036` — VLSI Engineer Internship
 
 - motivo en BD: `titulo_universitario_en_curso_requerido`
 - detección textual: `confirmado` (término: `'Bachelor’s'`) · obligatorio=True · en_curso=True · suave=False
@@ -1339,7 +1350,7 @@ sin_requisitos         | sin_requisitos_mapeados                | 8
 >
 > contexto: ...up opportunities with HPE. Job Description: Job Family Definition: Students or recent graduates of college, university, or other accredited academic programs, pursuing diplomas or degrees (Associate, Bachelor’s, Master’s, or PhD) in any field. Assists in various tasks aligned with their field of study, including research, collaboration on team initiatives and projects, problem-solving, and creative thinking...
 
-### 96. `workday-ingeniero-de-Manufactura_20184428` — ingeniero de Manufactura
+### 97. `workday-ingeniero-de-Manufactura_20184428` — ingeniero de Manufactura
 
 - motivo en BD: `titulo_universitario_requerido`
 - detección textual: `confirmado` (término: `'Bachelor’s'`) · obligatorio=True · en_curso=False · suave=False
@@ -1351,7 +1362,7 @@ sin_requisitos         | sin_requisitos_mapeados                | 8
 >
 > contexto: ...ives. Also designs process improvements to reduce product cost, process cycle time and improved product quality. Qualifications/Responsibilities 2-4 years of experience in a highly regulated industry Bachelor’s degree in Engineering or a related field required. Intermediate English proficiency (B1), Experience leading projects and supporting cost-reduction and quality-improvement initiatives within producti...
 
-## 5. Las 31 `revisar_a_mano / educacion_no_confirmada` — por qué el MOTOR no las descarta
+## 5. Las 29 `revisar_a_mano / educacion_no_confirmada` — por qué el MOTOR no las descarta
 
 Son requisitos universitarios **obligatorios** que el TEXTO no confirma
 (negación o alternativa). Van a revisión manual y a la HOJA DE REVISIÓN
@@ -1359,18 +1370,7 @@ pendiente (`docs/PASO5_REVISION_PENDIENTES.md`): el estado es el del
 **motor**; el veredicto humano queda ABIERTO hasta que una segunda
 persona firme en esa hoja.
 
-### 1. `indeed-bf3386c86f36686f` — Technical Support Engineer II - Costa Rica, Colombia, Mexico
-
-- detección textual: `alternativa` (término: `"Bachelor's"`)
-- requisitos `education` extraídos:
-  - `value_text="Bachelor's"` · `requirement_level='inferred'` · `education_status='unspecified'`
-    - evidencia literal del requisito: > EDUCATION AND EXPERIENCE Bachelor's or Master's degree in Computer Science or a related field or equivalent experience.
-
-> EDUCATION AND EXPERIENCE Bachelor's or Master's degree in Computer Science or a related field or equivalent experience.
->
-> contexto: ...n appropriate to troubleshoot complex technical issues live, helping reduce back-and-forth communication and speed up resolution for high-priority or advanced customer cases. EDUCATION AND EXPERIENCE Bachelor's or Master's degree in Computer Science or a related field or equivalent experience. 3+ years of Support Engineering, Software Engineering experience. Thorough knowledge with consuming RESTful and Gra...
-
-### 2. `recruitee-transperfect-2770002` — Client Service Executive
+### 1. `recruitee-transperfect-2770002` — Client Service Executive
 
 - detección textual: `alternativa` (término: `'Bachelor’s'`)
 - requisitos `education` extraídos:
@@ -1381,7 +1381,29 @@ persona firme en esa hoja.
 >
 > contexto: ...rk well with people from a variety of different backgrounds and cultures, work independently and as part of a team · Strong MS Office/computer skills Required Experience and Qualifications: · Minimum Bachelor’s degree or its equivalent · Experience in customer service · Experience coordinating projects and assignment of resource...
 
-### 3. `workday-Accounts-Payable-Representative_J-020440` — Accounts Payable Representative
+### 2. `workable-cynet-corp-9613AEDBB4` — Pricing Analyst (Remote in Costa Rica)
+
+- detección textual: `alternativa` (término: `'Bachelor’s'`)
+- requisitos `education` extraídos:
+  - `value_text='Bachelor'` · `requirement_level='inferred'` · `education_status='unspecified'`
+    - evidencia literal del requisito: > Qualifications - Bachelor’s degree in Finance, Economics, Business, Data Analytics, or a related field (or equivalent work experience).
+
+> Qualifications - Bachelor’s degree in Finance, Economics, Business, Data Analytics, or a related field (or equivalent work experience).
+>
+> contexto: ...ing tools, templates, and models to improve efficiency and accuracy. - Support scenario modelling, profitability analysis, and executive reporting to guide strategic decision-making. Qualifications - Bachelor’s degree in Finance, Economics, Business, Data Analytics, or a related field (or equivalent work experience). - 2+ years of experience in pricing or financial analysis within staffing, government contr...
+
+### 3. `workday-Accounting-Analyst_JR-0111160-1` — Accounting Analyst
+
+- detección textual: `alternativa` (término: `"Bachelor's"`)
+- requisitos `education` extraídos:
+  - `value_text="Bachelor's degree"` · `requirement_level='ambiguous'` · `education_status='unspecified'`
+    - evidencia literal del requisito: > In this role, you will be responsible for: Analyzing financial data and applying accounting judgment to prepare journal entries for accruals, reclassifications, adjustments, and other items required by management Owning month-end reconciliations end-to-end — investigating variances, identifying root causes, and partnering with cross-functional teams to drive timely resolution Performing flux analysis for balance sheet and P&L accounts, providing clear, well-supported explanations of variances in monthly activity Partnering closely with FP&A, Procurement, Prepaids, Treasury, International Accounting, External Reporting, and SOX teams to resolve accounting questions and ensure accurate recording of transactions Identifying opportunities for process improvement and simplification, and driving them to completion to build efficiencies across the team Supporting SOX compliance and monitoring efforts, proactively flagging and helping remediate control gaps during audits Building trusted relationships with business partners, acting as a go-to resource for accounting questions Supporting other Corporate Accounting areas and initiatives as priorities evolve over time About You Basic Qualifications 4+ years of experience in accounting, with a solid foundation in US GAAP 4+ years of experience using a large ERP system Bachelor's degree in Accounting, Finance, or a related discipline, or equivalent practical experience Other Qualifications Thorough understanding of Generally Accepted Accounting Principles (GAAP), with the ability to apply these principles to ensure accurate, consistent, and transparent financial statements, as well as to stay current with changes or updates to these standards Proficient in Excel, including formulas and pivot tables, along with familiarity with Google Workspace tools (Sheets, Docs, Drive, Slides) Comfortable using AI tools to support accounting analysis and drive efficiency in day-to-day work Detail-oriented, with the ability to manage complex information, spot errors or inconsistencies, and maintain a high level of accuracy and consistency across all work Skilled at identifying and improving processes, using analytical tools to measure performance and find opportunities to enhance efficiency and productivity Analytical and solution-oriented, with the ability to understand underlying processes and bring thoughtful recommendations to the team Organized and effective at managing tight deadlines, delivering timely and accurate work in a fast-paced environment Excellent written and verbal communication skills, with the ability to share ideas clearly and collaborate effectively across cross-functional teams Flexible and open to learning new things, with an enthusiasm for growing in a dynamic, evolving environment Public accounting, software, and/or SaaS industry experience preferred Our Approach to Flexible Work With Flex Work, we’re combining the best of both worlds: in-person time and remote.
+
+> ... and initiatives as priorities evolve over time About You Basic Qualifications 4+ years of experience in accounting, with a solid foundation in US GAAP 4+ years of experience using a large ERP system Bachelor's degree in Accounting, Finance, or a related discipline, or equivalent practical experience Other Qualifications Thorough understanding of Generally Accepted Accounting Principles (GAAP), wi...
+>
+> contexto: ...and initiatives as priorities evolve over time About You Basic Qualifications 4+ years of experience in accounting, with a solid foundation in US GAAP 4+ years of experience using a large ERP system Bachelor's degree in Accounting, Finance, or a related discipline, or equivalent practical experience Other Qualifications Thorough understanding of Generally Accepted Accounting Principles (GAAP), with the abi...
+
+### 4. `workday-Accounts-Payable-Representative_J-020440` — Accounts Payable Representative
 
 - detección textual: `alternativa` (término: `'Bachelor’s'`)
 - requisitos `education` extraídos:
@@ -1392,7 +1414,7 @@ persona firme en esa hoja.
 >
 > contexto: ...ur office in AFZ, Heredia on Mondays, Wednesdays, and Thursdays. Please note that there may be occasions where additional office days are required, due specific business needs. Minimum Qualifications Bachelor’s degree coursework in Accounting, Finance, Business Administration, or a related discipline and 1+ year of relevant experience; alternatively, 3+ years of relevant professional experience in Accounts...
 
-### 4. `workday-Analyst-Payroll_R273170` — Analyst Payroll
+### 5. `workday-Analyst-Payroll_R273170` — Analyst Payroll
 
 - detección textual: `alternativa` (término: `"Bachelor's"`)
 - requisitos `education` extraídos:
@@ -1403,7 +1425,7 @@ persona firme en esa hoja.
 >
 > contexto: ...to SOX controls and internal payroll control requirements. Participate in audits and support compliance reviews as needed. Ensure accurate documentation and retention of payroll records. Requirements Bachelor's degree in Business Administration, Accounting, Finance, Human Resources, or related field. Equivalent combination of education and relevant experience may be considered. Experience supporting multina...
 
-### 5. `workday-Audience-Management_26999789` — Audience Management
+### 6. `workday-Audience-Management_26999789` — Audience Management
 
 - detección textual: `alternativa` (término: `'Bachelors'`)
 - requisitos `education` extraídos:
@@ -1414,7 +1436,7 @@ persona firme en esa hoja.
 >
 > contexto: ...eting efforts, including dashboard reporting and MIS. Optimization experience a plus. Salesforce Marketing Cloud experience a plus. Digital Marketing and Email Deployment experience a plus Education: Bachelors/University degree or equivalent experience ------------------------------------------------------ Job Family Group: Marketing ------------------------------------------------------ Job Family: Market...
 
-### 6. `workday-Buyer-Planner-Sr_31163601` — Buyer Planner Sr
+### 7. `workday-Buyer-Planner-Sr_31163601` — Buyer Planner Sr
 
 - detección textual: `alternativa` (término: `'Bachelor'`)
 - requisitos `education` extraídos:
@@ -1424,17 +1446,6 @@ persona firme en esa hoja.
 > Required Qualifications Bachelor Degree, engineering, science or closely related discipline is desired, or equivalent technical.
 >
 > contexto: ...w product introductions to achieve agreed upon launch dates with targeted launch inventory levels while developing and implementing plans that minimize phase out obsolescence. Required Qualifications Bachelor Degree, engineering, science or closely related discipline is desired, or equivalent technical. 5 +years of experience in Progressively responsible experience in purchasing/commodity management. 3 ye...
-
-### 7. `workday-Cardiac-Specialist-II_R18282-1` — Cardiac Specialist II
-
-- detección textual: `alternativa` (término: `"Bachelor's"`)
-- requisitos `education` extraídos:
-  - `value_text="Bachelor's degree"` · `requirement_level='required'` · `education_status='unspecified'`
-    - evidencia literal del requisito: > What We Look For Bachelor's degree, ECG certification, or an equivalent combination of education and relevant experience required.
-
-> What We Look For Bachelor's degree, ECG certification, or an equivalent combination of education and relevant experience required.
->
-> contexto: ...ecks, and quality management activities to maintain data integrity. Create, maintain, and improve workflow documentation, training materials, tracking logs, and procedural documents. What We Look For Bachelor's degree, ECG certification, or an equivalent combination of education and relevant experience required. Minimum of 2 to 3 years of experience processing cardiac safety data in a core laboratory, clini...
 
 ### 8. `workday-Clinical-Project-Manager_R18034-1` — Clinical Project Manager
 
@@ -1515,16 +1526,16 @@ persona firme en esa hoja.
 >
 > contexto: ...LatAm territory leaders. Other activities as identified in support of environmental regulatory, corporate, and operational requirements for the Kyndryl Latin America portfolio. Who You Are Education: Bachelor's degree or equivalent in environmental science, environmental engineering, or a related field. Work / Program Management experience: 5+ years’ experience in Environmental Management related to data ce...
 
-### 15. `workday-HR-Benefits-Operations-Analyst_261003280` — HR Benefits Operations Analyst
+### 15. `workday-Governance-Reporting---Analysis-Sr-Analyst---C12---HEREDIA_261007965` — Governance Reporting & Analysis Sr. Analyst - C12 - HEREDIA
 
-- detección textual: `alternativa` (término: `'Bachelor’s'`)
+- detección textual: `alternativa` (término: `"Bachelor's"`)
 - requisitos `education` extraídos:
-  - `value_text='Bachelor'` · `requirement_level='inferred'` · `education_status='unspecified'`
-    - evidencia literal del requisito: > Proven organization and time management skills Demonstrated problem-solving and decision-making skills Consistently demonstrates clear and concise written and verbal communication skills Education: Bachelor’s degree/University degree or equivalent experience This job description provides a high-level review of the types of work performed.
+  - `value_text="Bachelor's"` · `requirement_level='inferred'` · `education_status='unspecified'`
+    - evidencia literal del requisito: > Education : Bachelor's/University degree or equivalent experience ------------------------------------------------------ Job Family Group: Controls Governance & Oversight ------------------------------------------------------ Job Family: Governance Reporting & Analysis ------------------------------------------------------ Time Type: Full time ------------------------------------------------------ Most Relevant Skills Analytical Thinking, Constructive Debate, Controls Lifecycle, Data Analysis, Digital Skills (Including AI), Escalation Management, Governance, Management Reporting, Needs Assessment, Risk Management Lifecycle.
 
-> Proven organization and time management skills Demonstrated problem-solving and decision-making skills Consistently demonstrates clear and concise written and verbal communication skills Education: Bachelor’s degree/University degree or equivalent experience This job description provides a high-level review of the types of work performed.
+> ...Education : Bachelor's/University degree or equivalent experience ------------------------------------------------------ Job Family Group: Controls Governance & Oversight -----------------------------------------...
 >
-> contexto: .... Proven organization and time management skills Demonstrated problem-solving and decision-making skills Consistently demonstrates clear and concise written and verbal communication skills Education: Bachelor’s degree/University degree or equivalent experience This job description provides a high-level review of the types of work performed. Other job-related duties may be assigned as required. Experience in...
+> contexto: ...th diverse groups of stakeholders to achieve milestones and deadlines. Proven ability to manage multiple, concurrent large-scale projects from ideation through testing and implementation. Education : Bachelor's/University degree or equivalent experience ------------------------------------------------------ Job Family Group: Controls Governance & Oversight ---------------------------------------------------...
 
 ### 16. `workday-HR-Operations-Support-Lead-Analyst_25848722` — HR Operations Support Lead Analyst (C13) hybrid located in Heredia
 
@@ -1537,18 +1548,7 @@ persona firme en esa hoja.
 >
 > contexto: ...d Proven organization and time management skills Demonstrated problem-solving and decision-making skills Consistently demonstrates clear and concise written and verbal communication skills Education: Bachelor’s degree/University degree or equivalent experience Master’s degree preferred This job description provides a high-level review of the types of work performed. Other job-related duties may be assigned...
 
-### 17. `workday-IT-Security-Engineer-II_R-01372831` — IT Security Engineer II
-
-- detección textual: `alternativa` (término: `"Bachelor's"`)
-- requisitos `education` extraídos:
-  - `value_text="Bachelor's Degree"` · `requirement_level='preferred'` · `education_status='completed'`
-    - evidencia literal del requisito: > Key Responsibilities: Providing key input and assistance in the development and implementation of a global cybersecurity risk management program Maintaining and executing the risk management policy throughout the entire risk lifecycle Executing various risk analysis processes within the team including intake and analysis of reported risks, risk measurement, risk response, and ensuring teams are properly managing plans to reduce risk Execute third party security assessments and analyze identified risks to help with strategic decisions around third party management Ensure consistency of security practice and standards across the organization Conduct Information Security assessments including and documenting controls, identifying potential gaps and or inconsistencies and making sound recommendations for improvement and/or mitigation Collaborate on the technical definitions and oversee implementation of security controls and requirements for systems, infrastructure and solutions Carry out information security risk assessments on technology solutions in line with the company risk management program Conduct third-party risk management activities including vendor/supplier assessments and risk analysis Intake and analysis of identified cyber security issues and risks from a variety of sources including security assessments, compliance checks, automated vulnerability systems, and other internally or externally reported risks Complete analyses and reports to develop a comprehensive view of risk across the company Assist and track for accurate risk measurement and response activities, provide necessary information and analysis to help business leaders prioritize risks Review and track action plans developed by risk owners and ensure plans are completed appropriately Perform ad-hoc risk analysis as assigned Perform other duties as assigned REQUIREMENTS 3+ years' experience in risk analysis, information risk management, data privacy, information technology, or equivalent with exposure to cybersecurity and/or information security risk Bachelor's Degree in Risk Management, Information Assurance, Information Security, Cybersecurity, IT, Data Privacy or similar area or equivalent work experience Experience with risk analysis Ability to explain complex risk management topics to a broad audience General understanding of cybersecurity technologies and controls with the ability to bridge the gap between governance and technical concepts Excellent writing skills, with experience as a writer or technical editor is considered a plus Demonstrated ability to complete work with minimal direction and self-identify tasks Excellent written and verbal communication skills with experience presenting to senior leadership Strong interpersonal, organizational, and excellent documentation skills Excellent customer service skills Relevant certifications such as CRISC, CISSP or CISA are considered a plus Understanding of various risk management frameworks such as the NIST Risk Management Framework or Center for Internet Security Risk Assessment Methodology will be considered plus
-
-> ...ed REQUIREMENTS 3+ years' experience in risk analysis, information risk management, data privacy, information technology, or equivalent with exposure to cybersecurity and/or information security risk Bachelor's Degree in Risk Management, Information Assurance, Information Security, Cybersecurity, IT, Data Privacy or similar area or equivalent work experience Experience with risk analysis Ability t...
->
-> contexto: ...ed REQUIREMENTS 3+ years' experience in risk analysis, information risk management, data privacy, information technology, or equivalent with exposure to cybersecurity and/or information security risk Bachelor's Degree in Risk Management, Information Assurance, Information Security, Cybersecurity, IT, Data Privacy or similar area or equivalent work experience Experience with risk analysis Ability to explain...
-
-### 18. `workday-Network-Support-Engineer_1211197` — Network Support Engineer
+### 17. `workday-Network-Support-Engineer_1211197` — Network Support Engineer
 
 - detección textual: `alternativa` (término: `'Bachelor'`)
 - requisitos `education` extraídos:
@@ -1559,7 +1559,7 @@ persona firme en esa hoja.
 >
 > contexto: ...able tools is an essential element of the role Develop a "Can-Do" attitude and suggest ways to improve the team performance and increase customer's satisfaction Basic Qualifications Higher education (Bachelor or Master degree in electrical engineering or computer science or equivalent ) 3+ years of working experience in a network support role, 2-3 of these years would be spent supporting large IP networks...
 
-### 19. `workday-Operations-Engineer_R0007464` — Operations Engineer
+### 18. `workday-Operations-Engineer_R0007464` — Operations Engineer
 
 - detección textual: `alternativa` (término: `'Bachelor’s'`)
 - requisitos `education` extraídos:
@@ -1570,18 +1570,18 @@ persona firme en esa hoja.
 >
 > contexto: ...accordingly. Conduct User Acceptance Tests in production and research relevant errors. Work with Product and Development for releases and enhancements. Experience, Required Skills and Qualifications: Bachelor’s degree in computer science, electronics, telecommunication, or equivalent work experience. 3-5 years of professional experience in application support, Production support, technical customer support,...
 
-### 20. `workday-Principal-Cybersecurity-Engineer_R0007423` — Principal Cybersecurity Engineer
+### 19. `workday-Premium-Support-Engineer-Expert_1210068` — Senior Premium Network Support Engineer – ClearPass & Wireless
 
-- detección textual: `alternativa` (término: `'Bachelor’s'`)
+- detección textual: `alternativa` (término: `"Bachelor's"`)
 - requisitos `education` extraídos:
-  - `value_text='Bachelor'` · `requirement_level='required'` · `education_status='unspecified'`
-    - evidencia literal del requisito: > Required Qualifications: · Bachelor’s degree in Computer Science, Information Security, or a related field, or equivalent professional experience.
+  - `value_text="Bachelor's"` · `requirement_level='required'` · `education_status='unspecified'`
+    - evidencia literal del requisito: > Education and Experience Required: Bachelor's or Master's degree in Mechanical, Electrical, or other Engineering, Computer Science, or equivalent.
 
-> Bachelor’s degree in Computer Science, Information Security, or a related field, or equivalent professional experience.
+> Education and Experience Required: Bachelor's or Master's degree in Mechanical, Electrical, or other Engineering, Computer Science, or equivalent.
 >
-> contexto: ...heduled searches, and lookup- generating pipelines — to support threat detection, compliance reporting, and operational dashboards for the Windows and endpoint environment. Required Qualifications: · Bachelor’s degree in Computer Science, Information Security, or a related field, or equivalent professional experience. · 8+ years of progressive experience in information security or systems engineering, with...
+> contexto: ...erspective to cross- organization projects, programs, and activities. Ready to learn and adopt to WLAN technologies - Wireless Access Points, ArubaOS 8, ArubaOS 10. Education and Experience Required: Bachelor's or Master's degree in Mechanical, Electrical, or other Engineering, Computer Science, or equivalent. Typically 6-10 years experience. Advanced English Level. Knowledge and Skills Required Strong prof...
 
-### 21. `workday-Principal-Engineer--Quality_Req-51750` — Principal Engineer, Quality
+### 20. `workday-Principal-Engineer--Quality_Req-51750` — Principal Engineer, Quality
 
 - detección textual: `alternativa` (término: `"Bachelor's"`)
 - requisitos `education` extraídos:
@@ -1592,7 +1592,7 @@ persona firme en esa hoja.
 >
 > contexto: ...r level employees on more complex procedures • Develop technical content of risk management files • Manage Supplier Quality Activities as needed • Other incidental duties What you'll need (Required): Bachelor's degree in engineering or Scientific field, 6 years of experience minimum of experience, including either industry or industry/education or Master's Degree or equivalent in Engineering or Scientific f...
 
-### 22. `workday-Production-Supervisor-I_31163511` — Production Supervisor I
+### 21. `workday-Production-Supervisor-I_31163511` — Production Supervisor I
 
 - detección textual: `alternativa` (término: `'bachelor’s'`)
 - requisitos `education` extraídos:
@@ -1605,20 +1605,7 @@ persona firme en esa hoja.
 >
 > contexto: ...ation. Execute and monitor continuous improvement processes to increase quality, reduce cost and improve overall team productivity in own production line Required Qualifications 80% completeness of a bachelor’s degree program from a four-year college or university in Business Administration, Engineering or other technical/scientific experience. 0-2 years supervisory experience. Preferably in a medical devic...
 
-### 23. `workday-Production-Supervisor-I_31163518` — Production Supervisor I
-
-- detección textual: `alternativa` (término: `'bachelor’s'`)
-- requisitos `education` extraídos:
-  - `value_text='Bachelor'` · `requirement_level='preferred'` · `education_status='unspecified'`
-    - evidencia literal del requisito: > Preferred Qualifications Bachelor’s degree in business administration, Engineering or similar field.
-  - `value_text='bachelor'` · `requirement_level='required'` · `education_status='unspecified'`
-    - evidencia literal del requisito: > Execute and monitor continuous improvement processes to increase quality, reduce cost and improve overall team productivity in own production line Required Qualifications 80% completeness of a bachelor’s degree program from a four-year college or university in Business Administration, Engineering or other technical/scientific experience.
-
-> Execute and monitor continuous improvement processes to increase quality, reduce cost and improve overall team productivity in own production line Required Qualifications 80% completeness of a bachelor’s degree program from a four-year college or university in Business Administration, Engineering or other technical/scientific experience.
->
-> contexto: ...ation. Execute and monitor continuous improvement processes to increase quality, reduce cost and improve overall team productivity in own production line Required Qualifications 80% completeness of a bachelor’s degree program from a four-year college or university in Business Administration, Engineering or other technical/scientific experience. 0-2 years supervisory experience. Preferably in a medical devic...
-
-### 24. `workday-Sales-Specialist_R-117581` — Sales Specialist
+### 22. `workday-Sales-Specialist_R-117581` — Sales Specialist
 
 - detección textual: `alternativa` (término: `'four year college degree'`)
 - requisitos `education` extraídos:
@@ -1629,7 +1616,7 @@ persona firme en esa hoja.
 >
 > contexto: ...overall accuracy. General proficiency with various tools, systems, and procedures required to accomplish the job. May need to consult with Senior/Specialist staff members on some technical issues. A four year college degree (or additional experience in a related field) and 3 years functional experience including a minimum 1 year position specific experience....
 
-### 25. `workday-Security-Governance---Compliance-Specialist_2022361-1` — Security Governance & Compliance Specialist
+### 23. `workday-Security-Governance---Compliance-Specialist_2022361-1` — Security Governance & Compliance Specialist
 
 - detección textual: `alternativa` (término: `'Bachelor’s'`)
 - requisitos `education` extraídos:
@@ -1640,7 +1627,7 @@ persona firme en esa hoja.
 >
 > contexto: ...AI/ML systems, including their secure use, configuration, and governance. Contribute to the ongoing evolution of scalable, AI centric, automation-forward compliance processes. Minimum Qualifications Bachelor’s degree plus 5+ years of experience in technical compliance, security, risk, audit, or a related field; equivalent practical experience may be considered. Direct experience supporting or leading audit...
 
-### 26. `workday-Security-Governance---Compliance-Specialist_2023168-1` — Security Governance & Compliance Specialist
+### 24. `workday-Security-Governance---Compliance-Specialist_2023168-1` — Security Governance & Compliance Specialist
 
 - detección textual: `alternativa` (término: `"Bachelor's"`)
 - requisitos `education` extraídos:
@@ -1651,7 +1638,7 @@ persona firme en esa hoja.
 >
 > contexto: ...organizational objectives. Lead difficult conversations professionally and apply judgment to assess criticality and prioritize efforts in alignment with organizational goals. Must-have Qualifications Bachelor's degree or equivalent work experience required. Professional certification(s) such as GIAC, CISSP, CRISC, CISM, CISA, ISO 27001 Lead Implementer/Auditor, CCSK, CCSP, etc. 3-5 + years performing hands-...
 
-### 27. `workday-Senior-Client-Services-Executive_R2025-244318` — Senior Client Services Executive
+### 25. `workday-Senior-Client-Services-Executive_R2025-244318` — Senior Client Services Executive
 
 - detección textual: `alternativa` (término: `'Bachelor’s'`)
 - requisitos `education` extraídos:
@@ -1662,7 +1649,18 @@ persona firme en esa hoja.
 >
 > contexto: ...and ability to multi-task in a fast-paced environment · Superior written and spoken communication skills in English Required Experience and Qualifications: · Experience in customer service · Minimum Bachelor’s degree or its equivalent · Strong MS Office/computer skills...
 
-### 28. `workday-Senior-Project-Manager_R13442` — Senior Project Manager
+### 26. `workday-Senior-Engineer---WLAN_1210063-2` — Senior Engineer – WLAN
+
+- detección textual: `alternativa` (término: `'Bachelor’s'`)
+- requisitos `education` extraídos:
+  - `value_text='Bachelor'` · `requirement_level='required'` · `education_status='unspecified'`
+    - evidencia literal del requisito: > Education and Experience Required: Bachelor’s or Master’s degree in Computer Science, Electrical Engineering, Computer Engineering, or a related discipline, or equivalent practical experience.
+
+> Education and Experience Required: Bachelor’s or Master’s degree in Computer Science, Electrical Engineering, Computer Engineering, or a related discipline, or equivalent practical experience.
+>
+> contexto: ...thodologies within the engineering organization. Provides guidance, coaching, and mentoring to junior engineers to support skill development and knowledge transfer. Education and Experience Required: Bachelor’s or Master’s degree in Computer Science, Electrical Engineering, Computer Engineering, or a related discipline, or equivalent practical experience. Typically 6–10 years of relevant experience in enter...
+
+### 27. `workday-Senior-Project-Manager_R13442` — Senior Project Manager
 
 - detección textual: `alternativa` (término: `"Bachelor's"`)
 - requisitos `education` extraídos:
@@ -1673,7 +1671,7 @@ persona firme en esa hoja.
 >
 > contexto: ...kills, and ability to multi-task. Excellent oral and written communication skills. Excellent interpersonal skills. Foreign language skills a plus. Appropriate Education and Experience: A minimum of a Bachelor's degree or equivalent experience. Hands-on knowledge of database functions and concepts. Must be very resourceful, with the ability to work independently. Must have proven organizational and communica...
 
-### 29. `workday-Senior-Specialist--Technical-Training_R576356` — Senior Specialist, Technical Training
+### 28. `workday-Senior-Specialist--Technical-Training_R576356` — Senior Specialist, Technical Training
 
 - detección textual: `alternativa` (término: `'Bachelor’s'`)
 - requisitos `education` extraídos:
@@ -1684,18 +1682,7 @@ persona firme en esa hoja.
 >
 > contexto: ...solution. Generate and distribute training metrics and/or Key Performance Indicators (KPIs). Perform additional duties and projects, as assigned, to support enterprise priorities. What you will need: Bachelor’s degree in Business, Education, Human Resources, or related field (or equivalent experience).Bachelor’s degree in Business, Education, Human Resources, or related field (or equivalent experience). 2-4...
 
-### 30. `workday-SeniorTechnician--Laboratory--Microbiology-_Req-51330` — SeniorTechnician, Laboratory (Microbiology)
-
-- detección textual: `alternativa` (término: `"Bachelor's"`)
-- requisitos `education` extraídos:
-  - `value_text="Bachelor's Degree"` · `requirement_level='ambiguous'` · `education_status='unspecified'`
-    - evidencia literal del requisito: > • Assist in testing validation/revalidation activities for critical systems and equipment under close supervision • May maintain basic equipment by following procedures and executing PM (preventative maintenance) per established schedule • Support laboratory investigations and propose recommendations for manager view • Prepare data summaries for laboratory reports or technical studies using existing templates as a model as well as review and approve basic laboratory data • Execute testing or instructions associated to equipment and process validation protocols • May train, coach, and guide lower-level technicians on new procedures, assess work techniques and provide feedback on procedures • Other incidental duties What you’ll need (Required): • Technical or Diploma Degree in Laboratory Science, Mircrobiology Laboratory or Related fields with 3 years of previous experience working in a laboratory Required, or Bachelor's Degree or Equivalent in Chemistry and /or Microbiology Preferred.
-
-> Technical or Diploma Degree in Laboratory Science, Mircrobiology Laboratory or Related fields with 3 years of previous experience working in a laboratory Required, or Bachelor's Degree or Equivalent in Chemistry and /or Microbiology Preferred.
->
-> contexto: ...s What you’ll need (Required): • Technical or Diploma Degree in Laboratory Science, Mircrobiology Laboratory or Related fields with 3 years of previous experience working in a laboratory Required, or Bachelor's Degree or Equivalent in Chemistry and /or Microbiology Preferred. • Availability to work from Monday to Friday from 8.00 a.m. to 05.00 p.m. What else we look for (preferred): • Good written and verba...
-
-### 31. `workday-SharePoint-Application-Developer_R55630-1` — SharePoint Application Developer
+### 29. `workday-SharePoint-Application-Developer_R55630-1` — SharePoint Application Developer
 
 - detección textual: `alternativa` (término: `"Bachelor's"`)
 - requisitos `education` extraídos:
@@ -1718,7 +1705,7 @@ corrida `20261029_171039` (106 vacantes en total):
   tres, ordenadas por `job_id`).
 
 Cada caso se revisó a mano contra la frase literal del aviso.
-`Estado final` es el de la corrida vigente `20261107_171903`.
+`Estado final` es el de la corrida vigente `20261107_225916`.
 
 | # | job_id | veredicto manual | por qué | estado final | motivo final |
 |---|---|---|---|---|---|
@@ -1739,14 +1726,14 @@ Cada caso se revisó a mano contra la frase literal del aviso.
 | B2 | `cinde-4892` | BLOQUEO | Job Requirements: Active university student + Currently pursuing | descartada | `titulo_universitario_en_curso_requerido` |
 | B3 | `cinde-4898` | BLOQUEO | Formacion: Licenciatura | descartada | `titulo_universitario_requerido` |
 | B4 | `workable-valatam-A30B8CD1CD` | NO BLOQUEO | 'Bachelor's or Associate's degree preferred' | datos_insuficientes | `educacion_no_cumple` |
-| B5 | `workday-Analista-de-CPFR_887589` | BLOQUEO | Licenciatura o bachillerato universitario (ambos son=title universit.) | descartada | `titulo_universitario_requerido` |
+| B5 | `workday-Analista-de-CPFR_887589` | BLOQUEO | Licenciatura o bachillerato universitario (ambos son=title universit.) | purgado | purgado |
 | B6 | `workday-Applications-Support-Sr-Analyst_26963530` | NO BLOQUEO | or equivalent experience | purgado | purgado |
 | B7 | `workday-Audience-Management_26999789` | NO BLOQUEO | or equivalent experience | revisar_a_mano | `educacion_no_confirmada` |
 | B8 | `workday-Commercial-Support-Specialist_202609-124777` | NO BLOQUEO | 'Bachelor's or Master's degree preferred' | purgado | purgado |
 | B9 | `workday-Content-Review-Operations-Specialist_202610-127168` | NO BLOQUEO | or equivalent experience | purgado | purgado |
 | B10 | `workday-Data-Governance-Foundation-Lead-Analyst_26983548` | BLOQUEO | Education: Bachelor's/University degree (el 'preferred' es del Master's) | purgado | purgado |
 | B11 | `workday-Datacenter-Engineer--L3-ERT_1212933-2` | NO BLOQUEO | or equivalent (sin calificar) -> conservador | revisar_a_mano | `educacion_no_confirmada` |
-| B12 | `workday-Digital-Campaign-Delivery-Associate_202609-122817` | BLOQUEO | Further requirements + Bachelor's degree | descartada | `titulo_universitario_requerido` |
+| B12 | `workday-Digital-Campaign-Delivery-Associate_202609-122817` | BLOQUEO | Further requirements + Bachelor's degree | purgado | purgado |
 | B13 | `workday-Director--Manufacturing-Engineering_REQ-2026-18566` | BLOQUEO | Education & Experience + discipline required | descartada | `titulo_universitario_requerido` |
 | B14 | `workday-Document-Control-Intern_1210991` | BLOQUEO | estudiante activo: 'pursuing diplomas or degrees' | descartada | `titulo_universitario_en_curso_requerido` |
 | B15 | `workday-Escalation-Engineer_1212930-2` | BLOQUEO | What you need to bring: + Bachelor's degree | purgado | purgado |
@@ -1757,7 +1744,7 @@ Cada caso se revisó a mano contra la frase literal del aviso.
 | B20 | `workday-Network-Support-Engineer_1211197` | NO BLOQUEO | or equivalent | revisar_a_mano | `educacion_no_confirmada` |
 | B21 | `workday-Principal-Engineer--Quality_Req-51750` | NO BLOQUEO | or equivalent | revisar_a_mano | `educacion_no_confirmada` |
 | B22 | `workday-Programmatic-Media-Associate---Citi-Commerce_261002988` | NO BLOQUEO | or equivalent experience | revisar_a_mano | `educacion_no_cumple` |
-| B23 | `workday-Regulatory-Specialist-Diagnostics_202610-126607` | NO BLOQUEO | or equivalent experience | revisar_a_mano | `educacion_no_cumple` |
+| B23 | `workday-Regulatory-Specialist-Diagnostics_202610-126607` | NO BLOQUEO | or equivalent experience | purgado | purgado |
 | B24 | `workday-Sales-Commercial-Manager_R-257732` | BLOQUEO | Role Requirements + Bachelor's degree | purgado | purgado |
 | B25 | `workday-Senior-Data-Scientist---ML-Engineering---MLOps_202609-123431` | NO BLOQUEO | 'Who You Are' es ambiguo -> se deja en revision | purgado | purgado |
 | B26 | `workday-Software-Engineering-Systems--Intern_1210981` | BLOQUEO | estudiante activo: 'Education & Experience: Currently pursuing' | descartada | `titulo_universitario_en_curso_requerido` |
@@ -1766,9 +1753,9 @@ Cada caso se revisó a mano contra la frase literal del aviso.
 | B29 | `workday-Switching-Technical-Support-Engineer-Intern---Switching-Support---EX-Products_1214133` | BLOQUEO | estudiante activo: 'Education and Experience Currently pursuing' | descartada | `titulo_universitario_en_curso_requerido` |
 | B30 | `workday-Technical-Project-Manager---HiredScore_JR-0108592-1` | NO BLOQUEO | Preferred Qualifications + Bachelor's degree | revisar_a_mano | `educacion_no_cumple` |
 
-> 13 de los 43 avisos de la muestra ya NO están en la BD actual (purgados por una limpieza posterior): se listan con `purgado` y no entran en el cómputo.
+> 16 de los 43 avisos de la muestra ya NO están en la BD actual (purgados por una limpieza posterior): se listan con `purgado` y no entran en el cómputo.
 
-**Resultado: 30 de 30 verificables coinciden con el veredicto manual.**
+**Resultado: 27 de 27 verificables coinciden con el veredicto manual.**
 
 - Estrato A: 12 de 13 eran bloqueos reales; **1 falso descarte**
   (`workday-Accounts-Payable-Representative_J-020440`: "… and 1+ year of
@@ -1779,7 +1766,7 @@ Cada caso se revisó a mano contra la frase literal del aviso.
 - Proporción de bloqueos reales en la muestra: **26 de 43 (60%)**; la
   muestra inicial daba 5 de 10 (50%%). La proporción **se mantiene o
   sube** → la regla NO estaba sobreajustada.
-- La regla nueva acierta en **30 de 30** casos verificables: donde el
+- La regla nueva acierta en **27 de 27** casos verificables: donde el
   texto obliga descarta y donde el texto no obliga deja la vacante para
   revisión.
 
@@ -1820,7 +1807,7 @@ Cada caso se revisó a mano contra la frase literal del aviso.
 - **B4 `workable-valatam-A30B8CD1CD`** — 'Bachelor's or Associate's degree preferred'
   > - Bachelor’s or Associate’s degree preferred.
 - **B5 `workday-Analista-de-CPFR_887589`** — Licenciatura o bachillerato universitario (ambos son=title universit.)
-  > Para tener éxito en este puesto, necesitarás las siguientes calificaciones: Licenciatura o bachillerato universitario en Administración de Empresas, Ingeniería Industrial, Logística, Supply Chain o una carrera afín.
+  > (purgado en la limpieza 2026-10-31: sin frase verificable)
 - **B6 `workday-Applications-Support-Sr-Analyst_26963530`** — or equivalent experience
   > (purgado en la limpieza 2026-10-31: sin frase verificable)
 - **B7 `workday-Audience-Management_26999789`** — or equivalent experience
@@ -1834,7 +1821,7 @@ Cada caso se revisó a mano contra la frase literal del aviso.
 - **B11 `workday-Datacenter-Engineer--L3-ERT_1212933-2`** — or equivalent (sin calificar) -> conservador
   > Education: Bachelor's or Master’s degree in Mechanical, Electrical, Computer Science, or equivalent.
 - **B12 `workday-Digital-Campaign-Delivery-Associate_202609-122817`** — Further requirements + Bachelor's degree
-  > Further requirements ● Bachelor's degree in Marketing, Business, Communications, or a related field.
+  > (purgado en la limpieza 2026-10-31: sin frase verificable)
 - **B13 `workday-Director--Manufacturing-Engineering_REQ-2026-18566`** — Education & Experience + discipline required
   > Education & Experience Bachelor’s degree in Manufacturing, Mechanical, Electrical, Industrial, or a related Engineering discipline required
 - **B14 `workday-Document-Control-Intern_1210991`** — estudiante activo: 'pursuing diplomas or degrees'
@@ -1856,7 +1843,7 @@ Cada caso se revisó a mano contra la frase literal del aviso.
 - **B22 `workday-Programmatic-Media-Associate---Citi-Commerce_261002988`** — or equivalent experience
   > ...ng and delivery aligned to campaign goals Experience providing clear, timely campaign reporting and issue resolutions Experience documenting operational playbooks and trafficking standards Education: Bachelors/University degree or equivalent experience (Highly preferred bachelor’s degree in Business, Marketing, or related field) This job description provides a high-level review of the types of wor...
 - **B23 `workday-Regulatory-Specialist-Diagnostics_202610-126607`** — or equivalent experience
-  > Who you are: Bachelor’s/Master’s degree or equivalent experience, preferably with a completed university degree in Biology, Biochemistry or Analytical Chemistry
+  > (purgado en la limpieza 2026-10-31: sin frase verificable)
 - **B24 `workday-Sales-Commercial-Manager_R-257732`** — Role Requirements + Bachelor's degree
   > (purgado en la limpieza 2026-10-31: sin frase verificable)
 - **B25 `workday-Senior-Data-Scientist---ML-Engineering---MLOps_202609-123431`** — 'Who You Are' es ambiguo -> se deja en revision
@@ -1871,15 +1858,3 @@ Cada caso se revisó a mano contra la frase literal del aviso.
   > Job Description: Job Family Definition: Students or recent graduates of college, university, or other accredited academic programs, pursuing diplomas or degrees (Associate, Bachelor’s, Master’s, or PhD) in any field.
 - **B30 `workday-Technical-Project-Manager---HiredScore_JR-0108592-1`** — Preferred Qualifications + Bachelor's degree
   > ...ers and internal teams even when priorities or requirements are evolving Strong problem-solving skills, with the ability to troubleshoot technical issues and drive resolution Preferred Qualifications Bachelor’s degree in Business, Information Systems, Industrial Engineering, or a related field 2+ years of experience delivering AI-enabled solutions, intelligent automation, or ML-powered features wi...
-
-## 7. DELTA vs. la corrida anterior `20261107_133939` (0 avisos cambian)
-
-Cada cambio se midió ANTES de escribir la corrida nueva (evaluación en
-seco contra la BD) y aquí queda documentado con la frase literal del
-aviso.
-
-| # | job_id | antes | ahora | por qué |
-|---|---|---|---|---|
-
-### 7.1. Frase literal de cada cambio
-
