@@ -61,6 +61,28 @@ IA_MODEL=<modelo del endpoint>     # o "auto" si el proveedor lo resuelve
 OLLAMA_API_KEY=...                 # si la cuenta lo exige
 ```
 
+### Ollama Cloud en la práctica (medido 2026-11-08)
+
+- **"Gratis" son créditos, no tokens**: pay as you go = $0 de cuota pero se
+  paga **por token** (comprar créditos); Pro $20/mes = $60 de créditos, Max
+  $100 = $300. Los tokens se miden en **$ a la tasa del modelo**
+  (ollama.com/pricing). Sin saldo, las llamadas se rechazan.
+- **No escribas `IA_MODEL=auto`**: `auto` coge el **primer** modelo de
+  `GET /models` (en la cuenta medida era `gpt-oss:120b`). En la UI v2 el campo
+  "Modelo:" es un **desplegable** y "Listar modelos" lo rellena con los del
+  endpoint.
+- **Medido sobre 736 avisos** (mismo corpus y código, pipeline completo):
+
+  | | Nube `gemma4:31b` | Local `gemma4-e2b-qat` |
+  |---|---|---|
+  | Tiempo del pase IA | 8,2 min | 81,3 min |
+  | Coste | 6,7% del free usage | $0 |
+  | Campos / requisitos | 1335 / 1948 | **2288 / 2879** |
+  | Paso 5 (calificada / sin_requisitos) | 132 / 121 | **220 / 11** |
+
+  La **local gana en calidad de dato**, la nube en velocidad. La caché de IA
+  separa por **proveedor+modelo** (`ia_api._cache_key`) → comparar es seguro.
+
 ### Qué cambia al usar un proveedor externo
 
 1. **No se arranca nada local**: `ia_servidor.asegurar_servidor()` devuelve

@@ -35,8 +35,9 @@ caro de descubrir**; lo puntual vive en los handoffs.
 
 - **App/CLI/scripts** → venv: `.\.venv\Scripts\python.exe -X utf8 …`
 - **Tests** → python del **sistema**: `python -m pytest tests/ -q`
-  (pytest **no** está en el venv; ~9–17 min la suite completa; baseline verificado
-  2026-11-07: **1171 passed + 1740 subtests** — 510,99 s; con la 025).
+  (pytest **no** está en el venv; ~8–17 min la suite completa; baseline verificado
+  2026-11-08: **1179 passed + 1740 subtests** — 494,53 s; con la 025 + el
+  arreglo de fantasmas + el desplegable de modelos).
 - **`-X utf8` en todo comando que imprima datos de la BD**: sin él, un `\uf0b7`
   o un `\x85` en una descripción rompe la salida (los saves sí se completan).
   Para CSV por consola: `[Console]::OutputEncoding = UTF8` antes.
@@ -331,6 +332,14 @@ anteriores `valida=0`); nunca `UPDATE` in-place.
     integraron tienen un análisis **obsoleto** (les faltan requisitos): hay que
     re-analizarlos TODOS con `enrich requirements-source --apply` antes del
     backfill y del Paso 5.
+17. **Los tests NO deben depender del `.env` real**: `jobpulse_v15.cli` hace
+    `load_dotenv()` **al importarse**, así que cualquier test que importe el
+    CLI carga el `.env` del desarrollador en `os.environ` de toda la sesión de
+    pytest (p. ej. `IA_BASE_URL=https://ollama.com/v1` → la tarjeta "IA local"
+    de la UI v2 se pinta como "IA externa" y fallan 2 tests). Por eso
+    `tests/test_ui_v2.py::TestConfiguracionTab` fija la IA local en `setUp`
+    (y restaura al final). Regla: si un test depende del entorno, que lo
+    **fije** en `setUp`; no confiar en el `.env` del usuario.
 
 ## IA: local o externa (Ollama, LM Studio, cloud gratis)
 
@@ -355,6 +364,21 @@ anteriores `valida=0`); nunca `UPDATE` in-place.
   `run_enriquecimiento.py`, **no** del CLI `jobpulse_v15`.
 - Límites **opt-in y ajustables**: `IA_MAX_LLAMADAS`/`IA_RPM`/`IA_MAX_VACANTES`
   (avisos por corrida; vacío = **sin tope**, no hay valores fijos).
+- **Elegir modelo en la UI v2**: el campo "Modelo:" es un **combobox editable**
+  y el botón **"Listar modelos" lo RELLENA** (lista la del endpoint
+  configurado; vale para todos los proveedores). `IA_MODEL=auto` coge el
+  **primer** modelo de la lista → casi siempre `gpt-oss:120b`: usa el
+  desplegable y escribe el modelo explícito.
+- **Nube vs local (medido 2026-11-07/08, mismo corpus de 736 avisos)**:
+  Ollama Cloud `gemma4:31b` = **8,2 min**, **6,7% del free usage**, 1335
+  campos, 1948 reqs, 132 calificadas, **121 sin_requisitos**; local
+  `gemma4-e2b-qat` = **81,3 min**, **$0**, **2288 campos**, 2879 reqs,
+  **220 calificadas**, **11 sin_requisitos**. La local gana en datos, la nube
+  en velocidad. La caché de IA separa por **proveedor+modelo**
+  (`ia_api._cache_key`) → comparar es seguro.
+- **Ollama Cloud NO da tokens gratis**: "pay as you go" es $0 de cuota pero se
+  paga por token (créditos); Pro $20/mes = $60 de créditos, Max $100 = $300.
+  Los tokens se miden en $ a la tasa del modelo (ollama.com/pricing).
 
 ## UI
 

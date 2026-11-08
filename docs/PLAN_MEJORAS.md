@@ -56,6 +56,31 @@ Ollama Cloud y LM Studio dan acceso (a veces gratis) al mismo enriquecimiento.
 tareas futuras (matching semántico, extracción de CV, summaries). Sin cambios
 de código en el pipeline cuando se cambie de motor.
 
+### Ola 0 · MEDIDO 2026-11-07/08: nube vs local sobre el MISMO corpus
+
+Corrida limpia (736 avisos nuevos) + el pipeline completo dos veces, con el
+mismo código y el mismo corpus crudo (la nube en la UI v2; la local restaurando
+el respaldo crudo):
+
+| Métrica | ☁️ Ollama Cloud `gemma4:31b` | 💻 Local `gemma4-e2b-qat` |
+|---|---|---|
+| Pase IA | **8,2 min** | 81,3 min |
+| Coste | **6,7% del free usage** | **$0** |
+| Campos llenados | 1335 | **2288** |
+| skills / languages | 600 / **54** | **733 (99,6%) / 709 (96%)** |
+| Requisitos en BD | 1948 | **2879** |
+| Reqs de idioma (`espanol`/`ingles`) | 41 / 223 | **471 / 345** |
+| Paso 5: calificada / sin_requisitos | 132 / 121 | **220 / 11** |
+| `educacion_no_confirmada` | 0 | 29 (firma de 2ª persona) |
+
+**Conclusión**: la IA local gana en **calidad del dato**; la nube gana en
+**velocidad** (10×). Para el uso diario, la local (coste $0); la nube sirve
+para iterar rápido o si no hay GPU. La **caché separa por proveedor+modelo**
+(`ia_api._cache_key`), así que la comparación no está contaminada.
+
+Además: el campo "Modelo:" de la UI v2 pasó a **combobox** y "Listar modelos"
+lo **rellena** (`IA_MODEL=auto` cogía el primer modelo de la lista).
+
 ---
 
 ## Ola 1 — Cerrar el hueco de raíz (impacto ALTO, cambios chicos)
