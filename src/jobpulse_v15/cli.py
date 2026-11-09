@@ -5,6 +5,7 @@ import hashlib
 import io
 import json
 import sqlite3
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -437,8 +438,20 @@ def _agregar_argumentos_viabilidad(parser: argparse.ArgumentParser) -> None:
         "--semantica",
         action="store_true",
         help=(
-            "Incluir el componente semantico (embeddings locales). Tarda mas "
-            "la primera vez (vectoriza el corpus) y es lo mismo que usa la UI."
+            "Incluir el componente semantico (embeddings locales). Es el "
+            "PREDETERMINADO cuando el modelo y la cache ya estan en disco; "
+            "con este flag se FUERZA (puede descargar el modelo y vectorizar "
+            "el corpus). Es lo mismo que usa la UI."
+        ),
+    )
+    parser.add_argument(
+        "--sin-semantica",
+        action="store_true",
+        help=(
+            "No incluir el componente semantico: mas rapido (no vectoriza el "
+            "corpus). Solo cambia el ORDEN (medido 2026-11-08 sobre 736 "
+            "avisos: 0 cambios de banda, 187 de 622 puntajes se mueven >5 "
+            "puntos)."
         ),
     )
     parser.add_argument(
@@ -464,7 +477,38 @@ def _cmd_viabilidad(repository: Repository, args) -> None:
         return
     job_ids = [str(aviso.get("job_id") or "") for aviso in avisos]
     semantica_por_job: dict[str, float] = {}
-    if args.semantica:
+    if getattr(args, "sin_semantica", False) and getattr(args, "semantica", False):
+        raise ValueError("--semantica y --sin-semantica son incompatibles.")
+    usar_semantica = not getattr(args, "sin_semantica", False)
+    if usar_semantica and not getattr(args, "semantica", False):
+        # El componente semantico es el PREDETERMINADO (es lo que usa la UI),
+        # pero SOLO si no cuesta trabajo extra: el modelo tiene que estar en
+        # la cache local (no se descarga nada) y la cache de embeddings tiene
+        # que cubrir el corpus (no se re-vectoriza nada). Un comando de solo
+        # lectura no descarga ~500 MB ni vectoriza el corpus sin avisar.
+        from jobpulse_v15.search_engine import (
+            embeddings_cache_cubren,
+            modelo_embeddings_disponible,
+        )
+
+        if not modelo_embeddings_disponible():
+            usar_semantica = False
+            # A STDERR: la salida de este comando es JSON (un aviso en el
+            # stdout la volveria invalida).
+            print(
+                "[aviso] Componente semantico omitido (el modelo de embeddings "
+                "no esta en la cache local). Usa --semantica para forzarlo.",
+                file=sys.stderr,
+            )
+        elif not embeddings_cache_cubren(job_ids):
+            usar_semantica = False
+            print(
+                "[aviso] Componente semantico omitido (la cache de embeddings "
+                "no cubre el corpus: habria que vectorizarlo). Usa "
+                "--semantica para forzarlo.",
+                file=sys.stderr,
+            )
+    if usar_semantica:
         from jobpulse_v15.ats import percentiles_semanticas, perfil_ats_desde_facts
         from jobpulse_v15.search_engine import SemanticSearchEngine
 
@@ -474,7 +518,10 @@ def _cmd_viabilidad(repository: Repository, args) -> None:
                 SemanticSearchEngine(), avisos, perfil
             )
         except Exception as exc:  # pragma: no cover - depende del motor
-            print(f"[aviso] No se pudo calcular la semantica: {exc}")
+            print(
+                f"[aviso] No se pudo calcular la semantica: {exc}",
+                file=sys.stderr,
+            )
     viabilidades = calcular_viabilidades(
         repository,
         job_ids,
@@ -3460,7 +3507,10 @@ def main() -> int:
                 _cmd_enrich_requirements_source(repository, args)
             # === viabilidad (ajuste tecnico) ===
             elif args.command == "viabilidad":
-                _cmd_viabilidad(repository, args)
+                try:
+                    _cmd_viabilidad(repository, args)
+                except ValueError as exc:
+                    parser.error(str(exc))
             # === postulaciones (estado del proceso) ===
             elif args.command == "postulaciones":
                 if args.postulaciones_command == "correo":

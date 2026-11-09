@@ -675,8 +675,8 @@ real del pipeline.
 
 | # | Mejora | Por qué al final |
 |---|---|---|
-| 5.1 | Re-análisis **sin inflar el historial** (`save_analysis` marca `is_current=0` y crea fila nueva): hacer upsert cuando el texto no cambió pero sí los campos | Toca la auditoría del análisis (riesgo medio); el beneficio es disco/tiempo, no resultados |
-| 5.2 | Semántica/embeddings en el motor de **viabilidad** (hoy solo el ranking ATS los usa) | El percentile es el único componente ruidoso; overhaul grande (alto) y el motor ya es conservador |
+| 5.1 | Re-análisis **sin inflar el historial** (`save_analysis` marca `is_current=0` y crea fila nueva): hacer upsert cuando el texto no cambió pero sí los campos | Toca la auditoría del análisis (riesgo medio); el beneficio es disco/tiempo, no resultados — **medido: ya NO ocurre** (§5.9) |
+| 5.2 | Semántica/embeddings en el motor de **viabilidad** (hoy solo el ranking ATS los usa) | El percentile es el único componente ruidoso; overhaul grande (alto) y el motor ya es conservador — **medido: el motor YA lo usa**; lo que faltaba era el valor por defecto (§5.9) |
 | 5.3 | IA externa para **tareas futuras** (matching semántico, resumen de vacantes, extracción de CV) | Requiere primero la Ola 2 (orquestador) para que las tareas nuevas se puedan lanzar igual desde CLI y UI |
 | 5.4 | `ia_api`: streaming / reintentos por token / cache por proveedor | Optimizaciones; el flujo actual ya es estable |
 
@@ -762,6 +762,104 @@ cobertura o puntaje (solo `nc_count` 1 → 0), así que ninguno cae a
 **negocio** que hay que decidir **con una fuente** (no por impulso): si 2 años
 de educación superior en CR cuentan como universitario (CONESUP) y si un
 bachillerato parcial del 80 % cuenta como requisito universitario cumplido.
+
+### 5.8 La UI clásica en el orquestador — **HECHO 2026-11-08** (punto 5)
+
+La UI clásica (`ui.py`) era la **tercera** implementación del flujo: su propio
+bucle de análisis, su propio pase de IA (`asyncio.run(pase_completo)`) y su
+propio re-análisis (`_reananalizar_con_campos_fuente`). Tres copias de la misma
+lógica = tres formas de divergir de la CLI y de la UI v2.
+
+**Qué se cambió** (con permiso explícito del usuario; la UI clásica siempre fue
+"intacta por regla"):
+
+- `_post_flujo_completo` (el "flujo completo" de la casilla del barrido)
+  llama a `pipeline.ejecutar` con las **mismas 6 etapas** que el botón
+  "Procesar" de la UI v2: `analisis → ia → reanalisis → backfill → paso5 →
+  evidencia`.
+- `open_enriquecimiento` (la ventana "Enriquecimiento IA") llama a
+  `pipeline.ejecutar` con `("ia", "reanalisis")` (como la UI v2).
+- Se **borró** `_reananalizar_con_campos_fuente` (método muerto tras la
+  migración) y con él el `asyncio.run(pase_completo)` y el arranque/parada
+  manual del servidor IA: ahora eso vive solo en el orquestador
+  (`ia_enrichment.pase_completo` + `ia_servidor.asegurar_servidor`).
+- La **comparación con el perfil** (paso 4, el filtro de la grilla) **NO**
+  cambia: sigue siendo `repository.compare_jobs_to_candidate_profile`, que es
+  **informativa**; el veredicto auditable es el del Paso 5, que ahora también
+  corre desde la UI clásica (corrida nueva en `job_match`).
+
+**Consecuencia**: la CLI, la UI v2 y la UI clásica ejecutan las mismas etapas
+**por construcción** (mismo orquestador, mismo orden, mismo código). Antes la
+UI clásica hacía `backfill`/Paso 5/evidencia **a medias**: los requisitos
+nuevos sin `codigo_canonico` quedaban **ignorados en silencio** por el motor.
+
+**Tests**: `tests/test_ui.py::TestUiClasicaDelegaAlOrquestador` (5 tests):
+comprueba las etapas exactas de las dos ventanas, que el repositorio y la
+ruta de la BD son los de la UI, que el método muerto ya no existe y que las
+tres entradas (CLI, UI clásica, UI v2) llaman al mismo `pipeline.ejecutar`.
+
+### 5.9 · 5.1 y 5.2: el alcance REAL (medido 2026-11-08)
+
+El plan decía que 5.1 (upsert de `save_analysis`) y 5.2 (semántica en
+viabilidad) eran dos *}overhaul* grandes*. Al medirlos en la BD real, **los
+dos ya estaban hechos** (o casi): lo que faltaba era que nadie lo hubiera
+verificado. Esto es lo que se encontró y lo que se cambió.
+
+**5.1 · El historial de análisis NO se infla (ya era así)** — medido en la BD
+real (esquema 27):
+
+| métrica | valor |
+|---|---|
+| filas en `job_analysis` | **735** |
+| avisos con análisis | **735** |
+| analyses por aviso | **1** (ninguno tiene 2) |
+| duplicados exactos (`job_id` + `text_hash` + versión) | **0** |
+
+El motivo está en el código: `Repository.save_analysis` **ya hace upsert**
+cuando el aviso, el `text_hash` y la versión coinciden (reutiliza el
+`analysis_id`, borra los requisitos viejos y reinserta), y
+`analysis_flow.reananalizar_con_campos_fuente` **solo guarda si el
+resultado cambia** (`analisis_refleja_campos` compara la firma de los
+requisitos). El historial solo crece cuando **el texto del aviso cambia**,
+que es justo lo que se quiere auditar. → **No hace falta tocar nada.**
+
+**5.2 · El motor de viabilidad YA usa la semántica; faltaba el valor por
+defecto** — el motor tiene el componente (`PESO_SEMANTICA = 0.15`, el
+percentil 0-100 de la similitud cargo↔perfil) y la CLI lo calculaba solo con
+`--semantica`; la UI v2 **siempre** lo calculaba. Medido sobre los **736
+avisos** de la BD real (solo lectura):
+
+| | SIN semántica | CON semántica |
+|---|---|---|
+| bandas | aplicar 4 · revisar 16 · no_prioritario 602 · sin_datos 15 · veto 99 | **idénticas** |
+| avisos que cambian de BANDA | — | **0 de 736** |
+| delta del `ajuste` (622 avisos con puntaje) | — | media **3,82** · máx **10,0** · 187 se mueven >5 puntos |
+| cambios en el ORDEN (top 50) | — | **45 de 50** |
+
+Conclusión: la semántica **ordena, no.veredicta** (como dice el propio motor:
+*"ordena, pero no define la banda"*). Por eso **activarla por defecto NO
+toca ninguna banda**: no es un cambio de umbrales (los umbrales del Paso 5
+siguen congelados).
+
+**Lo que se cambió (2026-11-08)**:
+
+- `search_engine.modelo_embeddings_disponible()`: ¿el modelo de embeddings ya
+  está en la cache local de Hugging Face? (no se descarga nada).
+- `search_engine.embeddings_cache_cubren(job_ids)`: ¿la cache de embeddings
+  cubre el corpus? (no se re-vectoriza nada).
+- `jobpulse-v15 viabilidad list|top`: el componente semántico es el
+  **PREDETERMINADO**, pero **solo si no cuesta trabajo extra** (modelo local
+  **y** cache completa): si falta uno de los dos, avisa por **stderr** y
+  sigue sin él. `--semantica` lo fuerza (puede descargar/vectorizar),
+  `--sin-semantica` lo quita. Los dos a la vez → error de uso.
+- Los avisos del CLI ahora van a **stderr**: la salida del comando es JSON
+  y un aviso mezclado la volvía inválida (bug preexistente del `--semantica`).
+
+**Lo que NO se cambió (a propósito)**: el peso `PESO_SEMANTICA` (0,15) y los
+umbrales de banda (85 / 80) son **ajustes de negocio**: se congelan sin
+acuerdo. Con la medición a la vista, la decisión pendiente es solo "¿lo
+dejamos activo por defecto?" (respuesta: sí, con el opt-out), no "¿cuánto
+pesa?".
 
 ---
 

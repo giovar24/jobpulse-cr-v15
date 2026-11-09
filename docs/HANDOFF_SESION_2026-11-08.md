@@ -1,5 +1,20 @@
 # Handoff — Sesión 2026-11-08
 
+**TL;DR (turno 4)**: se cerró el **punto 5** del backlog (Ola 5). La **UI
+clásica** ya no tiene flujo propio: delega al **orquestador**
+`pipeline.ejecutar` (`analisis → ia → reanalisis → backfill → paso5 →
+evidencia` en el flujo completo; `ia + reanalisis` en la ventana
+"Enriquecer IA") y se borró su implementación duplicada del re-análisis
+(`_reananalizar_con_campos_fuente`). Con eso **CLI, UI v2 y UI clásica dan el
+mismo `job_match` por construcción**. El **alcance real de 5.1 y 5.2** se
+midió: **5.1 ya estaba hecho** (735 analyses para 735 avisos: cero
+inflación del historial) y **5.2 ya estaba en el motor** (el componente
+semántico con peso 0,15): lo que faltaba era el **valor por defecto**, y la
+medición sobre 736 avisos mostró **0 cambios de banda** (solo cambia el
+ORDEN), así que ahora la CLI lo usa por defecto **sin custo extra**
+(solo si el modelo y la cache ya están en disco; `--semantica` lo fuerza,
+`--sin-semantica` lo quita). Los **5 puntos del backlog están cerrados**.
+
 **TL;DR (turno 3)**: se ejecutó el **punto 3** del backlog (la **firma** de los
 29 `educacion_no_confirmada`). La firma de la **segunda persona** (el usuario,
 2026-11-08) queda **registrada en la base** (migración **`027`**, esquema
@@ -303,6 +318,66 @@ solo cambian con una **corrida nueva** (nunca `UPDATE` de la anterior); los
 umbrales (cobertura 0.60 / puntaje 0.80) **no se tocaron**; una firma anclada
 a un texto viejo **no** se aplica a un texto nuevo.
 
+### 1.11 Turno 4 · PUNTO 5: la UI clásica al orquestador + el alcance real de 5.1/5.2
+
+Con **permiso explícito del usuario** (la UI clásica era "intacta por
+regla"), se cerró el último punto del backlog.
+
+**a) La UI clásica delega en `pipeline.ejecutar`** — era la **tercera**
+implementación del flujo (su propio bucle de análisis, su propio
+`asyncio.run(pase_completo)` y su propio re-análisis
+`_reananalizar_con_campos_fuente`):
+
+| ventana de la UI clásica | antes | ahora |
+|---|---|---|
+| flujo completo (casilla del barrido) | análisis → IA → re-análisis → backfill → **sin** Paso 5, **sin** evidencia | `pipeline.ejecutar("analisis","ia","reanalisis","backfill","paso5","evidencia")` |
+| "Enriquecimiento IA" | `asyncio.run(pase_completo)` + arranque/parada manual del servidor IA | `pipeline.ejecutar("ia","reanalisis")` |
+
+Se **borró** el método muerto `_reananalizar_con_campos_fuente`. La
+**comparación con el perfil** (paso 4, el filtro de la grilla) **NO** cambia:
+sigue siendo `repository.compare_jobs_to_candidate_profile`, que es
+**informativa**; el veredicto auditable es el del Paso 5 (que ahora también
+corre desde la UI clásica, siempre como **corrida nueva**).
+
+**b) 5.1 (upsert de `save_analysis`) — ya estaba hecho**, medido en la BD
+real: `job_analysis` = **735 filas** para **735 avisos** (1 análisis por
+aviso, **0** duplicados `(job_id, text_hash, versión)`). El motivo está en el
+código: `Repository.save_analysis` **reutiliza el `analysis_id`** cuando el
+aviso, el `text_hash` y la versión coinciden, y
+`analysis_flow.reananalizar_con_campos_fuente` **solo guarda si el resultado
+cambia**. → **cero cambios de código**.
+
+**c) 5.2 (semántica en viabilidad) — el motor ya la usaba; faltaba el valor
+por defecto.** Medido sobre los **736 avisos** (solo lectura):
+
+| | SIN semántica | CON semántica |
+|---|---|---|
+| bandas | aplicar 4 · revisar 16 · no_prioritario 602 · sin_datos 15 · veto 99 | **idénticas** |
+| cambios de BANDA | — | **0 de 736** |
+| delta del `ajuste` (622 con puntaje) | — | media **3,82** · máx **10,0** · 187 >5 puntos |
+| cambios en el ORDEN (top 50) | — | **45 de 50** |
+
+La semántica **ordena, no veredicta** (peso `PESO_SEMANTICA = 0,15`, sin
+tocar). Cambios:
+
+- `search_engine.modelo_embeddings_disponible()` — ¿el modelo ya está en la
+  cache local de Hugging Face?
+- `search_engine.embeddings_cache_cubren(job_ids)` — ¿la cache de embeddings
+  cubre el corpus?
+- `jobpulse-v15 viabilidad list|top`: el componente semántico es el
+  **PREDETERMINADO**, pero **solo si no cuesta trabajo extra** (modelo local
+  **y** cache completa); si falta uno, avisa por **stderr** (la salida es
+  JSON) y sigue sin él. `--semantica` lo **fuerza**, `--sin-semantica` lo
+  quita; los dos a la vez → error de uso (exit 2).
+
+**d) La BD real NO se tocó en el turno 4**: `db check` ok (esquema **27**,
+`integrity_check` ok, 0 violaciones FK); la corrida vigente sigue siendo
+**`20261108_175932`**.
+
+**Tests**: `tests/test_ui.py::TestUiClasicaDelegaAlOrquestador` (5),
+`tests/test_cli_viabilidad.py::TestCliViabilidadSemantica` (6),
+`tests/test_caches.py::TestDisponibilidadDeEmbeddings` (5).
+
 ## 2. Decisiones
 
 1. **La corrida local queda como vigente**: más datos y coste $0. La nube se
@@ -333,6 +408,22 @@ a un texto viejo **no** se aplica a un texto nuevo.
 10. **Turno 3 · "no bloqueo" NO es "cumple"**: el título no bloquea, pero el
     perfil no lo tiene → el requisito queda `faltante` y la vacante a
     `revisar_a_mano` (y en viabilidad, banda máxima `revisar`).
+11. **Turno 4 · la UI clásica delega en el orquestador** (punto 5, con
+    permiso explícito del usuario): su flujo completo corre las **mismas 6
+    etapas** que el botón "Procesar" de la UI v2, y su ventana de
+    enriquecimiento las mismas 2 (`ia`, `reanalisis`). Su **comparación con
+    el perfil** (paso 4) **no** cambia: es informativa; el veredicto
+    auditable es el del Paso 5, que ahora también corre desde la UI clásica.
+12. **Turno 4 · la semántica en viabilidad NO cambia ninguna banda**
+    (medido sobre 736 avisos): 0 avisos cambian de banda; lo que cambia es
+    el **orden** (45 de los 50 primeros se reordenan). Por eso se puede
+    activar por defecto **sin tocar umbrales** (los del Paso 5 siguen
+    congelados y el peso `PESO_SEMANTICA = 0,15` se deja como está).
+13. **Turno 4 · la semántica solo se activa si no cuesta trabajo extra**: el
+    modelo tiene que estar en la cache local de Hugging Face **y** la cache
+    de embeddings tiene que cubrir el corpus. Un comando de solo lectura no
+    descarga ~500 MB ni re-vectoriza el corpus sin avisar (avisa por
+    **stderr**, porque la salida es JSON).
 
 ## 3. Estado de la BD real
 
@@ -354,10 +445,11 @@ a un texto viejo **no** se aplica a un texto nuevo.
 
 ## 4. Pendiente inmediato (priorizado)
 
-1. **PUNTO 5 · Ola 5**: 5.1 upsert de `save_analysis` (re-análisis sin
-   inflar el historial) y 5.2 embeddings/semántica en **viabilidad** (el
-   overhaul grande). Además, **migrar la UI clásica a `pipeline.py`** (el
-   usuario ya dio permiso; la UI clásica está intacta por regla hasta ahora).
+1. ~~**PUNTO 5 · Ola 5**~~ → **CERRADO (turno 4)**: la UI clásica delega en
+   el orquestador (`pipeline.ejecutar`), 5.1 **ya estaba hecho** (upsert real
+   en `save_analysis`, 0 inflación del historial) y 5.2 **ya estaba en el
+   motor** (lo que faltaba era el valor por defecto, ya activado sin costo
+   extra). Ver §1.11 y `docs/PLAN_MEJORAS.md` §5.8-§5.9.
 2. **2 decisiones de negocio bloquean 2 avisos** (firmados "dudoso"):
    (#2) si 2 años de educación superior en CR cuentan como universitario
    (fuente CONESUP) — `workday-Credit---Collections-Specialist--2_R232432`;
@@ -393,12 +485,24 @@ a un texto viejo **no** se aplica a un texto nuevo.
 - `docs/PASO5_FIRMA_EDUCACION.json` — la hoja de firma (29 decisiones).
 - `docs/PASO5_EVIDENCIA_2026-11-08.md` / `docs/PASO5_REVISION_PENDIENTES.md`
   — generados para la corrida `20261108_175932` (2 casos abiertos).
+- `src/jobpulse_v15/ui.py` — `_post_flujo_completo` (~2119) y
+  `open_enriquecimiento` (~2304): las dos ventanas delegan en el orquestador
+  (turno 4).
+- `src/jobpulse_v15/search_engine.py` — `modelo_embeddings_disponible()` y
+  `embeddings_cache_cubren()` (turno 4).
+- `src/jobpulse_v15/cli.py` — `viabilidad list|top` con `--semantica` /
+  `--sin-semantica` (turno 4) y el comando `decision` (turno 3).
+- `docs/PLAN_MEJORAS.md` §5.8 (UI clásica) y §5.9 (alcance real de 5.1/5.2).
+- `docs/FLUJO_CLI_VS_UI.md` — paridad CLI / UI v2 / UI clásica.
 
 ## 6. Contexto
 
 - Rama `main`, repo `giovar24/jobpulse-cr-v15`. **Commits locales, sin
   push** (falta confirmación del usuario): `a5a43fb`, `317f908`, `a36ca79`,
-  `3b11a69`, `177de1c` + los de esta sesión (desplegable de modelos,
-  aislamiento de tests, docs).
+  `3b11a69`, `177de1c` + los de esta sesión (`c6fc8ce` puntos 1+4,
+  `08b111d` punto 2, `6bf1b92` punto 3, y el commit del punto 5 — "feat(pipeline):
+  la UI clasica delega en el orquestador y la semantica es el valor por
+  defecto (punto 5)").
 - **No pushear sin confirmación.**
-- La UI clásica (`ui.py`) **no se toca** sin permiso explícito.
+- La UI clásica (`ui.py`) **no se toca** sin permiso explícito (el permiso
+  del turno 4 se usó solo para delegar en el orquestador).

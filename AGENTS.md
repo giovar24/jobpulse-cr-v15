@@ -102,8 +102,14 @@ implementación** cada una (`scrape` → `analisis` → `ia` → `reanalisis` �
 
 - la CLI: `run_full_flow.py` (ya es un envoltorio del orquestador);
 - la UI v2: botones **"Procesar"** y **"Enriquecer IA"** (pestaña "Scraping");
-- la UI clásica: mantiene su flujo (intacta por regla) pero usa las mismas
-  implementaciones por etapa, incluido el re-análisis (paso 3.5).
+- la UI clásica: **desde 2026-11-08 (punto 5 del backlog, con permiso
+  explícito del usuario) también delega**: su flujo completo llama a
+  `pipeline.ejecutar` con `("analisis","ia","reanalisis","backfill","paso5",
+  "evidencia")` y la ventana "Enriquecer IA" con `("ia","reanalisis")`. Ya no
+  tiene pase de IA ni re-análisis propios (se borró
+  `_reananalizar_con_campos_fuente`). Su **comparación con el perfil** (paso 4)
+  sigue siendo propia e informativa (`compare_jobs_to_candidate_profile`): el
+  veredicto auditable es el del Paso 5.
 
 ```python
 from jobpulse_v15 import pipeline
@@ -407,7 +413,9 @@ anteriores `valida=0`); nunca `UPDATE` in-place.
 
 ## UI
 
-- **UI clásica** (`ui.py`): completa e intacta — no la toques sin pedirlo.
+- **UI clásica** (`ui.py`): completa — no la toques sin pedirlo. **Excepción
+  ya autorizada (2026-11-08, punto 5 del backlog)**: delegar sus etapas al
+  orquestador `pipeline.ejecutar` y eliminar implementaciones duplicadas.
 - **UI v2** (`ui_v2/`, plana y modular): capas `theme`/`widgets`/`dialogs`/
   `i18n`/`configuracion` + `data/` (stores sin Tk) + `tabs/`.
   **Agregar una pestaña = módulo nuevo + 1 línea en `PESTANIAS`** (`ui_v2/app.py`).
@@ -440,6 +448,10 @@ $py = ".\.venv\Scripts\python.exe"
 & $py -X utf8 -m jobpulse_v15 taxonomy curate [--apply] [--limit N]
 & $py -X utf8 -m jobpulse_v15 pipeline etapas [--limite N] [--corrida ID] [--json]
 & $py -X utf8 -m jobpulse_v15 viabilidad list [--banda aplicar] | top [--limit N]  # --limit por defecto: 50
+# El componente SEMANTICO (embeddings) es el PREDETERMINADO, pero solo si no cuesta
+# trabajo extra (modelo en la cache local de HF Y cache de embeddings que cubra el
+# corpus); si no, avisa por stderr y sigue sin el. --semantica lo FUERZA,
+# --sin-semantica lo quita (los dos a la vez = error de uso).
 & $py -X utf8 -m jobpulse_v15 postulaciones correo --dias 90 [--apply]
 & $py -X utf8 -m jobpulse_v15 postulaciones workday --apply
 & $py -X utf8 -m jobpulse_v15 db check

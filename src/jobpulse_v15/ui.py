@@ -2122,88 +2122,75 @@ class JobPulseWindow:
         (servidor bajo demanda), 4) comparar con el perfil y mostrar solo las
         vacantes que coinciden. Corre en hilo propio para no bloquear la UI.
 
-        El paso 1 (obtener datos + ingest) ya ocurrió en el barrido anterior.
-        """
-        import asyncio
+        Los pasos **2, 3 y 3.5** los ejecuta el ORQUESTADOR (`pipeline.ejecutar`),
+        el MISMO que usan la CLI y la UI v2: una sola implementación por etapa
+        (O12 · Ola 2.1). Así la UI no puede divergir del CLI (antes cada una
+        tenía su propio bucle de análisis y su propio pase de IA).
 
-        from jobpulse_v15 import ia_enrichment as iae
-        from jobpulse_v15 import ia_estado as ie
-        from jobpulse_v15.ia_servidor import asegurar_servidor, servidor_arriba
+        Etapas del orquestador: `analisis` → `ia` → `reanalisis` →
+        `backfill` → `paso5` → `evidencia` (las MISMAS que corre el botón
+        "Procesar" de la UI v2). El paso 1 (obtener datos + ingest) ya ocurrió
+        en el barrido anterior; el paso 4 (comparación y grilla) es propio de
+        la UI y no cambia.
+
+        La CONFIRMACIÓN de privacidad (IA externa) la hace el caller ANTES de
+        invocar (ver `open_barrido`): aquí solo se ejecuta.
+        """
+        from jobpulse_v15 import pipeline
 
         def _log(texto: str) -> None:
             dialog.after(0, lambda t=texto: resultado_text.insert("end", t))
             dialog.after(0, lambda: resultado_text.see("end"))
 
         def _run() -> None:
-            servidor = None
             veredicto = None
             try:
-                # Paso 2: limpieza/extracción con reglas en TODOS los pendientes
-                _log("\n=== PASO 2: análisis por reglas ===\n")
-                dialog.after(0, lambda: status_var.set("Analizando (reglas)..."))
-                pendientes = self.repository.search_jobs(
-                    review_reason="analysis_missing", limit=10000
-                )
-                _log(f"{len(pendientes)} vacante(s) sin análisis.\n")
-                ok = 0
-                fallos = 0
-                for job in pendientes:
-                    try:
-                        self._analyze_job(str(job["job_id"]))
-                        ok += 1
-                    except (ValueError, sqlite3.Error):
-                        fallos += 1
-                _log(f"Reglas: {ok} analizadas, {fallos} con error.\n")
-
-                # Paso 3: lo que las reglas no resolvieron → enriquecimiento IA
-                _log("\n=== PASO 3: enriquecimiento IA ===\n")
-                dialog.after(0, lambda: status_var.set("Enriqueciendo (IA)..."))
-                if not iae.get_ia_client():
-                    _log("IA no configurada (Configuración → IA); paso omitido.\n")
-                    veredicto = None
-                else:
-                    cliente = iae.get_ia_client()
-                    es_local = bool(getattr(cliente, "es_local", False))
-                    if es_local and servidor_arriba():
-                        _log("Servidor IA ya activo (no se toca).\n")
-                    else:
-                        # IA externa: `asegurar_servidor` no arranca nada local.
-                        servidor = asegurar_servidor(on_log=_log)
-                    antes = ie.snapshot_enriquecimiento()
-                    _log(
-                        f"Snapshot antes: jobs={antes.get('total', 0)} | "
-                        f"críticos pend={antes.get('criticos_pendientes_rec', 0)} | "
-                        f"secundarios pend={antes.get('secundarios_pendientes_rec', 0)}\n"
-                    )
-                    r = asyncio.run(iae.pase_completo(on_event=_log))
-                    import time as _time
-                    _time.sleep(2)  # deja asentar los últimos INSERTs
-                    despues = ie.snapshot_enriquecimiento()
-                    veredicto = ie.evaluar_ia(antes, despues, r)
-                    _log(ie.resumen_linea(veredicto) + "\n")
-                    if not veredicto["ok"]:
-                        _log(
-                            "⚠️ El enriquecimiento NO completó su trabajo "
-                            "(ver motivo arriba).\n"
-                        )
-
-                # Paso 3.5: los campos estructurados que la IA acaba de llenar
-                # todavia NO son requisitos comparables: sin este re-analisis
-                # el aviso queda `sin_requisitos` (la CLI lo hacia con
-                # `enrich requirements-source --apply`). Es el paso que
-                # separaba la UI de la CLI (O12 · Ola 1.1).
-                _log("\n=== PASO 3.5: re-analisis con los campos de la IA ===\n")
-                dialog.after(
-                    0, lambda: status_var.set("Re-analizando (campos de la IA)...")
-                )
-                stats_re = self._reananalizar_con_campos_fuente(
-                    lambda texto: _log(texto + "\n")
-                )
+                # Pasos 2, 3 y 3.5: el orquestador (una sola implementación).
                 _log(
-                    f"Re-analisis: {stats_re.get('reanalizados', 0)} aviso(s) "
-                    f"actualizados, {stats_re.get('sin_cambio', 0)} sin cambio, "
-                    f"{stats_re.get('errores', 0)} con error.\n"
+                    "\n=== PASOS 2-3.5: pipeline (análisis → IA → "
+                    "re-análisis → backfill → Paso 5 → evidencia) ===\n"
                 )
+                dialog.after(0, lambda: status_var.set("Procesando (análisis → IA)..."))
+                resultado = pipeline.ejecutar(
+                    self.repository,
+                    etapas=(
+                        "analisis",
+                        "ia",
+                        "reanalisis",
+                        "backfill",
+                        "paso5",
+                        "evidencia",
+                    ),
+                    progreso=lambda t: _log(t + "\n"),
+                    db_path=str(self.repository.database.path),
+                )
+                etapas = resultado.get("etapas") or {}
+                for error in resultado.get("errores") or []:
+                    _log("!! %s\n" % error)
+                _log(pipeline.resumen_linea(resultado) + "\n")
+
+                # La IA: el orquestador ya hizo el pase (servidor bajo demanda,
+                # cerrado al terminar). Solo queda traducir su estado para la
+                # barra de estado.
+                paso_ia = etapas.get("ia") or {}
+                estado_ia_bruto = str(paso_ia.get("estado") or "").strip()
+                if not paso_ia or estado_ia_bruto == "omitido":
+                    veredicto = None
+                    _log(
+                        "IA no configurada (Configuración → IA); paso omitido.\n"
+                    )
+                else:
+                    veredicto = {
+                        "ok": bool(paso_ia.get("ok")),
+                        "estado": estado_ia_bruto or "desconocido",
+                    }
+                paso_paso5 = etapas.get("paso5") or {}
+                if paso_paso5.get("corrida"):
+                    _log(
+                        "Paso 5: corrida %s (%s aviso(s) evaluados).\n"
+                        % (paso_paso5["corrida"], paso_paso5.get("evaluadas", "?"))
+                    )
+
                 dialog.after(0, self._actualizar_badge_analisis)
 
                 # Paso 4: comparar con el perfil y mostrar vacantes vigentes.
@@ -2293,39 +2280,8 @@ class JobPulseWindow:
             except Exception as e:
                 _log(f"\nERROR en el flujo: {e}\n")
                 dialog.after(0, lambda: status_var.set("Error en el flujo"))
-            finally:
-                if servidor is not None:
-                    try:
-                        servidor.detener()
-                        _log("Servidor IA detenido (lo abrió este flujo).\n")
-                    except Exception:
-                        pass
 
         threading.Thread(target=_run, daemon=True).start()
-
-    def _reananalizar_con_campos_fuente(self, log=None) -> dict:
-        """Re-analiza los avisos con campos estructurados sin integrar (O12).
-
-        El pase IA llena ``jobs.skills`` / ``jobs.languages``; esos campos
-        solo se vuelven requisitos comparables si el aviso se re-analiza.
-        La UI no lo hacia (la CLI si, con ``enrich requirements-source
-        --apply``): por eso la UI dejaba 231 avisos ``sin_requisitos``
-        frente a 11 de la CLI.
-
-        La implementacion es UNA (``analysis_flow``): aqui solo se le pasa
-        el repositorio de la UI y el log.
-        """
-        from jobpulse_v15.analysis_flow import reananalizar_con_campos_fuente
-
-        try:
-            return reananalizar_con_campos_fuente(
-                self.repository,
-                on_progress=log,
-            )
-        except Exception as exc:  # noqa: BLE001 - no rompe el flujo principal
-            if log:
-                log(f"⚠️ Re-analisis omitido: {exc}")
-            return {"candidatos": 0, "reanalizados": 0, "sin_cambio": 0, "errores": 0}
 
     def _confirmar_ia_externa(self, parent=None) -> bool:
         """Pide confirmación si la IA configurada NO es local.
@@ -2362,13 +2318,22 @@ class JobPulseWindow:
 
         Si la IA configurada es EXTERNA, pide confirmación antes de enviar
         el texto de los avisos (el pase arranca solo al abrir la ventana).
+
+        El pase y el re-análisis los ejecuta el ORQUESTADOR (`pipeline.ejecutar`),
+        el MISMO que usan la CLI y la UI v2 (O12 · Ola 2.1): una sola
+        implementación por etapa.
         """
-        import asyncio
-
         from jobpulse_v15 import ia_enrichment as iae
-        from jobpulse_v15 import ia_estado as ie
-        from jobpulse_v15.ia_servidor import asegurar_servidor, servidor_arriba
+        from jobpulse_v15 import pipeline
 
+        if not iae.get_ia_client():
+            messagebox.showwarning(
+                "IA no configurada",
+                "Configura la IA (Configuración → IA, o las variables IA_* "
+                "del .env) antes de enriquecer.",
+                parent=self.root,
+            )
+            return
         if not self._confirmar_ia_externa(parent=self.root):
             return
 
@@ -2411,45 +2376,33 @@ class JobPulseWindow:
             dialog.after(0, lambda: resultado_text.see("end"))
 
         def _correr() -> None:
-            servidor = None
             try:
-                if not iae.get_ia_client():
-                    _log("ERROR: IA no configurada (Configuración → IA, o .env).")
-                    dialog.after(0, lambda: status_var.set("IA no configurada"))
-                    return
-                cliente = iae.get_ia_client()
-                es_local = bool(getattr(cliente, "es_local", False))
-                if es_local and servidor_arriba():
-                    _log("Servidor IA ya activo (no se toca).")
-                else:
-                    # IA externa: `asegurar_servidor` no arranca nada local.
-                    servidor = asegurar_servidor(on_log=_log)
                 dialog.after(0, lambda: info_var.set("Enriqueciendo..."))
-                antes = ie.snapshot_enriquecimiento()
-                _log(
-                    f"Snapshot antes: jobs={antes.get('total', 0)} | "
-                    f"críticos pend={antes.get('criticos_pendientes_rec', 0)} | "
-                    f"secundarios pend={antes.get('secundarios_pendientes_rec', 0)}"
+                resultado = pipeline.ejecutar(
+                    self.repository,
+                    etapas=("ia", "reanalisis"),
+                    progreso=lambda t: _log(t),
+                    db_path=str(self.repository.database.path),
                 )
-                r = asyncio.run(iae.pase_completo(on_event=_log))
-                import time as _time
-                _time.sleep(2)  # deja asentar los últimos INSERTs
-                despues = ie.snapshot_enriquecimiento()
-                veredicto = ie.evaluar_ia(antes, despues, r)
-                _log(ie.resumen_linea(veredicto))
-                # Los campos que la IA acaba de llenar (skills/languages) solo
-                # son requisitos comparables si el aviso se re-analiza (O12).
-                stats_re = self._reananalizar_con_campos_fuente(_log)
+                etapas = resultado.get("etapas") or {}
+                paso_ia = etapas.get("ia") or {}
+                paso_re = etapas.get("reanalisis") or {}
+                for error in resultado.get("errores") or []:
+                    _log("!! %s" % error)
                 _log(
-                    f"Re-analisis: {stats_re.get('reanalizados', 0)} aviso(s) "
-                    f"actualizados, {stats_re.get('sin_cambio', 0)} sin cambio, "
-                    f"{stats_re.get('errores', 0)} con error."
+                    "Re-analisis: %s aviso(s) actualizados, %s sin cambio, "
+                    "%s con error."
+                    % (
+                        paso_re.get("reanalizados", 0),
+                        paso_re.get("sin_cambio", 0),
+                        paso_re.get("errores", 0),
+                    )
                 )
                 dialog.after(0, self._actualizar_badge_analisis)
-                if veredicto["ok"]:
+                if paso_ia.get("ok"):
                     dialog.after(
                         0,
-                        lambda s=veredicto["estado"]: status_var.set(
+                        lambda s=paso_ia.get("estado", "?"): status_var.set(
                             f"Completado ({s})"
                         ),
                     )
@@ -2457,7 +2410,7 @@ class JobPulseWindow:
                     _log("⚠️ Revisa el motivo: el enriquecimiento no avanzó.")
                     dialog.after(
                         0,
-                        lambda s=veredicto["estado"]: status_var.set(
+                        lambda s=paso_ia.get("estado", "problema"): status_var.set(
                             f"Terminó con problemas ({s})"
                         ),
                     )
@@ -2465,12 +2418,6 @@ class JobPulseWindow:
                 _log(f"ERROR: {e}")
                 dialog.after(0, lambda: status_var.set("Error"))
             finally:
-                if servidor is not None:
-                    try:
-                        servidor.detener()
-                        _log("Servidor IA detenido (lo abrió esta corrida).")
-                    except Exception as e:
-                        _log(f"No se pudo detener el servidor IA: {e}")
                 dialog.after(0, progress.stop)
                 # Refresca la lista principal (el enriquecimiento cambia datos).
                 if self.root.winfo_exists():

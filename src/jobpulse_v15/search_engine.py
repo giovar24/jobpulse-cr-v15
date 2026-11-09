@@ -44,6 +44,17 @@ CACHE_VERSION = 2
 _FALLBACK_ACTIVO = False
 
 
+def _cache_hub_hf() -> Path:
+    """Carpeta de la cache de Hugging Face (`models--<org>--<nombre>`)."""
+    hub = os.environ.get("HF_HUB_CACHE")
+    if hub:
+        return Path(hub)
+    home = os.environ.get("HF_HOME")
+    if home:
+        return Path(home) / "hub"
+    return Path.home() / ".cache" / "huggingface" / "hub"
+
+
 def normalizar_texto(texto: str) -> str:
     """Minusculas, sin acentos y sin espacios repetidos.
 
@@ -64,6 +75,52 @@ def normalizar_texto(texto: str) -> str:
 # Modelos
 MODELO_PRIMARY = "google/embeddinggemma-300m"      # 768 dim, MRL, prompts asimetricos
 MODELO_FALLBACK = "sentence-transformers/paraphrase-multilingual-mpnet-base-v2"  # 768 dim
+
+
+def modelo_embeddings_disponible() -> bool:
+    """True si el modelo de embeddings ya esta en la cache LOCAL de HF.
+
+    Sirve para que un comando de **solo lectura** (la CLI de viabilidad) NO
+    descargue un modelo de ~500 MB sin que el usuario lo pida: si el modelo
+    no esta ya en disco, el comando avisa y sigue sin el componente
+    semantico (o lo fuerza con `--semantica`).
+    """
+    hub = _cache_hub_hf()
+    for modelo in (MODELO_PRIMARY, MODELO_FALLBACK):
+        carpeta = hub / ("models--" + str(modelo).replace("/", "--"))
+        if carpeta.is_dir():
+            return True
+    return False
+
+
+def embeddings_cache_cubren(job_ids: Any) -> bool:
+    """True si la cache de embeddings cubre TODOS los avisos indicados.
+
+    La cache guarda, por aviso, el texto indexado (documento y titulo) con su
+    hash. Si un aviso NO esta en la cache, el motor tiene que **codificarlo**
+    (cargar el modelo y vectorizar): para un comando de solo lectura no
+    compensa, asi que el componente semantico solo se activa por defecto
+    cuando la cache ya cubre el corpus (o sea: trabajo hecho antes).
+    """
+    ids = [str(job_id) for job_id in (job_ids or []) if str(job_id or "").strip()]
+    if not ids:
+        return False
+    for cache_file, meta_file in (
+        (EMB_CACHE_FILE, EMB_META_FILE),
+        (EMB_TIT_CACHE_FILE, EMB_TIT_META_FILE),
+    ):
+        if not cache_file.exists() or not meta_file.exists():
+            return False
+        try:
+            meta = json.loads(meta_file.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return False
+        if meta.get("version") != CACHE_VERSION:
+            return False
+        items = meta.get("items") or {}
+        if not all(job_id in items for job_id in ids):
+            return False
+    return True
 
 # Vocabularios para expansion semantica
 VOCAB_ES = [

@@ -9,6 +9,8 @@ Reglas que se comprueban:
 """
 from __future__ import annotations
 
+import json
+import os
 import sys
 import tempfile
 import unittest
@@ -146,6 +148,85 @@ class TestLimpiezaPorClave(unittest.TestCase):
         self.assertEqual(caches._tamano_legible(512), "512 B")
         self.assertEqual(caches._tamano_legible(2048), "2.0 KB")
         self.assertEqual(caches._tamano_legible(5 * 1024 * 1024), "5.0 MB")
+
+
+class TestDisponibilidadDeEmbeddings(unittest.TestCase):
+    """Ola 5 · 5.2: ¿se puede usar el componente semantico SIN trabajo extra?
+
+    Un comando de solo lectura (la CLI de viabilidad) solo activa el
+    componente semantico si el modelo ya esta en la cache local de Hugging
+    Face y la cache de embeddings cubre el corpus (asi no descarga ~500 MB
+    ni re-vectoriza nada).
+    """
+
+    def setUp(self):
+        self.temp_dir = tempfile.TemporaryDirectory()
+        base = Path(self.temp_dir.name)
+        self.embeddings = base / "embeddings_cache.npy"
+        self.meta = base / "embeddings_meta.json"
+        self.titulos = base / "embeddings_titulos.npy"
+        self.tit_meta = base / "embeddings_titulos_meta.json"
+        parches = [
+            unittest.mock.patch.object(search_engine, "EMB_CACHE_FILE",
+                                       self.embeddings),
+            unittest.mock.patch.object(search_engine, "EMB_META_FILE", self.meta),
+            unittest.mock.patch.object(search_engine, "EMB_TIT_CACHE_FILE",
+                                       self.titulos),
+            unittest.mock.patch.object(search_engine, "EMB_TIT_META_FILE",
+                                       self.tit_meta),
+        ]
+        for parche in parches:
+            parche.start()
+            self.addCleanup(parche.stop)
+        self.addCleanup(self.temp_dir.cleanup)
+
+    def _escribir_meta(self, items, version=None):
+        contenido = {
+            "model": "modelo-de-prueba",
+            "version": search_engine.CACHE_VERSION if version is None else version,
+            "dim": 768,
+            "items": items,
+        }
+        self.meta.write_text(json.dumps(contenido), encoding="utf-8")
+        self.tit_meta.write_text(json.dumps(contenido), encoding="utf-8")
+        # Los .npy tambien tienen que existir (la cache son los 4 archivos).
+        self.embeddings.write_bytes(b"x")
+        self.titulos.write_bytes(b"x")
+
+    def test_sin_cache_la_cobertura_es_falsa(self):
+        self.assertFalse(search_engine.embeddings_cache_cubren(["job-1"]))
+
+    def test_la_cache_cubre_solo_los_avisos_que_conoce(self):
+        self._escribir_meta({"job-1": {"hash": "h", "idx": 0}})
+        self.assertTrue(search_engine.embeddings_cache_cubren(["job-1"]))
+        self.assertFalse(
+            search_engine.embeddings_cache_cubren(["job-1", "job-2"])
+        )
+
+    def test_una_cache_de_otra_version_no_cubre(self):
+        self._escribir_meta({"job-1": {"hash": "h", "idx": 0}}, version=999)
+        self.assertFalse(search_engine.embeddings_cache_cubren(["job-1"]))
+
+    def test_sin_ids_no_cubre(self):
+        self._escribir_meta({})
+        self.assertFalse(search_engine.embeddings_cache_cubren([]))
+
+    def test_el_modelo_se_busca_en_la_cache_local_de_huggingface(self):
+        hub = Path(self.temp_dir.name) / "hub"
+        carpeta = (
+            hub
+            / ("models--" + search_engine.MODELO_PRIMARY.replace("/", "--"))
+        )
+        carpeta.mkdir(parents=True)
+        with unittest.mock.patch.dict(
+            os.environ, {"HF_HUB_CACHE": str(hub)}, clear=False
+        ):
+            self.assertTrue(search_engine.modelo_embeddings_disponible())
+        # Sin ningun modelo en la cache: no se puede usar (ni descargar).
+        with unittest.mock.patch.dict(
+            os.environ, {"HF_HUB_CACHE": str(hub / "vacio")}, clear=False
+        ):
+            self.assertFalse(search_engine.modelo_embeddings_disponible())
 
 
 if __name__ == "__main__":

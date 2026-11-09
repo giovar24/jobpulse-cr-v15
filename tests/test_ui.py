@@ -2310,5 +2310,169 @@ class TestElegirFiltroCompatibilidad(unittest.TestCase):
         )
 
 
+class _HiloSincrono:
+    """Doble de `threading.Thread` que ejecuta el objetivo de inmediato.
+
+    Los flujos de la UI clásica corren en un hilo; para probarlos de forma
+    determinista se sustituye por este doble, que hace el trabajo **en el
+    hilo principal** (igual que la UI real lo acaba haciendo a través de
+    `dialog.after`).
+    """
+
+    def __init__(self, target=None, args=(), kwargs=None, daemon=None):
+        self._target = target
+        self._args = args
+        self._kwargs = kwargs or {}
+        self.daemon = daemon
+
+    def start(self):
+        if self._target is not None:
+            self._target(*self._args, **self._kwargs)
+
+    def join(self, timeout=None):
+        return None
+
+    def is_alive(self):
+        return False
+
+
+#: Resultado del orquestador que devuelve el doble de `pipeline.ejecutar`.
+RESULTADO_ORQUESTADOR = {
+    "ok": True,
+    "corrida": "20261108_000000",
+    "corrida_pipeline": "pipe_20261108_000000",
+    "detenido": False,
+    "etapas": {
+        "analisis": {"ok": True},
+        "ia": {"ok": True, "estado": "completado"},
+        "reanalisis": {"ok": True, "reanalizados": 3, "sin_cambio": 1, "errores": 0},
+        "backfill": {"ok": True},
+        "paso5": {"ok": True, "corrida": "20261108_000000", "evaluadas": 12},
+        "evidencia": {"ok": True},
+    },
+    "errores": [],
+}
+
+
+class TestUiClasicaDelegaAlOrquestador(unittest.TestCase):
+    """Punto 5 (Ola 5): la UI clásica usa el ORQUESTADOR (`pipeline.ejecutar`).
+
+    Antes la UI clásica tenía su propio bucle de análisis, su propio pase de
+    IA y su propio re-análisis: tres implementaciones paralelas a las del CLI
+    y la UI v2 (por eso divergían). Ahora las tres llaman al MISMO
+    `pipeline.ejecutar`: una sola implementación por etapa.
+    """
+
+    def setUp(self):
+        self.temp_dir = tempfile.TemporaryDirectory()
+        self.database = Database(Path(self.temp_dir.name) / "ui-orquestador.db")
+        self.database.initialize()
+        self.repository = Repository(self.database)
+        self.root = _tkroot_reintentos()
+
+    def tearDown(self):
+        self.root.update_idletasks()
+        self.root.destroy()
+        gc.collect()
+        self.temp_dir.cleanup()
+
+    def test_el_flujo_completo_delega_los_pasos_al_orquestador(self):
+        window = JobPulseWindow(self.root, self.repository)
+        self.root.update()
+        dialog = tk.Toplevel(self.root)
+        texto = tk.Text(dialog)
+        texto.pack()
+        status = tk.StringVar(value="")
+
+        with patch(
+            "jobpulse_v15.ui.threading.Thread", _HiloSincrono
+        ), patch(
+            "jobpulse_v15.pipeline.ejecutar", return_value=RESULTADO_ORQUESTADOR
+        ) as ejecutar:
+            window._post_flujo_completo(dialog, texto, status)
+            self.root.update()
+
+        self.assertEqual(ejecutar.call_count, 1)
+        args, kwargs = ejecutar.call_args
+        self.assertIs(args[0], self.repository)
+        self.assertEqual(
+            kwargs["etapas"],
+            ("analisis", "ia", "reanalisis", "backfill", "paso5", "evidencia"),
+        )
+        self.assertEqual(kwargs["db_path"], str(self.database.path))
+
+        # La UI muestra lo que devolvió el orquestador (no su propio cálculo).
+        contenido = texto.get("1.0", "end")
+        self.assertIn("PIPELINE:", contenido)
+        self.assertIn("20261108_000000", contenido)
+        self.assertIn("IA completado", status.get())
+        dialog.destroy()
+
+    def test_la_ventana_de_enriquecimiento_delega_al_orquestador(self):
+        window = JobPulseWindow(self.root, self.repository)
+        self.root.update()
+
+        with patch(
+            "jobpulse_v15.ui.threading.Thread", _HiloSincrono
+        ), patch(
+            "jobpulse_v15.ia_enrichment.get_ia_client", return_value=object()
+        ), patch.object(
+            JobPulseWindow, "_confirmar_ia_externa", return_value=True
+        ), patch(
+            "jobpulse_v15.pipeline.ejecutar", return_value=RESULTADO_ORQUESTADOR
+        ) as ejecutar:
+            window.open_enriquecimiento()
+            self.root.update()
+
+        self.assertEqual(ejecutar.call_count, 1)
+        args, kwargs = ejecutar.call_args
+        self.assertIs(args[0], self.repository)
+        self.assertEqual(kwargs["etapas"], ("ia", "reanalisis"))
+        self.assertEqual(kwargs["db_path"], str(self.database.path))
+
+        dialogos = [
+            hijo
+            for hijo in self.root.winfo_children()
+            if isinstance(hijo, tk.Toplevel)
+            and hijo.title() == "Enriquecimiento IA"
+        ]
+        self.assertEqual(len(dialogos), 1)
+
+        def descendientes(widget):
+            for hijo in widget.winfo_children():
+                yield hijo
+                yield from descendientes(hijo)
+
+        textos = [
+            widget
+            for widget in descendientes(dialogos[0])
+            if isinstance(widget, tk.Text)
+        ]
+        contenido = textos[0].get("1.0", "end")
+        self.assertIn("Re-analisis: 3 aviso(s) actualizados", contenido)
+        dialogos[0].destroy()
+
+    def test_la_ui_clasica_no_tiene_implementacion_propia_del_reanalisis(self):
+        """El re-análisis tiene UNA implementación (`analysis_flow`)."""
+        self.assertFalse(hasattr(JobPulseWindow, "_reananalizar_con_campos_fuente"))
+
+    def test_ui_clasica_y_ui_v2_llaman_al_mismo_orquestador(self):
+        """Las tres entradas (CLI, UI clásica, UI v2) comparten el orquestador."""
+        raiz = Path(__file__).resolve().parents[1] / "src" / "jobpulse_v15"
+        texto_ui = (raiz / "ui.py").read_text(encoding="utf-8")
+        texto_v2 = (raiz / "ui_v2" / "tabs" / "scraping.py").read_text(encoding="utf-8")
+        texto_run = (raiz.parent.parent / "run_full_flow.py").read_text(encoding="utf-8")
+        self.assertIn("pipeline.ejecutar(", texto_ui)
+        self.assertIn("pipeline.ejecutar(", texto_v2)
+        self.assertIn("pipeline.ejecutar(", texto_run)
+
+    def test_la_ui_clasica_no_duplica_el_pase_de_ia(self):
+        """La UI clásica no vuelve a importar el pase de IA por su cuenta."""
+        raiz = Path(__file__).resolve().parents[1] / "src" / "jobpulse_v15"
+        texto_ui = (raiz / "ui.py").read_text(encoding="utf-8")
+        self.assertNotIn("iae.pase_completo(", texto_ui)
+        self.assertNotIn("asyncio.run(", texto_ui)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -9,6 +9,16 @@ Regla que se mantiene: **la UI y el CLI deben compartir el mismo motor**. Lo
 que hoy comparten está marcado como *compartido*; lo que no, se señala como
 diferencia con su consecuencia.
 
+> **Actualizado 2026-11-08 (punto 5 · Ola 5).** La **UI clásica** ya no
+> mantiene su propio flujo: delega los pasos 2, 3, 3.5, backfill, Paso 5 y
+> evidencia al **orquestador** `jobpulse_v15.pipeline` (el MISMO que la CLI y
+> la UI v2). Con eso las tres entradas dan el mismo `job_match` **por
+> construcción**, no por convención. Se eliminó su implementación propia del
+> re-análisis (`_reananalizar_con_campos_fuente`): ahora hay UNA.
+> La comparación con el perfil (paso 4) sigue siendo propia de la UI
+> (`repository.compare_jobs_to_candidate_profile`): es informativa, no el
+> veredicto auditable.
+
 > **Actualizado 2026-11-04.** Desde entonces: el Paso 5 **SÍ se ejecuta desde
 > la UI v2** (pestaña "Vacantes" → botón "Ejecutar Paso 5", que deja la
 > corrida PERSISTIDA en `job_match` con `corrida_id` + `valida`, igual que el
@@ -36,10 +46,10 @@ diferencia con su consecuencia.
 | 1. Barrido | `run_full_flow.py --only-scrape <sitios>` (125 API + 4 browser) | Fuentes → **Ejecutar barrido** (árbol por plataforma; puerto CDP, días ANE, casilla "Flujo completo") | ✅ `scrape_dispatch.construir_llamada` + `IngestionService.fetch_and_import` |
 | 2. Análisis por reglas | `run_full_flow.run_analysis()` | **Analizar** / **Analizar sin analizar** / (casilla del barrido) | ✅ `analysis_flow.extract_job_analysis` |
 | 3. Enriquecimiento IA | `run_enriquecimiento.py` (servidor local bajo demanda) | **Enriquecer** (diálogo propio) | ✅ `ia_enrichment.pase_completo` + `ia_servidor` |
-| 4. Comparar con el perfil | **no lo hace** (imprime "abre la UI") | **Buscar** con filtro de compatibilidad + área | ⚠️ UI usa `repository.compare_jobs_to_candidate_profile` |
-| 5. Matching (Paso 5) | `run_paso5.py` → tabla `job_match` (corrida nueva) | UI v2: **Ejecutar Paso 5** → `job_match` (corrida nueva). UI clásica: no | ✅ (v2) `matching.ejecutar_paso5` vía `ui_v2/data/paso5.py` |
-| 5.b Re-análisis con los campos de la IA | `enrich requirements-source --apply` (todo) o el paso `reanalisis` del orquestador | UI clásica: paso 3.5 del flujo completo. UI v2: etapa `reanalisis` del pipeline | ✅ `analysis_flow.reananalizar_con_campos_fuente` (incremental: solo lo que no está integrado) |
-| 6. Evidencia / firma | `generar_evidencia_paso5.py`, `verificar_evidencia.py`, `generar_revision_pendientes.py` | UI v2: **Evidencia** (genera + verifica, sin subprocess). La hoja de firma sigue siendo CLI | ✅ `jobpulse_v15.evidencia` (los scripts son envoltorios) |
+| 4. Comparar con el perfil | **no lo hace** (imprime "abre la UI") | **Buscar** con filtro de compatibilidad + área | ⚠️ UI usa `repository.compare_jobs_to_candidate_profile` (informativa) |
+| 5. Matching (Paso 5) | `run_paso5.py` → tabla `job_match` (corrida nueva) | UI v2: **Ejecutar Paso 5** → `job_match` (corrida nueva). UI clásica: ✅ desde 2026-11-08 (etapa `paso5` del orquestador) | ✅ `matching.ejecutar_paso5` (v2 por `ui_v2/data/paso5.py`; clásica y CLI por `pipeline.ejecutar`) |
+| 5.b Re-análisis con los campos de la IA | `enrich requirements-source --apply` (todo) o el paso `reanalisis` del orquestador | UI clásica: ✅ etapa `reanalisis` del orquestador. UI v2: etapa `reanalisis` del pipeline | ✅ `analysis_flow.reananalizar_con_campos_fuente` (incremental: solo lo que no está integrado) |
+| 6. Evidencia / firma | `generar_evidencia_paso5.py`, `verificar_evidencia.py`, `generar_revision_pendientes.py` | UI v2: **Evidencia** (genera + verifica, sin subprocess). UI clásica: ✅ etapa `evidencia` del orquestador. La hoja de firma sigue siendo CLI | ✅ `jobpulse_v15.evidencia` (los scripts son envoltorios) |
 | 7. Brave/CDP | `run_scrape` lo abre y lo cierra **solo si lo abrió** (O7.2) | igual (barrido, re-login ANE, enriquecimiento) | ✅ `browser_manager.asegurar_brave` |
 | 8. Filtro "solo con requisitos obligatorios" (O2.2) | `search --solo-requisitos-obligatorios` | UI clásica + UI v2: columna **"Req."** + casilla | ✅ `Repository.search_jobs` (SQL; definición única) |
 | 9. Salud de los sitios (O3) | `site list --needs-review`, `site mark-reviewed [--all-needs-review]` | UI clásica: pestaña Fuentes (revisión manual) | ✅ `Repository.list_sites` / `mark_site_reviewed` |
@@ -87,7 +97,9 @@ proceso, se apaga al terminar.
 - El CLI lo hace en `run_enriquecimiento.py` (usado por el pipeline y por
   `run_full_flow.py`).
 - La UI lo hace en **Enriquecer** y también dentro de la casilla "Flujo
-  completo" (que encadena análisis → IA → comparación).
+  completo" (que encadena análisis → IA → comparación). **Desde 2026-11-08
+  las dos ventanas llaman al orquestador** (`pipeline.ejecutar`), que es el
+  que envuelve `pase_completo`: ya no hay un pase de IA propio de la UI.
 - La regla determinista de `work_mode` (patrones `#LI-*`, "hybrid work
   arrangement", etc.) corre en ambos porque vive dentro del pase.
 
@@ -117,7 +129,10 @@ existe por CLI** hoy.
   (pestaña "Vacantes") llama a `matching.ejecutar_paso5` vía
   `ui_v2/data/paso5.py` y deja la corrida **persistida** en `job_match`; la
   casilla "Evaluar todo" = `--evaluar-todo`. La columna "Paso 5" de la tabla
-  muestra el estado de esa corrida. La UI clásica sigue sin ejecutarlo.
+  muestra el estado de esa corrida.
+- **Desde 2026-11-08 la UI clásica también lo hace**: su flujo completo
+  llama a `pipeline.ejecutar`, cuya etapa `paso5` crea la misma corrida nueva
+  (`corrida_id` + `valida`).
 - `generar_evidencia_paso5.py` escribe `docs/PASO5_EVIDENCIA_<corrida>.md`
   (el nombre lo decide la corrida vigente, no una fecha fija) con la cita
   literal de cada descarte.
@@ -130,6 +145,8 @@ existe por CLI** hoy.
   después de usar la UI. **Desde 2026-11-05 la UI v2 sí** (botón "Evidencia"
   en "Vacantes"): la lógica vive en `jobpulse_v15.evidencia` y los scripts de
   la raíz son envoltorios finos (mismo CLI, mismo exit code).
+  **Desde 2026-11-08 la UI clásica también** (etapa `evidencia` de su flujo
+  completo): genera y verifica el documento sin subprocess.
 
 ### 2.6 Filtro de requisitos obligatorios (O2.2) — compartido
 
@@ -186,11 +203,13 @@ salud se deriva de las corridas, y `clean_run` borra las corridas).
    desde `jobpulse_v15.evidencia`, sin subprocess. La **hoja de firma**
    (`generar_revision_pendientes.py`) sigue siendo CLI a propósito: la firma
    es de una segunda persona.
-5. **Migrar la UI clásica al orquestador** `jobpulse_v15.pipeline`: hoy mantiene
-   su propio flujo (por regla del repo, la UI clásica no se toca sin pedirlo),
-   aunque usa las mismas implementaciones por etapa (análisis, IA, re-análisis,
-   backfill). Con eso, CLI y UI clásica darían el mismo `job_match` por
-   construcción, no por convención.
+5. ~~**Migrar la UI clásica al orquestador** `jobpulse_v15.pipeline`~~ →
+   **hecho (2026-11-08, punto 5 del backlog)**: la UI clásica llama a
+   `pipeline.ejecutar` con las etapas `analisis → ia → reanalisis → backfill
+   → paso5 → evidencia` (flujo completo) y `ia → reanalisis` (ventana
+   "Enriquecer IA"). Su implementación propia del re-análisis se eliminó.
+   Con eso, CLI y UI clásica dan el mismo `job_match` por construcción, no por
+   convención.
 
 ---
 
@@ -279,12 +298,12 @@ Comparado **después** de la corrida, contra el código de las dos UIs.
 | Etapa | Mi corrida (orquestador) | CLI `run_full_flow.py` | UI v2 "Procesar" | UI v2 "Enriquecer IA" | UI clásica |
 |---|---|---|---|---|---|
 | `scrape` | — (a propósito) | ✅ primero | — (botón aparte) | — | ✅ propio |
-| `analisis` | ✅ | ✅ | ✅ | — | ✅ (selección o "sin analizar") |
-| `ia` | ✅ | ✅ | ✅ | ✅ | ✅ |
-| `reanalisis` | ✅ | ✅ | ✅ | ✅ | ✅ (paso 3.5) |
-| `backfill` | ✅ | ✅ | ✅ | — | ❌ **no** |
-| `paso5` | ✅ | ✅ | ✅ | — | ❌ **no** |
-| `evidencia` | ✅ | ✅ | ✅ | — | ❌ **no** |
+| `analisis` | ✅ | ✅ | ✅ | — | ✅ (orquestador) |
+| `ia` | ✅ | ✅ | ✅ | ✅ | ✅ (orquestador) |
+| `reanalisis` | ✅ | ✅ | ✅ | ✅ | ✅ (orquestador) |
+| `backfill` | ✅ | ✅ | ✅ | — | ✅ (orquestador) |
+| `paso5` | ✅ | ✅ | ✅ | — | ✅ (orquestador) |
+| `evidencia` | ✅ | ✅ | ✅ | — | ✅ (orquestador) |
 
 ### 6.2 Qué es literalmente el MISMO código
 
@@ -293,30 +312,32 @@ Comparado **después** de la corrida, contra el código de las dos UIs.
 | `analysis_flow.extract_job_analysis` | mi corrida · CLI · UI v2 · UI clásica |
 | `ia_enrichment.pase_completo` + `ia_servidor` | mi corrida · CLI · UI v2 · UI clásica |
 | `analysis_flow.reananalizar_con_campos_fuente` | mi corrida · CLI · UI v2 · UI clásica |
-| `repository.backfill_requirements_canonico` | mi corrida · CLI · UI v2 (**no** UI clásica) |
-| `matching.ejecutar_paso5` | mi corrida · CLI · UI v2 (**no** UI clásica) |
-| `jobpulse_v15.evidencia` | mi corrida · CLI · UI v2 (**no** UI clásica) |
+| `repository.backfill_requirements_canonico` | mi corrida · CLI · UI v2 · UI clásica |
+| `matching.ejecutar_paso5` | mi corrida · CLI · UI v2 · UI clásica |
+| `jobpulse_v15.evidencia` | mi corrida · CLI · UI v2 · UI clásica |
 
-**Consecuencia**: mi corrida y el botón **"Procesar"** de la UI v2 ejecutan
-**exactamente las mismas 6 etapas, en el mismo orden, con el mismo
-orquestador** → la paridad es **por construcción**, no por convención. La
-única diferencia es el `scrape` (mi corrida no barre; "Procesar" tampoco: en
-la UI v2 el barrido es otro botón, y en la CLI es la primera etapa).
+**Consecuencia**: mi corrida, el botón **"Procesar"** de la UI v2 y el **flujo
+completo** de la UI clásica ejecutan **exactamente las mismas 6 etapas, en el
+mismo orden, con el mismo orquestador** → la paridad es **por construcción**,
+no por convención. La única diferencia es el `scrape` (mi corrida no barre;
+"Procesar" tampoco: en la UI v2 el barrido es otro botón, y en la CLI es la
+primera etapa). La ventana "Enriquecer IA" (UI v2 y clásica) hace solo `ia` +
+`reanalisis`, por diseño: no deja el matching al día.
 
 ### 6.3 Las diferencias que SÍ importan
 
 | # | Diferencia | Consecuencia |
 |---|---|---|
-| 1 | La UI clásica **no** hace `backfill` | Los requisitos nuevos (nacidos de una taxonomía curada) quedan **sin `codigo_canonico`** → el motor los **ignora en silencio** → el aviso se ve más compatible de lo que es |
-| 2 | La UI clásica **no** corre el Paso 5 | No hay veredicto auditable (`calificada`/`revisar_a_mano`/`descartada`/`fuera_de_area`): su "Perfil" es una comparación informativa |
-| 3 | La UI clásica **no** genera evidencia | Las frases literales y la hoja de firma quedan solo por CLI/UI v2 |
-| 4 | La UI clásica analiza **lo visible** (o lo pendiente con `limit=10000`, pero en su propio hilo) | Mismo resultado, distinto alcance; el orquestador usa `review_reason="analysis_missing"` |
-| 5 | La UI v2 "Enriquecer IA" solo hace `ia` + `reanalisis` | No deja el matching al día: hay que luego correr "Procesar" (o el Paso 5) |
+| 1 | La UI clásica **no** hace `scrape` dentro del orquestador | El barrido sigue siendo suyo (lo hace antes, en su propia ventana) |
+| 2 | La UI clásica compara con el perfil **además** del Paso 5 | Su "Perfil" (`compare_jobs_to_candidate_profile`) es **informativo**; el veredicto auditable es el del Paso 5 (que ahora también corre) |
+| 3 | La UI v2 "Enriquecer IA" solo hace `ia` + `reanalisis` | No deja el matching al día: hay que luego correr "Procesar" (o el Paso 5) |
 
 ### 6.4 Lo que NO se cambió (a propósito)
 
-- **La UI clásica no se tocó** (regla del repo: intacta sin pedido explícito).
-- El **filtro de la UI** (`fuera_de_area` en el motor) y los umbrales
+- La **comparación con el perfil** de la UI (`compare_jobs_to_candidate_profile`)
+  y el **filtro de la UI** (`fuera_de_area` en el motor) y los umbrales
   (0,60 / 0,80) tampoco.
 - La **hoja de firma** sigue siendo CLI (`generar_revision_pendientes.py`):
   la firma es de una **segunda persona**.
+- El **Paso 5 sigue siendo siempre una corrida nueva**: la UI clásica no
+  actualiza la corrida anterior.
