@@ -39,8 +39,11 @@ class FakeIAClient:
 
     def __init__(self, fallar=False):
         self.llamadas = 0
+        self.tokens_in = 0
+        self.tokens_out = 0
         self.fallar = fallar
         self.prompts_pedidos = []
+        self.cerrado = False
 
     async def chat_json(self, messages, schema=None, temperature=0.0,
                         max_tokens=0):
@@ -50,6 +53,9 @@ class FakeIAClient:
         system = messages[0]["content"]
         self.prompts_pedidos.append(system)
         return dict(RESPUESTAS.get(system, {"ok": True}))
+
+    async def close(self):
+        self.cerrado = True
 
 
 class TestExtractField(unittest.TestCase):
@@ -166,6 +172,44 @@ class TestRunIAEnrichment(unittest.TestCase):
         self.assertEqual(job["work_mode"], "onsite")
         self.assertEqual(job["city"], "Heredia")
         self.assertEqual(job["region"], "Heredia")
+
+    def test_los_avisos_excluidos_no_se_toquen(self):
+        """Ola 5 · 1: un aviso estancado ni se selecciona ni se reintenta."""
+        with patch.object(
+            iae, "get_ia_client", return_value=self.cliente,
+        ):
+            resultado = asyncio.run(iae.run_ia_enrichment(
+                db_path=self.db_path, limit=50, only_critical=True,
+                exclude_ids={"T-1"},
+            ))
+        stats = resultado["stats"]
+        self.assertEqual(stats["total"], 0)
+        self.assertEqual(resultado["ids_estancados"], [])
+        job = self.repo.get_job("T-1")
+        self.assertEqual(job["work_mode"], "unknown")  # intacto
+        # Solo la llamada del PREFLIGHT (1): ni una de enriquecimiento.
+        self.assertEqual(self.cliente.llamadas, 1)
+
+    def test_devuelve_los_ids_estancados(self):
+        """Un aviso que el modelo no puede enriquecer queda 'estancado'."""
+
+        class ClienteQueFallaEnEnriquecimiento(FakeIAClient):
+            async def chat_json(self, messages, schema=None, temperature=0.0,
+                                max_tokens=0):
+                if messages[0]["content"] == "Responde SOLO JSON.":
+                    return await FakeIAClient.chat_json(
+                        self, messages, schema, temperature, max_tokens)
+                raise RuntimeError("el modelo no responde")
+
+        with patch.object(
+            iae, "get_ia_client",
+            return_value=ClienteQueFallaEnEnriquecimiento(),
+        ):
+            resultado = asyncio.run(iae.run_ia_enrichment(
+                db_path=self.db_path, limit=50, only_critical=True,
+            ))
+        self.assertEqual(resultado["stats"]["failed"], 1)
+        self.assertEqual(resultado["ids_estancados"], ["T-1"])
 
     def test_pase_critico_salta_job_completo(self):
         # Job ya completo con criticos: no entra al pase critico.
@@ -389,7 +433,7 @@ class TestPaseCompleto(unittest.TestCase):
     def test_ciclos_y_pase_completo(self):
         llamadas = []
 
-        async def fake_run(limit=50, only_critical=True, db_path=None):
+        async def fake_run(limit=50, only_critical=True, db_path=None, **kw):
             llamadas.append(("crit" if only_critical else "full", limit))
             if only_critical:
                 if len([c for c in llamadas if c[0] == "crit"]) == 1:
@@ -419,7 +463,7 @@ class TestPaseCompleto(unittest.TestCase):
     def test_solo_criticos_no_corre_pase_completo(self):
         llamadas = []
 
-        async def fake_run(limit=50, only_critical=True, db_path=None):
+        async def fake_run(limit=50, only_critical=True, db_path=None, **kw):
             llamadas.append(("crit" if only_critical else "full", limit))
             if only_critical:
                 return {"stats": self._stats()}
@@ -441,7 +485,7 @@ class TestPaseCompleto(unittest.TestCase):
         self.assertIn("no configurada", r["error"])
 
     def test_error_del_pase_se_propaga_con_lo_acumulado(self):
-        async def fake_run(limit=50, only_critical=True, db_path=None):
+        async def fake_run(limit=50, only_critical=True, db_path=None, **kw):
             if len([1]) == 1 and only_critical:
                 # primer ciclo ok, segundo ciclo revienta
                 if not getattr(fake_run, "_ya", False):
@@ -458,6 +502,54 @@ class TestPaseCompleto(unittest.TestCase):
         self.assertIn("error", r)
         self.assertIn("servidor cayo", r["error"])
         self.assertEqual(len(r.get("ciclos", [])), 1)
+
+    def test_los_avisos_estancados_no_se_reintentan(self):
+        """Ola 5 · 1: si un aviso ya se intentó y no rindió, no se reintenta.
+
+        Sin esto, el ciclo 3 de la corrida local reintentó 433 avisos y
+        llenó 0 (el modelo es determinista a temp 0.1).
+        """
+        exclusiones = []
+        eventos = []
+
+        async def fake_run(limit=50, only_critical=True, db_path=None, **kw):
+            exclusiones.append(set(kw.get("exclude_ids") or set()))
+            if only_critical:
+                if len(exclusiones) == 1:
+                    return {"stats": self._stats(total=10, enriched=4, failed=2,
+                                                skipped=4),
+                            "ids_estancados": ["A-1", "A-2"]}
+                return {"stats": self._stats()}
+            return {"stats": self._stats(total=3, enriched=1)}
+
+        with patch.object(iae, "run_ia_enrichment", fake_run), \
+             patch.object(iae, "get_ia_client", lambda: FakeIAClient()), \
+             patch.object(iae, "verificar_servidor_ia", self._verificar_ok):
+            r = self._run(iae.pase_completo(on_event=eventos.append))
+        # El 2º ciclo y el pase completo excluyen los estancados.
+        self.assertEqual(exclusiones[0], set())
+        self.assertEqual(exclusiones[1], {"A-1", "A-2"})
+        self.assertEqual(exclusiones[-1], {"A-1", "A-2"})
+        self.assertTrue(any("estancados acumulados: 2" in e for e in eventos))
+
+    def test_el_pase_reporta_el_consumo_real(self):
+        """Ola 5 · 4: llamadas y tokens quedan guardados, no se pierden."""
+        cliente = FakeIAClient()
+        cliente.tokens_in = 1234
+        cliente.tokens_out = 567
+
+        async def fake_run(limit=50, only_critical=True, db_path=None, **kw):
+            return {"stats": self._stats(total=1, enriched=1)}
+
+        with patch.object(iae, "run_ia_enrichment", fake_run), \
+             patch.object(iae, "get_ia_client", lambda: cliente), \
+             patch.object(iae, "verificar_servidor_ia", self._verificar_ok):
+            r = self._run(iae.pase_completo())
+        self.assertEqual(r["uso"]["tokens_in"], 1234)
+        self.assertEqual(r["uso"]["tokens_out"], 567)
+        self.assertIn("llamadas", r["uso"])
+        # El cliente del pase se cierra pase lo que pase.
+        self.assertTrue(cliente.cerrado)
 
 
 class TestWorkModePorPatrones(unittest.TestCase):

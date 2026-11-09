@@ -125,6 +125,35 @@ servidor está apagado — antes esto se traducía en más de 150 fallos falso),
 luego pases de críticos en ciclos (para hasta cuando deja de avanzar) y
 finalmente un pase completo con secundarios.
 
+### Avisos estancados: no se reintentan (2026-11-08)
+
+El modelo es **determinista a temp 0.1**: un aviso al que el modelo no le
+puede extraer el campo devuelve SIEMPRE lo mismo. Reintentarlo en el siguiente
+ciclo es trabajo tirado (en la corrida local, el ciclo 3 reintentó **433
+avisos y llenó 0**).
+
+- `run_ia_enrichment(..., exclude_ids=...)` salta esos ids **antes de elegir
+  lote** → ni una llamada de IA.
+- `run_ia_enrichment` devuelve **`ids_estancados`**: los avisos que no
+  rindieron (`failed` = el modelo no halló el campo; `skipped` = devolvió lo
+  que ya estaba).
+- `pase_completo` los acumula y los excluye del **siguiente ciclo y del pase
+  completo** (no se reintentan ni ahí).
+
+### El consumo real queda guardado (2026-11-08)
+
+`IAClient.tokens_in/out` vivían solo en memoria y se perdían al terminar el
+pase. Ahora:
+
+- `pase_completo` usa **un único cliente** para todo el pase (los tokens se
+  acumulan), lo **cierra al terminar** y devuelve
+  `resumen["uso"] = {llamadas, tokens_in, tokens_out}`.
+- `pipeline_metricas.detalle_etapa("ia")` guarda ese `uso` en
+  `pipeline_etapa.detalle_json` → se consulta con
+  `jobpulse-v15 pipeline etapas --json` (clave `uso`).
+- Ejemplo medido (25 avisos, IA local, caché nueva): **123 llamadas**,
+  **52 827 tokens in / 3 901 tokens out**.
+
 ## Configuración .env
 
 ```

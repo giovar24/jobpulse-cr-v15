@@ -238,6 +238,9 @@ def detalle_etapa(nombre: str, resultado: Mapping[str, Any]) -> dict[str, Any]:
             + _int(completo.get("total")),
             "campos_llenados": _int(avance.get("campos_llenados")),
             "por_campo": avance.get("por_campo") or {},
+            # Consumo REAL de la corrida (llamadas y tokens): antes solo
+            # vivía en memoria del cliente y se perdía al terminar.
+            "uso": stats.get("uso") or {},
         }
     if nombre == "reanalisis":
         return {

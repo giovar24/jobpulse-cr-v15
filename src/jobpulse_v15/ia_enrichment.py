@@ -19,7 +19,7 @@ import json
 import logging
 import os
 import re
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 from jobpulse_v15.salario import contexto_salario, declara_salario
 from jobpulse_v15.ubicaciones_cr import ciudad_es_valida, es_provincia_valida
@@ -636,12 +636,25 @@ async def run_ia_enrichment(
     limit: int = 50,
     only_critical: bool = True,
     max_vacantes: Optional[int] = None,
+    ia_client=None,
+    exclude_ids: Optional[Set[str]] = None,
 ) -> Dict[str, Any]:
     """
     Pipeline principal: carga jobs sin campos críticos, enriquece campo por campo, guarda.
 
     ``max_vacantes`` (o ``IA_MAX_VACANTES``) limita cuántos avisos se toman
     en esta llamada; es OPT-IN: sin valor no hay tope.
+
+    ``ia_client`` permite reutilizar UN cliente para todo el pase (así los
+    tokens se acumulan y se puede medir el consumo real). Si no se pasa, se
+    crea uno propio (comportamiento de siempre).
+
+    ``exclude_ids`` son avisos que ya se intentsaron y no:rindieron (el modelo
+    no halló nada o devolvió lo que ya estaba): reintentarlos es trabajo
+    tirado, así que el pase crítico se los salta (Ola 5 · punto 1).
+
+    Devuelve además ``ids_estancados``: los avisos que no rindieron, para que
+    el orquestador pueda excluirlos del siguiente ciclo.
     """
     from dotenv import load_dotenv
     load_dotenv()  # asegura IA_* disponibles tambien desde UI/scripts
@@ -649,7 +662,7 @@ async def run_ia_enrichment(
     if not IA_AVAILABLE:
         return {"error": "IA client no disponible (import failed)"}
 
-    ia_client = get_ia_client()
+    ia_client = ia_client or get_ia_client()
     if not ia_client:
         return {"error": "IA no configurada (ver .env: IA_PROVEEDOR, IA_BASE_URL, IA_MODEL, IA_API_KEY)"}
 
@@ -688,9 +701,13 @@ async def run_ia_enrichment(
             cur.execute("SELECT job_id FROM jobs LIMIT ?", (limit,))
         
         job_ids = [row[0] for row in cur.fetchall()]
-    
+
+    # Avisos que ya se intentsaron y no rindieron: se saltan (trabajo tirado).
+    if exclude_ids:
+        job_ids = [jid for jid in job_ids if jid not in exclude_ids]
+
     if not job_ids:
-        return {"stats": {"total": 0, "seleccionados": 0, "enriched": 0, "skipped": 0, "failed": 0}, "message": "No hay jobs para enriquecer"}
+        return {"stats": {"total": 0, "seleccionados": 0, "enriched": 0, "skipped": 0, "failed": 0}, "message": "No hay jobs para enriquecer", "ids_estancados": []}
     
     # Cargar jobs completos
     jobs = []
@@ -706,10 +723,11 @@ async def run_ia_enrichment(
             jobs.append(job)
     
     if not jobs:
-        return {"stats": {"total": len(job_ids), "seleccionados": len(job_ids), "enriched": 0, "skipped": len(job_ids), "failed": 0}, "message": "Todos los jobs ya tienen campos críticos"}
+        return {"stats": {"total": len(job_ids), "seleccionados": len(job_ids), "enriched": 0, "skipped": len(job_ids), "failed": 0}, "message": "Todos los jobs ya tienen campos críticos", "ids_estancados": []}
 
     # Enriquecer en lotes
     stats = {"total": len(jobs), "seleccionados": len(job_ids), "enriched": 0, "skipped": 0, "failed": 0, "fields_filled": {"city": 0, "region": 0, "work_mode": 0, "date_published": 0, "employment_type": 0, "salary": 0, "skills": 0, "languages": 0}}
+    ids_estancados: List[str] = []
     
     batch_size = 3  # Lotes pequeños para modelo pequeño
     updated_jobs = []
@@ -725,6 +743,7 @@ async def run_ia_enrichment(
         for job, filled in zip(batch, results):
             if isinstance(filled, Exception) or not filled:
                 stats["failed"] += 1
+                ids_estancados.append(job["job_id"])
                 continue
 
             # Merge: solo llenar lo que falte y anotar SOLO los campos
@@ -745,6 +764,7 @@ async def run_ia_enrichment(
                 tocado.append(field)
             if not tocado:
                 stats["skipped"] += 1  # la IA no devolvio nada nuevo
+                ids_estancados.append(job["job_id"])
                 continue
             job["_ia_fields_filled"] = tocado
             stats["enriched"] += 1
@@ -776,7 +796,11 @@ async def run_ia_enrichment(
                 db_updated += 1
     
     stats["db_updated"] = db_updated
-    return {"stats": stats, "message": f"Enriquecidos {stats['enriched']}/{stats['total']}, BD actualizados: {db_updated}"}
+    return {
+        "stats": stats,
+        "message": f"Enriquecidos {stats['enriched']}/{stats['total']}, BD actualizados: {db_updated}",
+        "ids_estancados": ids_estancados,
+    }
 
 
 async def pase_completo(
@@ -830,6 +854,10 @@ async def pase_completo(
         )
     error = await verificar_servidor_ia(cliente)
     if error:
+        try:
+            await cliente.close()
+        except Exception:  # noqa: BLE001
+            pass
         return {"error": error}
     _reporta("Preflight OK: el backend responde.")
 
@@ -838,45 +866,69 @@ async def pase_completo(
         resumen["tope_vacantes"] = tope
     restante = tope
     ciclo = 0
-    while True:
-        ciclo += 1
-        limite = 500 if restante is None else min(500, restante)
-        if limite <= 0:
-            _reporta("Tope de avisos alcanzado: se detiene el pase crítico.")
-            break
-        r = await run_ia_enrichment(limit=limite, only_critical=True,
-                                    db_path=db_path)
-        if "error" in r:
-            return {"error": f"CRÍTICO ciclo {ciclo}: {r['error']}", **resumen}
-        s = r["stats"]
-        resumen["ciclos"].append(s)
-        _reporta(
-            f"CRÍTICO ciclo {ciclo}: total={s['total']} enriched={s['enriched']} "
-            f"failed={s['failed']} skipped={s['skipped']} "
-            f"fills={json.dumps(s.get('fields_filled', {}), ensure_ascii=False)}"
-        )
-        if restante is not None:
-            restante = max(
-                0, restante - int(s.get("seleccionados", s.get("total", 0)) or 0)
+    # Avisos que ya se intentsaron y NO rindieron: no se reintentan (el
+    # modelo es determinista a temp 0.1 y devuelve lo mismo). Sin esto, el
+    # ciclo 3 de la corrida local reintentó 433 avisos y llenó 0 (Ola 5).
+    estancados: Set[str] = set()
+    try:
+        while True:
+            ciclo += 1
+            limite = 500 if restante is None else min(500, restante)
+            if limite <= 0:
+                _reporta("Tope de avisos alcanzado: se detiene el pase crítico.")
+                break
+            r = await run_ia_enrichment(limit=limite, only_critical=True,
+                                        db_path=db_path, ia_client=cliente,
+                                        exclude_ids=estancados)
+            if "error" in r:
+                return {"error": f"CRÍTICO ciclo {ciclo}: {r['error']}", **resumen}
+            s = r["stats"]
+            resumen["ciclos"].append(s)
+            nuevos_estancados = set(r.get("ids_estancados") or [])
+            estancados |= nuevos_estancados
+            _reporta(
+                f"CRÍTICO ciclo {ciclo}: total={s['total']} enriched={s['enriched']} "
+                f"failed={s['failed']} skipped={s['skipped']} "
+                f"fills={json.dumps(s.get('fields_filled', {}), ensure_ascii=False)}"
+                + (f" | estancados acumulados: {len(estancados)}"
+                   if estancados else "")
             )
-        if s["total"] == 0 or s["enriched"] == 0:
-            break
-        if ciclo >= 5:  # guardia de seguridad
-            break
+            if restante is not None:
+                restante = max(
+                    0, restante - int(s.get("seleccionados", s.get("total", 0)) or 0)
+                )
+            if s["total"] == 0 or s["enriched"] == 0:
+                break
+            if ciclo >= 5:  # guardia de seguridad
+                break
 
-    if not solo_criticos:
-        limite = 2000 if restante is None else min(2000, restante)
-        r = await run_ia_enrichment(limit=limite, only_critical=False,
-                                    db_path=db_path)
-        if "error" in r:
-            return {"error": f"COMPLETO: {r['error']}", **resumen}
-        s = r["stats"]
-        resumen["completo"] = s
-        _reporta(
-            f"COMPLETO: total={s['total']} enriched={s['enriched']} "
-            f"failed={s['failed']} skipped={s['skipped']} "
-            f"fills={json.dumps(s.get('fields_filled', {}), ensure_ascii=False)}"
-        )
+        if not solo_criticos:
+            limite = 2000 if restante is None else min(2000, restante)
+            r = await run_ia_enrichment(limit=limite, only_critical=False,
+                                        db_path=db_path, ia_client=cliente,
+                                        exclude_ids=estancados)
+            if "error" in r:
+                return {"error": f"COMPLETO: {r['error']}", **resumen}
+            s = r["stats"]
+            resumen["completo"] = s
+            _reporta(
+                f"COMPLETO: total={s['total']} enriched={s['enriched']} "
+                f"failed={s['failed']} skipped={s['skipped']} "
+                f"fills={json.dumps(s.get('fields_filled', {}), ensure_ascii=False)}"
+            )
+    finally:
+        # El cliente es de este pase: se cierra pase lo que pase.
+        try:
+            await cliente.close()
+        except Exception:  # noqa: BLE001 - cerrar no debe romper el pase
+            pass
+    # Consumo real del pase (Ola 5 · punto 4): el cliente cuenta llamadas y
+    # tokens; antes solo vivían en memoria y se perdían al terminar.
+    resumen["uso"] = {
+        "llamadas": int(getattr(cliente, "llamadas", 0) or 0),
+        "tokens_in": int(getattr(cliente, "tokens_in", 0) or 0),
+        "tokens_out": int(getattr(cliente, "tokens_out", 0) or 0),
+    }
     return resumen
 
 

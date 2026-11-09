@@ -302,7 +302,7 @@ class TestPaseCompletoRespetaElTope(unittest.TestCase):
         return None
 
     def _fake_run(self, llamadas):
-        async def fake_run(limit=50, only_critical=True, db_path=None):
+        async def fake_run(limit=50, only_critical=True, db_path=None, **kw):
             criticos = [c for c in llamadas if c[0] == "crit"]
             llamadas.append(("crit" if only_critical else "full", limit))
             if only_critical:
