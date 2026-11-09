@@ -1,0 +1,184 @@
+{
+  "formato": 1,
+  "dimension": "educacion",
+  "revisor": "Giovanni Vargas",
+  "fecha": "2026-11-08",
+  "corrida_revisada": "20261108_131343",
+  "nota": "Firma de una SEGUNDA persona (la revision previa la hizo el autor de la regla -> se descarta por sesgo). Cada decision queda anclada al sha256 del texto EXACTO que se reviso: si el aviso se re-scrapea y su texto cambia, la decision deja de aplicar y el caso vuelve a revisar_a_mano.",
+  "decisiones": [
+    {
+      "job_id": "recruitee-transperfect-2770002",
+      "veredicto": "no_bloqueo",
+      "criterio": "El texto ofrece una via alternativa al titulo universitario: «Minimum Bachelor’s degree or its equivalent». No es un bloqueo duro: el requisito educativo no bloquea -> no bloqueo.",
+      "text_hash": "ce179bce897b2833e16784d51eff6dc6cb74aede149b7207a6bf32ed45609300"
+    },
+    {
+      "job_id": "workable-cynet-corp-9613AEDBB4",
+      "veredicto": "no_bloqueo",
+      "criterio": "El texto ofrece una via alternativa al titulo universitario: «Bachelor’s degree in Finance, Economics, Business, Data Analytics, or a related field (or equivalent work experience)». No es un bloqueo duro: el requisito educativo no bloquea -> no bloqueo.",
+      "text_hash": "c71f2290b858e2a3393e69009b483f2dbfc1f775eeec6e2b5bb29675c202878c"
+    },
+    {
+      "job_id": "workday-Accounting-Analyst_JR-0111160-1",
+      "veredicto": "no_bloqueo",
+      "criterio": "El texto ofrece una via alternativa al titulo universitario: «Bachelor's degree in Accounting, Finance, or a related discipline, or equivalent practical experience». No es un bloqueo duro: el requisito educativo no bloquea -> no bloqueo.",
+      "text_hash": "0d3c794eee6070baf15a9d9d6278057160add8a92e0ba1d95726610dc6b9c11b"
+    },
+    {
+      "job_id": "workday-Accounts-Payable-Representative_J-020440",
+      "veredicto": "no_bloqueo",
+      "criterio": "El texto ofrece una via alternativa al titulo universitario: «alternatively, 3+ years of relevant professional experience in Accounts Payable or Accounting may be considered in lieu of a degree». No es un bloqueo duro: el requisito educativo no bloquea -> no bloqueo.",
+      "text_hash": "1cdd85bee03516164cfc95dfe6d755d40530bbe7d56fb329503cfee06d510b70"
+    },
+    {
+      "job_id": "workday-Analyst-Payroll_R273170",
+      "veredicto": "no_bloqueo",
+      "criterio": "El texto ofrece una via alternativa al titulo universitario: «Equivalent combination of education and relevant experience may be considered.». No es un bloqueo duro: el requisito educativo no bloquea -> no bloqueo.",
+      "text_hash": "3f0b4ba654818269b865a2554174c8f3295d393aa1bfd018f5bbb6a00ed643b3"
+    },
+    {
+      "job_id": "workday-Audience-Management_26999789",
+      "veredicto": "no_bloqueo",
+      "criterio": "El texto ofrece una via alternativa al titulo universitario: «Education: Bachelors/University degree or equivalent experience». No es un bloqueo duro: el requisito educativo no bloquea -> no bloqueo.",
+      "text_hash": "ece6ba548045a46a5430ee5c91384a3858f09f00fa326899742a251b4186a1b8"
+    },
+    {
+      "job_id": "workday-Buyer-Planner-Sr_31163601",
+      "veredicto": "no_bloqueo",
+      "criterio": "El texto ofrece una via alternativa al titulo universitario: «Bachelor Degree, engineering, science or closely related discipline is desired, or equivalent technical». No es un bloqueo duro: el requisito educativo no bloquea -> no bloqueo.",
+      "text_hash": "6d92436c834745b18436d1c695ba0f393cc9bd5d4e0a6f7944c28cc72e18a37f"
+    },
+    {
+      "job_id": "workday-Clinical-Project-Manager_R18034-1",
+      "veredicto": "no_bloqueo",
+      "criterio": "El texto ofrece una via alternativa al titulo universitario: «What We Look For Bachelor’s degree required or equivalent experience». No es un bloqueo duro: el requisito educativo no bloquea -> no bloqueo.",
+      "text_hash": "277405207f00b386f4a416ad810ed00ef991548f3ab081d080903a2f1203a479"
+    },
+    {
+      "job_id": "workday-Commercial-Analyst_R-01372758",
+      "veredicto": "no_bloqueo",
+      "criterio": "El texto ofrece una via alternativa al titulo universitario: «Education and Experience: Bachelor's degree or equivalent experience». No es un bloqueo duro: el requisito educativo no bloquea -> no bloqueo.",
+      "text_hash": "d14b62e927daf7a5506356ce8e6912c390bc3d56ac9030092824f1e562daef8f"
+    },
+    {
+      "job_id": "workday-Creative-Execution-Manager--CrM-_261002442",
+      "veredicto": "no_bloqueo",
+      "criterio": "El texto ofrece una via alternativa al titulo universitario: «Education: Bachelors/University degree or equivalent experience». No es un bloqueo duro: el requisito educativo no bloquea -> no bloqueo.",
+      "text_hash": "d6d2f3ee531cc0a96a8294e90cdccea989c86b773068fda3d9d0a93b9a90a37b"
+    },
+    {
+      "job_id": "workday-Credit---Collections-Specialist--2_R232432",
+      "veredicto": "dudoso",
+      "criterio": "El aviso pide «Required Associate’s or bachelor’s degree in business, Finance, or a related field». Sigue SIN decidir la REGLA DE NEGOCIO #2 (si 2 anos de educacion superior en CR - fuente CONESUP - cuentan como universitario): el veredicto queda DUDOSO y el caso ABIERTO.",
+      "text_hash": "72b0ac60a2f390a7835c4ca30f4fd3a134f47db7471eda31801ba6cb37847604"
+    },
+    {
+      "job_id": "workday-Datacenter-Engineer--L3-ERT_1212932-2",
+      "veredicto": "no_bloqueo",
+      "criterio": "El texto ofrece una via alternativa al titulo universitario: «Education: Bachelor's or Master’s degree in Mechanical, Electrical, Computer Science, or equivalent». No es un bloqueo duro: el requisito educativo no bloquea -> no bloqueo.",
+      "text_hash": "7cda5b13cf6c3689cacd17154210387de61bd981f7fb370f8f418895ae30b151"
+    },
+    {
+      "job_id": "workday-Datacenter-Engineer--L3-ERT_1212933-2",
+      "veredicto": "no_bloqueo",
+      "criterio": "El texto ofrece una via alternativa al titulo universitario: «Education: Bachelor's or Master’s degree in Mechanical, Electrical, Computer Science, or equivalent». No es un bloqueo duro: el requisito educativo no bloquea -> no bloqueo.",
+      "text_hash": "8a3f6ffaa37b3f6d9de2e4dab34bbc667f2d937d60ca04e92d4cf2d25bcab77e"
+    },
+    {
+      "job_id": "workday-Environmental-Program-Manager---Latin-America_R-69389-1",
+      "veredicto": "no_bloqueo",
+      "criterio": "El texto ofrece una via alternativa al titulo universitario: «Education: Bachelor's degree or equivalent in environmental science, environmental engineering». No es un bloqueo duro: el requisito educativo no bloquea -> no bloqueo.",
+      "text_hash": "cc8098ee9a8673cc03dcbcbec21ea843021bb5c25cf1fdb8032d2417a520cb0b"
+    },
+    {
+      "job_id": "workday-Governance-Reporting---Analysis-Sr-Analyst---C12---HEREDIA_261007965",
+      "veredicto": "no_bloqueo",
+      "criterio": "El texto ofrece una via alternativa al titulo universitario: «Education : Bachelor's/University degree or equivalent experience». No es un bloqueo duro: el requisito educativo no bloquea -> no bloqueo.",
+      "text_hash": "527f4810998e7f037cb275d4e17415f61a39c0d27607d445ec07cf0a69886453"
+    },
+    {
+      "job_id": "workday-HR-Operations-Support-Lead-Analyst_25848722",
+      "veredicto": "no_bloqueo",
+      "criterio": "El texto ofrece una via alternativa al titulo universitario: «Education: Bachelor’s degree/University degree or equivalent experience». No es un bloqueo duro: el requisito educativo no bloquea -> no bloqueo.",
+      "text_hash": "4e6634f4c237152c334944dc6d263e0d9f5c18fe662742df4e3e8e7c31da4cf1"
+    },
+    {
+      "job_id": "workday-Network-Support-Engineer_1211197",
+      "veredicto": "no_bloqueo",
+      "criterio": "El texto ofrece una via alternativa al titulo universitario: «Higher education (Bachelor or Master degree in electrical engineering or computer science or equivalent )». No es un bloqueo duro: el requisito educativo no bloquea -> no bloqueo.",
+      "text_hash": "6d52b645b9a3cfeda6892d3329b5e18cf2c18b65a9ec76cd4e0da1bca951d069"
+    },
+    {
+      "job_id": "workday-Operations-Engineer_R0007464",
+      "veredicto": "no_bloqueo",
+      "criterio": "El texto ofrece una via alternativa al titulo universitario: «Bachelor’s degree in computer science, electronics, telecommunication, or equivalent work experience». No es un bloqueo duro: el requisito educativo no bloquea -> no bloqueo.",
+      "text_hash": "250eb02bd47ab50f083e5be1b02772ca176843c2373dd7a786631f7715e7a884"
+    },
+    {
+      "job_id": "workday-Premium-Support-Engineer-Expert_1210068",
+      "veredicto": "no_bloqueo",
+      "criterio": "El texto ofrece una via alternativa al titulo universitario: «Bachelor's or Master's degree in Mechanical, Electrical, or other Engineering, Computer Science, or equivalent». No es un bloqueo duro: el requisito educativo no bloquea -> no bloqueo.",
+      "text_hash": "dbaba7c0775cbd6df408f86b7971d45c322369859c534098f6d05336b0dae354"
+    },
+    {
+      "job_id": "workday-Principal-Engineer--Quality_Req-51750",
+      "veredicto": "bloqueo_real",
+      "criterio": "El aviso exige, en «What you'll need (Required): Bachelor's degree in engineering or Scientific field», un titulo universitario en ingenieria (o superior). Las alternativas son titulos SUPERIORES en la misma disciplina («Master's Degree or equivalent», «Ph.D. or equivalent»), no una via por experiencia: sin titulo universitario no hay acceso -> bloqueo real.",
+      "text_hash": "71e256825fef45536e01df7a5848aed18df1aca9f6ec7e405d8b6faed61e2c03"
+    },
+    {
+      "job_id": "workday-Production-Supervisor-I_31163511",
+      "veredicto": "dudoso",
+      "criterio": "El aviso pide «80% completeness of a bachelor’s degree program from a four-year college or university». Sigue SIN decidir la REGLA DE NEGOCIO #3 (si un bachillerato PARCIAL del 80 % cuenta como requisito universitario cumplido): el veredicto queda DUDOSO y el caso ABIERTO.",
+      "text_hash": "7d56a94aba71677ce2902ec848cfb339d5d5b303186ac50247c1cd6cf2a4879c"
+    },
+    {
+      "job_id": "workday-Sales-Specialist_R-117581",
+      "veredicto": "no_bloqueo",
+      "criterio": "El texto ofrece una via alternativa al titulo universitario: «A four year college degree (or additional experience in a related field)». No es un bloqueo duro: el requisito educativo no bloquea -> no bloqueo.",
+      "text_hash": "fd78103c4138d1e233c0a7ce36f3965592d2371225b8216acc123b95105afcc1"
+    },
+    {
+      "job_id": "workday-Security-Governance---Compliance-Specialist_2022361-1",
+      "veredicto": "no_bloqueo",
+      "criterio": "El texto ofrece una via alternativa al titulo universitario: «Bachelor’s degree plus 5+ years of experience in technical compliance, security, risk, audit, or a related field; equivalent practical experience may be considered.». No es un bloqueo duro: el requisito educativo no bloquea -> no bloqueo.",
+      "text_hash": "22d7a88210465270bbad4280bd43dd6983eecf2fd17b95560ac5aa2ebd814312"
+    },
+    {
+      "job_id": "workday-Security-Governance---Compliance-Specialist_2023168-1",
+      "veredicto": "no_bloqueo",
+      "criterio": "El texto ofrece una via alternativa al titulo universitario: «Must-have Qualifications Bachelor's degree or equivalent work experience required». No es un bloqueo duro: el requisito educativo no bloquea -> no bloqueo.",
+      "text_hash": "1bd02219d69216e859243ef9c3808be91c7526386e80c3b1de8acdfcf4d09ea9"
+    },
+    {
+      "job_id": "workday-Senior-Client-Services-Executive_R2025-244318",
+      "veredicto": "no_bloqueo",
+      "criterio": "El texto ofrece una via alternativa al titulo universitario: «Minimum Bachelor’s degree or its equivalent». No es un bloqueo duro: el requisito educativo no bloquea -> no bloqueo.",
+      "text_hash": "816a913d3491c9ea15d52a8c8bb6a458d235387d918585f5089990f6d706a9e4"
+    },
+    {
+      "job_id": "workday-Senior-Engineer---WLAN_1210063-2",
+      "veredicto": "no_bloqueo",
+      "criterio": "El texto ofrece una via alternativa al titulo universitario: «Computer Science, Electrical Engineering, Computer Engineering, or a related discipline, or equivalent practical experience». No es un bloqueo duro: el requisito educativo no bloquea -> no bloqueo.",
+      "text_hash": "fe2059b6a816b00239fe43b62f7902a83d13a666c344fb1a29ceadc32e8f1adb"
+    },
+    {
+      "job_id": "workday-Senior-Project-Manager_R13442",
+      "veredicto": "no_bloqueo",
+      "criterio": "El texto ofrece una via alternativa al titulo universitario: «Appropriate Education and Experience: A minimum of a Bachelor's degree or equivalent experience». No es un bloqueo duro: el requisito educativo no bloquea -> no bloqueo.",
+      "text_hash": "11923c58f7e0a20faa109ebd521ad56d80757e999cfc5e71b03f2e02b261b42e"
+    },
+    {
+      "job_id": "workday-Senior-Specialist--Technical-Training_R576356",
+      "veredicto": "no_bloqueo",
+      "criterio": "El texto ofrece una via alternativa al titulo universitario: «Bachelor’s degree in Business, Education, Human Resources, or related field (or equivalent experience)». No es un bloqueo duro: el requisito educativo no bloquea -> no bloqueo.",
+      "text_hash": "3f6149137962c3580cf8049c03c34df2312fd36d4a3f49ff5f90cf90d75bf7ef"
+    },
+    {
+      "job_id": "workday-SharePoint-Application-Developer_R55630-1",
+      "veredicto": "bloqueo_real",
+      "criterio": "El texto dice «Bachelor's Degree with Computer Science / MIS field of study required». El «or equivalent hands-on experience with Microsoft 365 development» se refiere a los estudios AVANZADOS PREFERIDOS («Advanced study preferred»), NO al bachillerato: el titulo es obligatorio -> bloqueo real.",
+      "text_hash": "f4c643c7337da3b8d496db610a4cd8aa7d4c0a8410219c5b78320fb7dbd78bdb"
+    }
+  ]
+}

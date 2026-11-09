@@ -42,6 +42,17 @@ Reglas del bloqueante de educacion (acordadas con el usuario):
   - El perfil NO registra NINGUN hecho educativo -> la dimension educativa no
     es verificable: NUNCA se descarta por falta de informacion; la vacante va
     a ``revisar_a_mano`` con motivo ``educacion_no_verificable``.
+* DECISIONES FIRMADAS (Paso 7 · tabla ``job_match_decision``): cuando el motor
+  NO pudo decidir (estado ``no_confirmado``), el veredicto de una SEGUNDA
+  persona cierra el caso:
+    - ``bloqueo_real`` -> el requisito bloquea -> la vacante se ``descartada``;
+    - ``no_bloqueo``   -> el requisito queda ``faltante`` (no bloquea, pero el
+      perfil no lo tiene) -> la vacante a ``revisar_a_mano``;
+    - ``dudoso``       -> sin cambio: el caso sigue ABIERTO (falta una
+      decision de negocio).
+  La decision esta anclada al sha256 del TEXTO que se reviso: si el aviso se
+  re-raspa y su texto cambia, la decision deja de aplicar (hay que volver a
+  firmarlo). **Una decision NUNCA pisa un veredicto que el motor ya dio.**
 
 Precedencia de estados (definida en el plan del paso 5):
 
@@ -80,6 +91,7 @@ from datetime import datetime
 from typing import Iterable, Sequence
 
 from jobpulse_v15 import areas
+from jobpulse_v15 import decisiones
 from jobpulse_v15 import idiomas
 
 UMBRAL_COBERTURA = 0.60
@@ -1034,6 +1046,10 @@ class EvaluadorPaso5:
         self.requisitos_por_job = self._cargar_requisitos()
         self.idioma_aviso_por_job = self._cargar_idioma_aviso()
         self.textos_por_job = self._cargar_textos()
+        # DECISIONES FIRMADAS por una segunda persona (tabla
+        # ``job_match_decision``): solo aplican si el texto del aviso es EXACTO
+        # el que se reviso (se ancla al sha256 del texto).
+        self.decisiones_por_job = self._cargar_decisiones()
         self.jobs_con_analisis = self._cargar_jobs_con_analisis()
         # Filtro por area de empleo: las areas marcadas por el usuario y el
         # area de cada oferta. Si el perfil no marca ninguna, no hay filtro.
@@ -1124,9 +1140,47 @@ class EvaluadorPaso5:
         for row in self.connection.execute(
             "SELECT job_id, requirements_raw, description_raw FROM jobs"
         ):
-            partes = [row["requirements_raw"] or "", row["description_raw"] or ""]
-            textos[row["job_id"]] = "\n".join(p for p in partes if p)
+            textos[row["job_id"]] = decisiones.texto_aviso(
+                row["requirements_raw"], row["description_raw"]
+            )
         return textos
+
+    def _cargar_decisiones(self) -> dict[str, dict[str, object]]:
+        """Decisiones FIRMADAS de la dimension educativa, por aviso.
+
+        La decision se ancla al sha256 del TEXTO que se reviso: si el aviso se
+        re-scrapea y su texto cambia, la firma deja de aplicar (el caso vuelve
+        a ``educacion_no_confirmada`` y hay que volver a firmarlo). Asi una
+        firma vieja nunca se aplica a un texto que nadie leyo.
+        """
+        try:
+            filas = self.connection.execute(
+                """
+                SELECT job_id, dimension, veredicto, criterio, revisor, fecha,
+                       text_hash, corrida_id
+                FROM job_match_decision
+                WHERE dimension = ?
+                """,
+                (decisiones.DIMENSION_EDUCACION,),
+            ).fetchall()
+        except sqlite3.OperationalError:
+            # La tabla todavia no existe (base anterior a la migracion 027):
+            # no hay firmas que aplicar.
+            return {}
+        por_job: dict[str, dict[str, object]] = {}
+        for fila in filas:
+            job_id = fila["job_id"]
+            texto = self.textos_por_job.get(job_id, "")
+            if not texto:
+                continue
+            if decisiones.hash_texto(texto) != fila["text_hash"]:
+                continue
+            por_job[job_id] = dict(fila)
+        return por_job
+
+    def decision_educacion(self, job_id: str) -> dict[str, object] | None:
+        """Decision firmada vigente para el aviso (o ``None``)."""
+        return self.decisiones_por_job.get(job_id)
 
     def _cargar_jobs_con_analisis(self) -> list[str]:
         return [
@@ -1348,12 +1402,24 @@ class EvaluadorPaso5:
         return self.estado_educacion_en_curso(nivel_req) == "cumple"
 
     def evaluar_educacion(
-        self, requisito: Requisito, texto: str
+        self, requisito: Requisito, texto: str, job_id: str | None = None
     ) -> tuple[str, ConfirmacionEducacion | None]:
         """Devuelve (estado_requisito, confirmacion).
 
         estado_requisito: 'cumple' | 'faltante' | 'bloqueante' | 'no_confirmado'
         | 'no_verificable'
+
+        Si se pasa ``job_id`` y el aviso tiene una DECISION FIRMADA por una
+        segunda persona (``job_match_decision``), la decision se aplica SOLO
+        cuando el motor NO pudo decidir ('no_confirmado'):
+
+        * 'bloqueo_real' -> 'bloqueante' (la vacante se descarta).
+        * 'no_bloqueo'   -> 'faltante' (no bloquea, pero no se da por cumplido:
+          la vacante sigue a revision manual).
+        * 'dudoso'       -> sin cambio (falta una decision de negocio).
+
+        La decision NUNCA pisa un veredicto del motor: solo cierra los casos
+        que el motor dejo abiertos por prudencia.
 
         Regla (acordada 2026-10-29):
 
@@ -1368,6 +1434,24 @@ class EvaluadorPaso5:
         * Si el perfil NO registra hechos educativos, la dimension educativa
           NO es verificable: nunca se descarta por falta de informacion.
         """
+        estado, confirmacion = self._evaluar_educacion(requisito, texto)
+        if estado != "no_confirmado" or not job_id:
+            return estado, confirmacion
+        decision = self.decisiones_por_job.get(job_id)
+        if not decision:
+            return estado, confirmacion
+        veredicto = str(decision.get("veredicto") or "")
+        if veredicto == decisiones.VEREDICTO_BLOQUEO_REAL:
+            return "bloqueante", confirmacion
+        if veredicto == decisiones.VEREDICTO_NO_BLOQUEO:
+            return "faltante", confirmacion
+        # 'dudoso' (o cualquier veredicto desconocido): el caso sigue ABIERTO.
+        return estado, confirmacion
+
+    def _evaluar_educacion(
+        self, requisito: Requisito, texto: str
+    ) -> tuple[str, ConfirmacionEducacion | None]:
+        """Regla educativa del motor, sin aplicar decisiones firmadas."""
         nivel_req = self.nivel_efectivo_requisito(requisito, texto)
         if nivel_req is None:
             return "no_confirmado", None
@@ -1490,7 +1574,7 @@ class EvaluadorPaso5:
                 else:
                     ok = self.cumple_language(req.codigo_canonico, req.qualifier)
             elif categoria == "education":
-                estado_req, conf = self.evaluar_educacion(req, texto)
+                estado_req, conf = self.evaluar_educacion(req, texto, job_id)
                 if estado_req == "cumple":
                     ok = True
                 elif estado_req == "bloqueante":

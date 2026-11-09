@@ -1,6 +1,35 @@
 # Handoff — Sesión 2026-11-08
 
-**TL;DR**:Sesión de **comparación IA nube vs IA local sobre el mismo corpus
+**TL;DR (turno 3)**: se ejecutó el **punto 3** del backlog (la **firma** de los
+29 `educacion_no_confirmada`). La firma de la **segunda persona** (el usuario,
+2026-11-08) queda **registrada en la base** (migración **`027`**, esquema
+**27**): tabla `job_match_decision`, anclada al **sha256 del texto exacto** que
+se leyó (si el aviso se re-raspa, la firma deja de aplicar y el caso vuelve a
+la hoja). **25 "no bloqueo"** → `revisar_a_mano / educacion_no_cumple`; **2
+"bloqueo real"** → `descartada / titulo_universitario_requerido`; **2 "dudoso"**
+siguen **ABIERTOS** (dependen de 2 decisiones de negocio sin tomar).
+Corrida nueva **`20261108_175932`**: `educacion_no_confirmada` **29 → 2**,
+`descartada` 97 → **99**, `revisar` 389 → **391**. Evidencia OK (**140
+verificaciones literales**, incluidas las 29 firmas con su cita literal y su
+efecto). CLI nuevo: `jobpulse-v15 decision list|sign`. Puntos **1, 2 y 4** ya
+estaban hechos (turno 2); el **5** sigue pendiente.
+
+**TL;DR (turno 2)**: se ejecutaron los **puntos 1, 2 y 4** del backlog de la
+sesión. **Punto 1** (ciclos de IA inútiles): los avisos que el modelo no
+puede enriquecer ya **no se reintentan** (el ciclo 3 local reintentaba 433
+avisos y llenaba 0). **Punto 4** (persistir tokens): el consumo real
+(llamadas + tokens) queda **guardado** en `pipeline_etapa.detalle_json`
+(medido: 123 llamadas, 52 827 in / 3 901 out). **Punto 2** (curaduría de la
+taxonomía, **tanda 3**): migración **`026`** (esquema **26**) que cura las
+**57 variantes de la cola que ≥2 avisos piden** → **+48 conceptos**,
+**+19 códigos**, **+77 requisitos comparables** (2879 → **2956**, 0 sin
+código), cola **1198 → 1150**, y una **corrida nueva de Paso 5**
+(`20261108_131343`): `calificada` 220 → **202**, `revisar` 365 → **389** (el
+motor ve más requisitos), `sin_requisitos` 11 (igual), y los **29
+`educacion_no_confirmada` intactos**. Puntos **3** (firma de los 29) y **5**
+(Ola 5: upsert + embeddings, y UI clásica → `pipeline.py`) siguen pendientes.
+
+**TL;DR (turno 1)**: Sesión de **comparación IA nube vs IA local sobre el mismo corpus
 fresco**. Se limpió la BD (solo datos de scraping), se hizo un **scrape
 nuevo de 736 avisos**, se configuró **Ollama Cloud** (`gemma4:31b`) y se
 corró el pipeline completo; luego se restauró el corpus crudo y se corrió lo
@@ -126,6 +155,154 @@ Respaldo: `data/backups/post_ia_local_20261107_230622.db`.
   vigente `20261107_225916` sigue siendo válida.
 - `db check` ok (esquema 25, sin violaciones FK).
 
+### 1.7 Turno 2 · PUNTO 1: los ciclos de IA que no rinden se cortan
+
+`src/jobpulse_v15/ia_enrichment.py`:
+
+- `run_ia_enrichment(..., exclude_ids: Set[str] | None)` salta los ids
+  excluidos **antes de elegir lote** (ni una llamada de IA).
+- `run_ia_enrichment` devuelve **`ids_estancados`**: los avisos que no
+  rindieron (`failed` = el modelo no halló el campo; `skipped` = devolvió lo
+  que ya estaba). Antes el ciclo 3 de la corrida local reintentó **433 avisos
+  y llenó 0** (el modelo es determinista a temp 0.1).
+- `pase_completo` acumula los estancados y los excluye del **siguiente ciclo
+  y del pase completo**.
+- Sin cambio de esquema. Tests: `tests/test_ia_enrichment.py` (34 + 36
+  subtests) y `tests/test_ia_externa.py`.
+
+### 1.8 Turno 2 · PUNTO 4: el consumo real de tokens queda guardado
+
+- `pase_completo` usa **un único cliente IA para todo el pase** (así los
+  tokens se acumulan), lo **cierra al terminar** (pase lo que pase) y
+  devuelve `resumen["uso"] = {llamadas, tokens_in, tokens_out}`.
+- `pipeline_metricas.detalle_etapa("ia")` lo guarda en
+  `pipeline_etapa.detalle_json` (clave `uso`) → consultable con
+  `jobpulse-v15 pipeline etapas --json`.
+- **Medido en COPIA** (corpus crudo + caché IA nueva + `IA_MAX_VACANTES=25`,
+  IA local): **123 llamadas · 52 827 tokens in · 3 901 tokens out**; 25/25
+  avisos enriquecidos, 0 errores. Sin pérdida de datos: solo 2 de 25 avisos
+  cambian de skills y es por el modelo no determinista (no por el cambio).
+
+### 1.9 Turno 2 · PUNTO 2: curaduría de la taxonomía, TANDA 3 (migración 026)
+
+Auditoría del corpus real (`taxonomia.demanda_corpus`, no el contador `veces`
+de la cola): de las **1198** variantes pendientes, **57** las piden **≥2
+avisos** → esa es la tanda.
+
+- **25 alias** a conceptos que ya existían (`interpretacion de planos` /
+  `interpretacion de diagramas` / `planos` / `drawings` → `lectura-planos`;
+  `diagnostico` / `investigate technical problems` / `network diagnostics` →
+  `troubleshooting`; `business analysis` → `analisis-negocio`; `invoicing` →
+  `facturacion`; `collections` → `cuentas-por-cobrar`; `supply chain` →
+  `abastecimiento`; `timelines` → `project-planning`; `seleccion` →
+  `reclutamiento`; `sap basico` → `sap`; `iis` / `web server technologies` →
+  `servidores`; `digitacion` → `data-entry`; `destrezas electricas` →
+  `electricidad`; `destrezas mecanicas` → `mecanica-industrial`;
+  `almacenamiento de alimentos` / `conservacion de alimentos` →
+  `manipulacion-alimentos`; `protocolos de higiene` →
+  `seguridad-alimentaria`; `phone` / `phone calls` /
+  `llamadas salientes outbound` → `atencion-al-cliente`).
+- **23 variantes con 19 códigos nuevos**: `negociacion`, `cierre-ventas`,
+  `marketing-automation`, `evaluacion-riesgos`, `order-to-cash`,
+  `containerization`, `ich`, `onq`, `reservaciones`, `cocteleria`,
+  `preparacion-alimentos`, `tecnicas-coccion`, `tecnicas-montaje`, `moto`,
+  `vehiculo-propio`, `ventaneria`, `alarma`, `paneles-control`,
+  `tarjetas-acceso`.
+- **9 se dejan en la cola a propósito** (con el motivo en la cabecera de la
+  migración): `website`, `data driven settings`, `upgrades`, `four seasons`,
+  `explore products`, `providing product information`, `buenas practicas`,
+  `asesor`, `liviano`.
+
+**Medición (copia → real, IDÉNTICA)**:
+
+| Métrica | Antes | Después |
+|---|---|---|
+| Esquema | 25 | **26** |
+| Cola de taxonomía | 1198 | **1150** (−48) |
+| Conceptos / códigos | 727 / 317 | **775 / 336** (+48 / +19) |
+| Requisitos (0 sin código) | 2879 | **2956** (+77) |
+| `calificada` / `revisar` | 220 / 365 | **202 / 389** |
+| `datos_insuf` / `descartada` / `sin_requisitos` | 42 / 97 / 11 | 36 / 97 / 11 |
+| `educacion_no_confirmada` | 29 | **29 (intacto)** |
+
+**Aplicación a la BD real**: respaldo
+`data/backups/pre_tanda3_20261108_131212.db` → apertura (aplica la **026**) →
+`enrich requirements-source --apply` (736 avisos, 1756 requisitos fuente; 1
+aviso sin descripción: `linkedin-4476184789`) → `enrich requirements-canonico
+--apply` (0) → `taxonomy curate --apply` (1202 → **1150**) → corrida
+**`20261108_131343`** → evidencia `docs/PASO5_EVIDENCIA_2026-11-08.md` OK
+(**136 verificaciones literales**, `no_confirmada=29`) → hoja de firma
+regenerada (29 casos) → `db check` ok (esquema 26, 0 FK).
+
+El −18 de `calificada` es el efecto esperado: los +77 requisitos recién
+visibles hacen que avisos que parecían cubiertos del todo muestren un
+`required` real que faltaba (tope `revisar`). El motor ve más requisitos, no
+peor matching.
+
+### 1.10 Turno 3 · PUNTO 3: la firma de los 29 `educacion_no_confirmada`
+
+La firma la hizo una **segunda persona** (el usuario, 2026-11-08) leyendo la
+hoja `docs/PASO5_REVISION_PENDIENTES.md` (corrida `20261108_131343`).
+
+**Qué se construyó** (nuevo):
+
+- `src/jobpulse_v15/decisiones.py` — módulo canónico: dimensiones/veredictos
+  válidos, el **ancla** (`hash_aviso` = sha256 de `requirements_raw` +
+  `description_raw`, el MISMO texto que leen el motor y la hoja), persistencia
+  (`guardar_decision`, `listar_decisiones`, `decision_vigente`) y la hoja de
+  firma (`cargar_firma`, `aplicar_firma`).
+- `src/jobpulse_v15/migrations/027_job_match_decision.sql` — tabla
+  `job_match_decision` (`job_id`, `dimension`, `veredicto`, `criterio`,
+  `revisor`, `fecha`, `text_hash`, `corrida_id`), `UNIQUE (job_id, dimension,
+  text_hash)` y FK a `jobs` con `ON DELETE CASCADE`. **No toca `job_match`**:
+  los estados los produce una **corrida nueva**.
+- `src/jobpulse_v15/matching.py` — el evaluador carga las firmas y las aplica
+  **SOLO cuando el motor no pudo decidir** (`no_confirmado`): `bloqueo_real` →
+  `bloqueante` (`descartada`), `no_bloqueo` → `faltante` (`revisar_a_mano`),
+  `dudoso` → sin cambio. **Una firma NUNCA pisa un veredicto del motor.**
+- `src/jobpulse_v15/viabilidad.py` — el veto educativo respeta la firma (los
+  2 "bloqueo real" pasan a banda `veto`).
+- `src/jobpulse_v15/cli.py` — `jobpulse-v15 decision list` y
+  `jobpulse-v15 decision sign --file <firma.json> [--dry-run]`.
+- `docs/PASO5_FIRMA_EDUCACION.json` — la hoja de firma (29 decisiones con su
+  `text_hash`); es la entrada auditable del CLI.
+- `src/jobpulse_v15/evidencia.py` — sección 6 nueva (las 29 firmas con su
+  veredicto, su efecto en la corrida y el criterio firmado) y verificación
+  **D** (cada cita `«...»` del criterio tiene que ser literal del texto de la
+  BD **y** el estado de la corrida tiene que concordar con el veredicto).
+- `generar_revision_pendientes.py` — la hoja muestra ahora el veredicto, el
+  criterio, el revisor y la fecha de los casos ya firmados, y lista aparte
+  las **decisiones de negocio pendientes**.
+
+**La firma (29 casos)**:
+
+| grupo | veredicto | n | efecto |
+|---|---|---|---|
+| A (vía alternativa explícita: "or equivalent experience" y compañía) | `no_bloqueo` | 25 | `revisar_a_mano / educacion_no_cumple` |
+| B `workday-Principal-Engineer--Quality_Req-51750` | `bloqueo_real` | 1 | `descartada / titulo_universitario_requerido` |
+| E `workday-SharePoint-Application-Developer_R55630-1` | `bloqueo_real` | 1 | `descartada / titulo_universitario_requerido` |
+| C `workday-Credit---Collections-Specialist--2_R232432` | `dudoso` | 1 | sigue `educacion_no_confirmada` |
+| D `workday-Production-Supervisor-I_31163511` | `dudoso` | 1 | sigue `educacion_no_confirmada` |
+
+**Medición (copia → real, IDÉNTICA)**: en la copia, el motor **sin** firma
+reproduce la corrida vigente **exactamente** (0 diferencias) → la firma es lo
+único que cambia. 27 avisos cambian de estado, **0 cambian de cobertura o
+puntaje** (solo `nc_count` 1 → 0), así que **ninguno cae a
+`datos_insuficientes`**. En **viabilidad**: 12 avisos `no_prioritario` →
+`revisar` (tope duro: requisito `required` faltante) y 2 → `veto`.
+
+**Aplicación a la BD real**: respaldo
+`data/backups/pre_firma_educacion_20261108_175903.db` → apertura (aplica la
+**027**) → `decision sign --file docs/PASO5_FIRMA_EDUCACION.json` (29
+aplicadas, 0 con texto cambiado) → corrida **`20261108_175932`** → evidencia
+`docs/PASO5_EVIDENCIA_2026-11-08.md` OK (**140 verificaciones literales**) →
+hoja regenerada (**2 casos abiertos**) → `db check` ok (esquema 27, 0 FK).
+
+**Reglas que se respetan**: la firma es de una segunda persona; los estados
+solo cambian con una **corrida nueva** (nunca `UPDATE` de la anterior); los
+umbrales (cobertura 0.60 / puntaje 0.80) **no se tocaron**; una firma anclada
+a un texto viejo **no** se aplica a un texto nuevo.
+
 ## 2. Decisiones
 
 1. **La corrida local queda como vigente**: más datos y coste $0. La nube se
@@ -134,53 +311,88 @@ Respaldo: `data/backups/post_ia_local_20261107_230622.db`.
    usuario la creó en ollama.com y queda en su `.env` gitignoreado.
 3. **Las 29 `educacion_no_confirmada`**: la firma es de una **segunda
    persona**; los estados NO se tocan. Hoja: `docs/PASO5_REVISION_PENDIENTES.md`.
-4. **No hay migración nueva**: el esquema sigue en **25**.
-5. **Tests aislados del `.env` real** (ver §1.7).
+   (Turno 2: la tanda 3 **no las movió**: siguen siendo 29.)
+4. **Esquema 26** (turno 2): la curaduría de la tanda 3 es una **migración
+   de datos** (`026_taxonomia_curacion_tanda_3.sql`), no un `UPDATE` a mano.
+5. **Tests aislados del `.env` real** (ver §1.7 del turno 1).
+6. **Tanda 3 medida por `demanda_corpus`** (nº de avisos que piden la
+   variante), no por `veces` de la cola: `veces` se reescribe en cada
+   curación y ya no distingue "un aviso" de "varios".
+7. **Un aviso estancado no se reintenta** (punto 1): el modelo es
+   determinista a temp 0.1; reintentar es trabajo tirado. Los ids se
+   acumulan solo durante el pase (no se guardan en la BD).
+8. **Turno 3 · la firma se APLICA, pero solo donde el motor no pudo decidir**
+   (punto 3): `bloqueo_real` → `descartada`, `no_bloqueo` → `faltante`
+   (nunca `descartada`), `dudoso` → el caso sigue abierto. Una firma
+   **nunca** pisa un veredicto que el motor ya dio (texto confirmado,
+   perfil que cumple, etc.).
+9. **Turno 3 · la firma está anclada al texto**: `text_hash` = sha256 de
+   `requirements_raw` + `description_raw`. Si el aviso se re-raspa y su texto
+   cambia, la firma **deja de aplicar** y el caso vuelve a la hoja. Es lo que
+   impide que una firma vieja se aplique a un texto que nadie leyó.
+10. **Turno 3 · "no bloqueo" NO es "cumple"**: el título no bloquea, pero el
+    perfil no lo tiene → el requisito queda `faltante` y la vacante a
+    `revisar_a_mano` (y en viabilidad, banda máxima `revisar`).
 
 ## 3. Estado de la BD real
 
-- Esquema **25** · **736 avisos** (735 con análisis) · **2879 requisitos**
-  (0 sin código) · **job_match vigente `20261107_225916`**
-  (calificada 220 · revisar 365 · descartada 97 · datos_insuf 42 ·
-  sin_requisitos 11) · cola de taxonomía **1198** (1259 menciones) ·
-  conceptos **727** · `educacion_no_confirmada` **29** (intocables).
+- Esquema **27** · **736 avisos** (735 con análisis) · **2956 requisitos**
+  (0 sin código) · **job_match vigente `20261108_175932`**
+  (calificada 202 · revisar 391 · descartada 99 · datos_insuf 36 ·
+  sin_requisitos 11) · cola de taxonomía **1150** (1160 menciones) ·
+  conceptos **775** (336 códigos) · `educacion_no_confirmada` **2**
+  (las dos firmadas "dudoso") · **29 decisiones firmadas** en
+  `job_match_decision` (25 `no_bloqueo` · 2 `bloqueo_real` · 2 `dudoso`).
 - `.env` **en config local**: `IA_PROVEEDOR=custom`,
   `IA_BASE_URL=http://127.0.0.1:8081/v1`, `IA_MODEL=gemma4-e2b-qat`.
   Para volver a la nube: 2 líneas (`ollama` + `https://ollama.com/v1` +
   `gemma4:31b`).
 - Backups: `pre_clean_20261107_181242` · `pre_ia_externa_20261107_203459` ·
-  `post_ia_externa_20261107_205655` (nube) · `post_ia_local_20261107_230622`.
+  `post_ia_externa_20261107_205655` (nube) · `post_ia_local_20261107_230622` ·
+  `pre_tanda3_20261108_131212` · **`pre_firma_educacion_20261108_175903`**
+  (antes de la migración 027).
 
 ## 4. Pendiente inmediato (priorizado)
 
-1. **Ciclos de IA que no rinden**: el ciclo 3 local reintentó 433 avisos con
-   **0 llenados** (`failed=355`). Candidata a mejora: cortar el pase cuando un
-   ciclo rinde 0 (también la nube dejó 521 "críticos recuperables").
-2. **`espanol: nativo` es inferencia**, no texto literal (365 avisos): el
+1. **PUNTO 5 · Ola 5**: 5.1 upsert de `save_analysis` (re-análisis sin
+   inflar el historial) y 5.2 embeddings/semántica en **viabilidad** (el
+   overhaul grande). Además, **migrar la UI clásica a `pipeline.py`** (el
+   usuario ya dio permiso; la UI clásica está intacta por regla hasta ahora).
+2. **2 decisiones de negocio bloquean 2 avisos** (firmados "dudoso"):
+   (#2) si 2 años de educación superior en CR cuentan como universitario
+   (fuente CONESUP) — `workday-Credit---Collections-Specialist--2_R232432`;
+   (#3) si un bachillerato parcial del 80 % cuenta como requisito universitario
+   cumplido — `workday-Production-Supervisor-I_31163511`. Hay que decidirlas
+   **con una fuente**, no por impulso; hasta entonces siguen en la hoja.
+3. **`espanol: nativo` es inferencia**, no texto literal (365 avisos): el
    modelo infiere el idioma del aviso. Inofensivo para el matching (el perfil
    lo cubre), pero a tener en cuenta al auditar.
-3. **`linkedin-4476184789`** sin descripción: re-scrape del aviso o dejarlo
+4. **`linkedin-4476184789`** sin descripción: re-scrape del aviso o dejarlo
    fuera (no es un bug del extractor).
-4. **29 `educacion_no_confirmada`**: segunda persona firma la hoja; después,
-   corrida nueva de Paso 5.
-5. Cola de taxonomía 1198 → siguiente tanda de curación (migración `026`),
+5. Cola de taxonomía **1150** → siguiente tanda de curación (migración `028`),
    priorizando variantes con ≥2 avisos reales (`demanda_corpus`, no `veces`).
-6. **Ola 5** (O4/upsert/embeddings) y **UI clásica → `pipeline.py`** (requiere
-   permiso del usuario; la UI clásica está intacta por regla).
-7. **Persistencia de tokens**: `IAClient.tokens_in/out` viven solo en memoria;
-   `resumen_uso()` no se llama en ningún sitio. Idea: guardarlo en
-   `pipeline_etapa.detalle_json` de la etapa `ia` para medir coste real.
+6. **Medir el efecto de los puntos 1 y 4 en una corrida real** (no solo en
+   copia): el siguiente pipeline completo debe mostrar menos llamadas por
+   aviso y el `uso` guardado en `pipeline_etapa.detalle_json`.
 
 ## 5. Archivos clave
 
-- `src/jobpulse_v15/ui_v2/tabs/configuracion.py` — desplegable de modelos.
-- `tests/test_ui_v2.py` — test del desplegable + aislamiento del `.env`.
-- `docs/PASO5_EVIDENCIA_2026-11-07.md` / `docs/PASO5_REVISION_PENDIENTES.md`
-  — generados para la corrida `20261107_225916` (29 casos).
-- `src/jobpulse_v15/ia_api.py` — `PRESETS` (incluido `ollama` nube) y
-  `_cache_key` (proveedor+modelo).
 - `src/jobpulse_v15/ia_enrichment.py` — `pase_completo` (ciclos crítico y
-  completo) y `enrich_job` (qué cuenta como `failed`).
+  completo, cliente único, `ids_estancados`, `uso`), `run_ia_enrichment`
+  (`exclude_ids`), `enrich_job` (qué cuenta como `failed`).
+- `src/jobpulse_v15/pipeline_metricas.py` — `detalle_etapa("ia")` guarda el
+  `uso` (llamadas + tokens).
+- `src/jobpulse_v15/migrations/026_taxonomia_curacion_tanda_3.sql` — curaduría
+  tanda 3 (48 variantes, 19 códigos nuevos) + los motivos de las 9 que se
+  dejan en la cola.
+- `src/jobpulse_v15/ui_v2/tabs/configuracion.py` — desplegable de modelos.
+- `src/jobpulse_v15/migrations/027_job_match_decision.sql` — tabla de
+  decisiones firmadas (`job_match_decision`).
+- `src/jobpulse_v15/decisiones.py` — módulo canónico de las decisiones
+  (ancla `text_hash`, persistencia, hoja de firma).
+- `docs/PASO5_FIRMA_EDUCACION.json` — la hoja de firma (29 decisiones).
+- `docs/PASO5_EVIDENCIA_2026-11-08.md` / `docs/PASO5_REVISION_PENDIENTES.md`
+  — generados para la corrida `20261108_175932` (2 casos abiertos).
 
 ## 6. Contexto
 

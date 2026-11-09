@@ -135,6 +135,76 @@ def _cmd_pipeline_etapas(repository: Repository, args) -> None:
         )
 
 
+def _cmd_decision_list(repository: Repository, args) -> None:
+    """Lista las decisiones firmadas del matching (tabla ``job_match_decision``)."""
+    from jobpulse_v15 import decisiones
+
+    dimension = getattr(args, "dimension", None) or decisiones.DIMENSION_EDUCACION
+    with repository.database.connection() as connection:
+        filas = decisiones.listar_decisiones(
+            connection,
+            dimension=dimension,
+            job_id=getattr(args, "job", None),
+        )
+    if not filas:
+        print("No hay decisiones firmadas (%s)." % dimension)
+        return
+    print("%-52s %-14s %-12s %s" % ("job_id", "veredicto", "fecha", "revisor"))
+    for fila in filas:
+        print(
+            "%-52s %-14s %-12s %s"
+            % (
+                fila["job_id"],
+                fila["veredicto"],
+                fila["fecha"],
+                fila["revisor"],
+            )
+        )
+    print("\n%d decision(es)." % len(filas))
+
+
+def _cmd_decision_sign(repository: Repository, args) -> None:
+    """Registra la hoja de firma (JSON) en la tabla de decisiones del Paso 7."""
+    from jobpulse_v15 import decisiones
+
+    try:
+        firma = decisiones.cargar_firma(args.file)
+    except (OSError, ValueError) as exc:
+        raise ValueError("No se pudo leer la firma: %s" % exc) from exc
+    with repository.database.connection() as connection:
+        if args.dry_run:
+            actual = []
+            for item in firma["decisiones"]:
+                job_id = str(item.get("job_id") or "").strip()
+                actual.append(
+                    decisiones.hash_aviso_en_base(connection, job_id)
+                    == str(item.get("text_hash") or "").strip()
+                )
+            print(
+                json.dumps(
+                    {
+                        "dimension": firma["dimension"],
+                        "revisor": firma["revisor"],
+                        "fecha": firma["fecha"],
+                        "decisiones": len(firma["decisiones"]),
+                        "texto_igual": sum(1 for ok in actual if ok),
+                        "texto_cambiado": sum(1 for ok in actual if not ok),
+                        "aplicado": False,
+                    },
+                    ensure_ascii=False,
+                    indent=2,
+                )
+            )
+            return
+        resultado = decisiones.aplicar_firma(connection, firma)
+    print(json.dumps(resultado, ensure_ascii=False, indent=2))
+    if resultado["texto_cambiado"]:
+        print(
+            "\n[AVISO] %d aviso(s) cambiaron de texto: su firma NO se aplico."
+            % len(resultado["texto_cambiado"])
+        )
+
+
 def _cmd_areas_classify(repository: Repository, args) -> None:
     """Clasifica las vacantes por su titulo y guarda el area (derivada)."""
     from jobpulse_v15 import areas as areas_mod
@@ -897,6 +967,35 @@ def main() -> int:
         help="Mostrar las vacantes pendientes sin analizarlas.",
     )
 
+    decision = commands.add_parser(
+        "decision",
+        help="Decisiones firmadas del matching (tabla de decisiones, Paso 7).",
+    )
+    decision_commands = decision.add_subparsers(
+        dest="decision_command", required=True
+    )
+    decision_list = decision_commands.add_parser(
+        "list", help="Listar las decisiones firmadas."
+    )
+    decision_list.add_argument(
+        "--dimension",
+        default="educacion",
+        help="Dimension del matching (hoy solo 'educacion').",
+    )
+    decision_list.add_argument("--job", help="Mostrar solo un aviso.")
+    decision_sign = decision_commands.add_parser(
+        "sign",
+        help="Registrar la hoja de firma (JSON) en la tabla de decisiones.",
+    )
+    decision_sign.add_argument(
+        "--file", required=True, help="Ruta del JSON con la hoja de firma."
+    )
+    decision_sign.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Comprobar la firma sin escribir nada en la base.",
+    )
+
     quality = commands.add_parser(
         "quality", help="Consultar la calidad de datos de la base v1.5."
     )
@@ -1589,6 +1688,16 @@ def main() -> int:
                     _cmd_areas_classify(repository, args)
             elif args.command == "taxonomy" and args.taxonomy_command == "curate":
                 _cmd_taxonomia_curar(repository, args)
+            elif args.command == "decision" and args.decision_command == "list":
+                try:
+                    _cmd_decision_list(repository, args)
+                except ValueError as exc:
+                    parser.error(str(exc))
+            elif args.command == "decision" and args.decision_command == "sign":
+                try:
+                    _cmd_decision_sign(repository, args)
+                except (ValueError, sqlite3.Error) as exc:
+                    parser.error(str(exc))
             elif args.command == "pipeline" and args.pipeline_command == "etapas":
                 _cmd_pipeline_etapas(repository, args)
             elif args.command == "areas" and args.areas_command == "list":

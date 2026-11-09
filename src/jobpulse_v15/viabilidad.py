@@ -216,6 +216,7 @@ def _evaluar_requisito(
     evaluador: EvaluadorPaso5,
     requisito: Requisito,
     texto: str,
+    job_id: str | None = None,
 ) -> DesgloseRequisito:
     """Estado de UN requisito frente al perfil (reutiliza las reglas duras)."""
     nivel = nivel_de_requisito(requisito)
@@ -242,7 +243,11 @@ def _evaluar_requisito(
             estado = ESTADO_FALTA
             motivo = "idioma_no_comparable"
     elif categoria == "education":
-        estado_educacion, _conf = evaluador.evaluar_educacion(requisito, texto)
+        # ``job_id`` permite que el motor aplique la DECISION FIRMADA de la
+        # dimension educativa (si el motor no pudo decidir).
+        estado_educacion, _conf = evaluador.evaluar_educacion(
+            requisito, texto, job_id
+        )
         if estado_educacion == "cumple":
             estado = ESTADO_CUMPLE
         elif estado_educacion == "bloqueante":
@@ -417,7 +422,8 @@ def evaluar_viabilidad(
 
     texto = evaluador.textos_por_job.get(job_id, "")
     desglose = [
-        _evaluar_requisito(evaluador, requisito, texto) for requisito in requisitos
+        _evaluar_requisito(evaluador, requisito, texto, job_id)
+        for requisito in requisitos
     ]
     resultado.desglose = desglose
     resultado.total_requisitos = len(desglose)
@@ -623,7 +629,8 @@ def _componentes_crudos(
         return None
     texto = evaluador.textos_por_job.get(job_id, "")
     desglose = [
-        _evaluar_requisito(evaluador, requisito, texto) for requisito in requisitos
+        _evaluar_requisito(evaluador, requisito, texto, job_id)
+        for requisito in requisitos
     ]
     evaluables = [d for d in desglose if d.estado != ESTADO_NO_VERIFICABLE]
     if not evaluables:

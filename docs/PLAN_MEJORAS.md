@@ -709,6 +709,62 @@ vivían solo en memoria y se perdían al terminar el pase.
   52 827 tokens in / 3 901 tokens out; sin pérdida de datos (2 de 25 avisos
   con skills distintas por ser el modelo no determinista, no por el cambio).
 
+### 5.7 La firma de `educacion_no_confirmada` — **HECHA 2026-11-08** (Paso 7)
+
+La regla educativa es conservadora a propósito: `descartada` solo si el texto
+confirma el título obligatorio **sin negación y sin alternativa**. Cuando el
+texto deja una vía alternativa ("or equivalent experience"), el motor deja el
+caso en `revisar_a_mano / educacion_no_confirmada` esperando el veredicto de
+una **segunda persona** (la revisión previa la hizo el autor de la regla → se
+descarta por sesgo). Hasta ahora esa firma vivía **solo en un documento**: el
+motor no la podía leer, así que los casos firmados seguían contando como
+"pendientes" para siempre.
+
+- **Migración `027_job_match_decision.sql`** (esquema **27**): tabla
+  `job_match_decision` con `veredicto` (`bloqueo_real` | `no_bloqueo` |
+  `dudoso`), `criterio`, `revisor`, `fecha`, `text_hash` y `corrida_id`;
+  `UNIQUE (job_id, dimension, text_hash)` y FK a `jobs` con `ON DELETE
+  CASCADE`. **No toca `job_match`**: los estados los produce una corrida nueva.
+- **Módulo canónico `decisiones.py`**: el **ancla** de la decisión es el
+  sha256 del **texto exacto** que se leyó (`requirements_raw` +
+  `description_raw`, el mismo que leen el motor y la hoja). Si el aviso se
+  re-raspa y su texto cambia, la firma **deja de aplicar** y el caso vuelve a
+  `educacion_no_confirmada`.
+- **`matching.py`**: el evaluador carga las firmas y las aplica **solo cuando
+  el motor no pudo decidir**: `bloqueo_real` → `bloqueante` (`descartada`),
+  `no_bloqueo` → `faltante` (`revisar_a_mano / educacion_no_cumple`), `dudoso`
+  → sin cambio (el caso sigue abierto). **Una firma nunca pisa un veredicto
+  que el motor ya dio.**
+- **`viabilidad.py`**: el veto educativo respeta la firma.
+- **CLI**: `jobpulse-v15 decision list` y `decision sign --file <firma.json>`
+  (`--dry-run` para comprobar sin escribir). La hoja firmada vive en
+  `docs/PASO5_FIRMA_EDUCACION.json` (29 decisiones con su `text_hash`).
+- **Evidencia**: sección nueva con las firmas y su efecto, y verificación que
+  comprueba que **cada cita del criterio es literal del texto de la BD** y que
+  **el estado de la corrida concuerda con el veredicto**.
+
+**La firma (segunda persona, 2026-11-08)**: 25 `no_bloqueo` (el texto ofrece
+vía alternativa explícita), 2 `bloqueo_real`
+(`workday-Principal-Engineer--Quality_Req-51750` y
+`workday-SharePoint-Application-Developer_R55630-1`) y 2 `dudoso`
+(`workday-Credit---Collections-Specialist--2_R232432` y
+`workday-Production-Supervisor-I_31163511`).
+
+**Medición (copia → real, IDÉNTICA)**: en la copia, el motor **sin** firma
+reproduce la corrida vigente **exactamente** (0 diferencias) → la firma es lo
+único que cambia. 27 avisos cambian de estado y **ninguno** cambia de
+cobertura o puntaje (solo `nc_count` 1 → 0), así que ninguno cae a
+`datos_insuficientes`. Corrida real **`20261108_175932`**: `educacion_no_confirmada`
+**29 → 2**, `descartada` 97 → **99**, `revisar` 389 → **391**; evidencia OK
+(**140 verificaciones literales**) y `db check` ok (esquema 27, 0 FK).
+
+**Lo que sigue abierto**: los 2 casos "dudoso" dependen de 2 decisiones de
+**negocio** que hay que decidir **con una fuente** (no por impulso): si 2 años
+de educación superior en CR cuentan como universitario (CONESUP) y si un
+bachillerato parcial del 80 % cuenta como requisito universitario cumplido.
+
+---
+
 ## Reglas que NO se tocan en ninguna ola
 
 - Umbrales del Paso 5 (cobertura 0.60 / puntaje 0.80) congelados.
@@ -716,7 +772,8 @@ vivían solo en memoria y se perdían al terminar el pase.
 - Idioma del aviso = idioma en que está escrito, salvo que el aviso pida idiomas.
 - Educación: `descartada` solo con título universitario obligatorio confirmado;
   nunca descartar por falta de información.
-- `educacion_no_confirmada`: solo lo firma una segunda persona.
+- `educacion_no_confirmada`: solo lo firma una segunda persona (la firma vive
+  en `job_match_decision` y se aplica **solo** donde el motor no pudo decidir).
 - Viabilidad ≠ contratación; el tope duro (1 `required` faltante ⇒ banda máxima
   `revisar`) sigue igual.
 - Cada cambio de regla de matching ⇒ **corrida nueva** en `job_match`.

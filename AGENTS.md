@@ -30,6 +30,7 @@ caro de descubrir**; lo puntual vive en los handoffs.
 | `docs/FLUJO_CLI_VS_UI.md` | Qué comparten CLI y UI y qué hace cada uno |
 | `docs/PASO5_EVIDENCIA_*.md` | Evidencia literal del matching (GENERADO, no editar) |
 | `docs/PASO5_REVISION_PENDIENTES.md` | Hoja de firma de `educacion_no_confirmada` |
+| `docs/PASO5_FIRMA_EDUCACION.json` | Hoja de firma **aplicada** (29 decisiones, Paso 7) |
 
 ## Dos Pythons (regla que más se rompe)
 
@@ -55,7 +56,7 @@ caro de descubrir**; lo puntual vive en los handoffs.
   migraciones N-M`). `init-db`, `backup` y `db check` **no** migran.
 - Esquema por migraciones: `src/jobpulse_v15/migrations/0NN_*.sql`. Cambio de
   esquema = **archivo nuevo**; nunca `ALTER` manual ni editar una migración ya
-  aplicada. Versionado con `PRAGMA user_version` (actual: **25**).
+  aplicada. Versionado con `PRAGMA user_version` (actual: **27**).
 - Si una migración tiene que **recrear una tabla** (cambiar un `CHECK`), SQLite
   no lo permite con `ALTER` y `PRAGMA foreign_keys` no se puede cambiar dentro
   de una transacción: la migración gestiona su propia transacción y lo marca
@@ -263,9 +264,24 @@ anteriores `valida=0`); nunca `UPDATE` in-place.
   (CR); "bachillerato universitario"/"licenciatura" = universitario; "bachelor"
   sin "degree" cerca es el título del puesto, no un requisito; estudiante en
   curso = criterio aparte (`titulo_universitario_en_curso_requerido`).
-- **`educacion_no_confirmada`**: solo la firma una **segunda persona** en
-  `docs/PASO5_REVISION_PENDIENTES.md` (el veredicto del autor de la regla se
-  descarta por sesgo). **NO** actualizar estados antes de la firma.
+- **`educacion_no_confirmada`**: solo la firma una **segunda persona** (el
+  veredicto del autor de la regla se descarta por sesgo). La firma vive en la
+  tabla **`job_match_decision`** (migración **027**, módulo canónico
+  `decisiones.py`): `veredicto` ∈ `bloqueo_real` | `no_bloqueo` | `dudoso`,
+  con `criterio`, `revisor`, `fecha` y **`text_hash`** (sha256 de
+  `requirements_raw` + `description_raw`).
+  - El motor aplica la firma **SOLO** cuando NO pudo decidir (`no_confirmado`):
+    `bloqueo_real` → `bloqueante` (`descartada`), `no_bloqueo` → `faltante`
+    (`revisar_a_mano / educacion_no_cumple`), `dudoso` → sin cambio (el caso
+    sigue abierto). **Una firma NUNCA pisa un veredicto del motor.**
+  - La firma está **anclada al texto**: si el aviso se re-raspa y su texto
+    cambia, la firma deja de aplicar y el caso vuelve a
+    `educacion_no_confirmada` (hay que volver a firmarlo).
+  - CLI: `jobpulse-v15 decision list` / `decision sign --file <firma.json>`
+    (`--dry-run` para comprobar sin escribir). La hoja firmada vive en
+    `docs/PASO5_FIRMA_EDUCACION.json`.
+  - Los estados solo cambian con una **corrida nueva** de Paso 5 (nunca
+    `UPDATE` de la anterior). **NO** actualizar estados antes de la firma.
 - **Viabilidad ≠ contratación**: `viabilidad.py` dice si el perfil **cumple lo
   que pide el aviso** (ajuste técnico 0-100 + banda). **Ser rechazado NO
   significa que el perfil no califique**: el reclutador decide por presupuesto,
@@ -289,7 +305,10 @@ anteriores `valida=0`); nunca `UPDATE` in-place.
    `jobpulse-v15 taxonomy curate --apply` la reconstruye desde
    `jobs.skills`/`jobs.languages` (`veces` = nº de **avisos** que la piden).
    Curar la taxonomía = **migración de datos** nueva (`02x_taxonomia_*`),
-   nunca `UPDATE` a mano.
+   nunca `UPDATE` a mano. **Para medir la demanda usa
+   `taxonomia.demanda_corpus`**, no el `veces` de la cola (se reescribe en
+   cada curación). Estado 2026-11-08: cola **1150** (tanda 3 = migración
+   `026`), conceptos **775** (336 códigos), 2956 requisitos (0 sin código).
 3. **Nunca insertar requisitos por SQL directo**: `job_requirements` tiene
    `analysis_id` (FK a `job_analysis`), no `job_id`. Usa `Repository.save_analysis`.
 4. `jobs.posting_language` es NOT NULL (tests: `undetermined`); `mixed` es
@@ -307,6 +326,12 @@ anteriores `valida=0`); nunca `UPDATE` in-place.
    aísla con `JOBPULSE_IA_CACHE`. `failed` en el pase IA **no** es error de
    red (cuenta "no mencionado"); los errores reales avisan
    "IA extract {campo} fallo tras 3 intentos".
+   **Avisos estancados (2026-11-08)**: el modelo es determinista a temp 0.1 →
+   un aviso al que no le puede extraer el campo **no se reintenta** en el
+   siguiente ciclo ni en el pase completo (`run_ia_enrichment(exclude_ids=…)`
+   y `ids_estancados`). El consumo real (llamadas + tokens) queda en
+   `pipeline_etapa.detalle_json` → clave `uso` (`jobpulse-v15 pipeline etapas
+   --json`): `pase_completo` usa un único cliente y lo cierra al terminar.
 9. **Caché de embeddings**: el temporal debe terminar en `.npy`
    (`embeddings_cache.npy.tmp.npy`) o `np.save` añade otra extensión y el
    `replace()` falla → se re-vectoriza todo el corpus en cada arranque.

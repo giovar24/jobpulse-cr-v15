@@ -27,6 +27,7 @@ import sqlite3
 from pathlib import Path
 from typing import Any, Callable
 
+from jobpulse_v15 import decisiones
 from jobpulse_v15 import matching
 
 # ---------------------------------------------------------------------------
@@ -355,6 +356,36 @@ def _encabezado_y_criterio(
     L.append("")
 
 
+def _decisiones(connection: sqlite3.Connection) -> list[dict[str, Any]]:
+    """Decisiones firmadas (tabla del Paso 7) que aplican al texto ACTUAL.
+
+    La decision se ancla al sha256 del texto revisado: si el aviso se
+    re-raspo, la firma deja de aplicar y no se documenta como vigente.
+    """
+    try:
+        filas = connection.execute(
+            """SELECT job_id, dimension, veredicto, criterio, revisor, fecha,
+                      text_hash, corrida_id
+               FROM job_match_decision WHERE dimension = ?
+               ORDER BY job_id""",
+            (decisiones.DIMENSION_EDUCACION,),
+        ).fetchall()
+    except sqlite3.OperationalError:
+        # La tabla todavia no existe (base anterior a la migracion 027).
+        return []
+    vigentes: list[dict[str, Any]] = []
+    for fila in filas:
+        fila = dict(fila)
+        texto = _texto_de(connection, fila["job_id"])
+        if not texto:
+            continue
+        if decisiones.hash_texto(texto) != fila["text_hash"]:
+            continue
+        fila["texto"] = texto
+        vigentes.append(fila)
+    return vigentes
+
+
 def _seccion_descartadas(L: list[str], connection: sqlite3.Connection, corrida: str) -> int:
     """Seccion 4: cada `descartada` con su evidencia literal. Devuelve el total."""
     descartadas = connection.execute(
@@ -362,6 +393,7 @@ def _seccion_descartadas(L: list[str], connection: sqlite3.Connection, corrida: 
            WHERE m.corrida_id=? AND m.estado='descartada' ORDER BY m.job_id""",
         (corrida,),
     ).fetchall()
+    firmadas = {d["job_id"]: d for d in _decisiones(connection)}
     L.append("## 4. Las %d `descartada` — evidencia literal" % len(descartadas))
     L.append("")
     for i, f in enumerate(descartadas, 1):
@@ -377,6 +409,13 @@ def _seccion_descartadas(L: list[str], connection: sqlite3.Connection, corrida: 
         L.append("- detección textual: `%s` (término: `%r`) · obligatorio=%s · "
                  "en_curso=%s · suave=%s"
                  % (conf.motivo, conf.termino, conf.obligatorio, conf.en_curso, conf.suave))
+        decision = firmadas.get(f["job_id"])
+        if decision is not None:
+            L.append("- **decisión firmada** (2ª persona, `%s`): veredicto `%s` · "
+                     "revisor `%s` · fecha `%s`"
+                     % (decision["dimension"], decision["veredicto"],
+                        decision["revisor"], decision["fecha"]))
+            L.append("  - criterio: %s" % decision["criterio"])
         reqs = _requisitos_de(connection, f["job_id"])
         if reqs:
             L.append("- requisitos `education` extraídos:")
@@ -415,6 +454,11 @@ def _seccion_no_confirmadas(L: list[str], connection: sqlite3.Connection, corrid
     L.append("**motor**; el veredicto humano queda ABIERTO hasta que una segunda")
     L.append("persona firme en esa hoja.")
     L.append("")
+    firmadas = {d["job_id"]: d for d in _decisiones(connection)}
+    if firmadas:
+        L.append("> Los casos de esta lista **con firma \"dudoso\"** siguen ABIERTOS")
+        L.append("> (falta una decisión de negocio): ver la sección 6.")
+        L.append("")
     for i, f in enumerate(noconf, 1):
         texto = _texto_de(connection, f["job_id"])
         conf = matching.confirmar_requisito_universitario(texto)
@@ -449,9 +493,53 @@ def _seccion_no_confirmadas(L: list[str], connection: sqlite3.Connection, corrid
     return len(noconf)
 
 
+def _seccion_decisiones(
+    L: list[str], connection: sqlite3.Connection, corrida: str
+) -> int:
+    """Seccion 6: las decisiones FIRMADAS (2a persona) y su efecto."""
+    firmadas = _decisiones(connection)
+    L.append("## 6. Las %d decisiones FIRMADAS (2ª persona) y su efecto" % len(firmadas))
+    L.append("")
+    if not firmadas:
+        L.append("No hay decisiones firmadas en la base (tabla `job_match_decision`):")
+        L.append("los casos `educacion_no_confirmada` siguen ABIERTOS.")
+        L.append("")
+        return 0
+    L.append("El motor NO puede decidir, por sí solo, si un título universitario")
+    L.append("**bloquea** o no (la regla es conservadora: `descartada` solo si el texto")
+    L.append("confirma el título obligatorio SIN negación y SIN alternativa). Cuando el")
+    L.append("texto deja una vía alternativa, el caso queda en `revisar_a_mano /")
+    L.append("educacion_no_confirmada` y espera el veredicto de una **segunda persona**")
+    L.append("(la revisión previa la hizo el autor de la regla → se descarta por sesgo).")
+    L.append("")
+    L.append("Cada decisión está anclada al **sha256 del texto exacto que se leyó**: si el")
+    L.append("aviso se vuelve a raspar y su texto cambia, la firma deja de aplicar y el")
+    L.append("caso vuelve a `educacion_no_confirmada`.")
+    L.append("")
+    L.append("| aviso | veredicto | efecto en la corrida | revisor | fecha |")
+    L.append("|---|---|---|---|---|")
+    for d in firmadas:
+        fila = connection.execute(
+            "SELECT estado, motivo FROM job_match WHERE corrida_id=? AND job_id=?",
+            (corrida, d["job_id"]),
+        ).fetchone()
+        efecto = (
+            "`%s` / `%s`" % (fila["estado"], fila["motivo"]) if fila else "(no evaluado)"
+        )
+        L.append("| `%s` | `%s` | %s | %s | %s |"
+                 % (d["job_id"], d["veredicto"], efecto, d["revisor"], d["fecha"]))
+    L.append("")
+    L.append("### Criterio firmado (cita literal del aviso)")
+    L.append("")
+    for d in firmadas:
+        L.append("- `%s` (%s): %s" % (d["job_id"], d["veredicto"], d["criterio"]))
+    L.append("")
+    return len(firmadas)
+
+
 def _seccion_medicion(L: list[str], connection: sqlite3.Connection, corrida: str) -> None:
-    """Seccion 6: la medicion ampliada de 43 casos (muestra historica)."""
-    L.append("## 6. Medición AMPLIADA de `educacion_no_cumple` (43 casos)")
+    """Seccion 7: la medicion ampliada de 43 casos (muestra historica)."""
+    L.append("## 7. Medición AMPLIADA de `educacion_no_cumple` (43 casos)")
     L.append("")
     L.append("La muestra pequeña inicial (5 de 10) no era suficiente para decidir la")
     L.append("regla. Se amplió a **43 casos** del grupo `educacion_no_cumple` de la")
@@ -544,7 +632,7 @@ def _seccion_medicion(L: list[str], connection: sqlite3.Connection, corrida: str
 
 
 def _seccion_delta(L: list[str], connection: sqlite3.Connection, corrida: str) -> None:
-    """Seccion 7: delta contra la corrida anterior."""
+    """Seccion 8: delta contra la corrida anterior."""
     anterior = connection.execute(
         "SELECT corrida_id FROM job_match WHERE corrida_id <> ? "
         "ORDER BY corrida_id DESC LIMIT 1",
@@ -568,7 +656,7 @@ def _seccion_delta(L: list[str], connection: sqlite3.Connection, corrida: str) -
         for jid in sorted(set(antes) & set(despues))
         if antes[jid] != despues[jid]
     ]
-    L.append("## 7. DELTA vs. la corrida anterior `%s` (%d avisos cambian)" % (prev, len(cambios)))
+    L.append("## 8. DELTA vs. la corrida anterior `%s` (%d avisos cambian)" % (prev, len(cambios)))
     L.append("")
     L.append("Cada cambio se midió ANTES de escribir la corrida nueva (evaluación en")
     L.append("seco contra la BD) y aquí queda documentado con la frase literal del")
@@ -630,19 +718,22 @@ def generar_evidencia(
         _encabezado_y_criterio(L, connection, corrida, corridas)
         n_descartadas = _seccion_descartadas(L, connection, corrida)
         n_noconf = _seccion_no_confirmadas(L, connection, corrida)
+        n_decisiones = _seccion_decisiones(L, connection, corrida)
         _seccion_medicion(L, connection, corrida)
         _seccion_delta(L, connection, corrida)
         destino.parent.mkdir(parents=True, exist_ok=True)
         destino.write_text("\n".join(L), encoding="utf-8")
         log(
-            "escrito %s (%d lineas) | corrida=%s | descartada=%d | no_confirmada=%d"
-            % (destino, len(L), corrida, n_descartadas, n_noconf)
+            "escrito %s (%d lineas) | corrida=%s | descartada=%d | no_confirmada=%d "
+            "| decisiones firmadas=%d"
+            % (destino, len(L), corrida, n_descartadas, n_noconf, n_decisiones)
         )
         return {
             "ruta": destino,
             "corrida": corrida,
             "descartadas": n_descartadas,
             "no_confirmadas": n_noconf,
+            "decisiones_firmadas": n_decisiones,
             "lineas": len(L),
         }
     finally:
@@ -841,6 +932,64 @@ def verificar_evidencia(
             log("        FRASE: %s" % (conf.segmento or "")[:180])
 
         log("")
+        log("=== D) las decisiones FIRMADAS (2a persona) y su efecto ===")
+        firmadas = _decisiones(connection)
+        for decision in firmadas:
+            job_id = decision["job_id"]
+            if job_id not in texto_doc:
+                fallos.append(
+                    "%s: la decision firmada no aparece en el documento" % job_id
+                )
+                continue
+            citas = re.findall(r"«([^»]+)»", decision["criterio"])
+            for cita in citas:
+                if " ".join(cita.split()) not in " ".join(texto_doc.split()):
+                    fallos.append(
+                        "%s: la cita firmada no aparece en el documento" % job_id
+                    )
+                    break
+                if cita not in decision["texto"]:
+                    fallos.append(
+                        "%s: la cita firmada NO es literal del texto de la BD" % job_id
+                    )
+                    break
+            fila = connection.execute(
+                "SELECT estado, motivo FROM job_match WHERE corrida_id=? AND job_id=?",
+                (vigente, job_id),
+            ).fetchone()
+            veredicto = decision["veredicto"]
+            if fila is None:
+                fallos.append(
+                    "%s: la decision firmada no esta en la corrida vigente" % job_id
+                )
+                continue
+            if veredicto == decisiones.VEREDICTO_BLOQUEO_REAL:
+                if fila["estado"] != "descartada":
+                    fallos.append(
+                        "%s: la firma dice 'bloqueo_real' pero el estado es %s"
+                        % (job_id, fila["estado"])
+                    )
+                    continue
+            elif veredicto == decisiones.VEREDICTO_NO_BLOQUEO:
+                if fila["estado"] == "descartada":
+                    fallos.append(
+                        "%s: la firma dice 'no_bloqueo' pero la vacante se descarta"
+                        % job_id
+                    )
+                    continue
+            elif veredicto == decisiones.VEREDICTO_DUDOSO:
+                if fila["motivo"] != "educacion_no_confirmada":
+                    fallos.append(
+                        "%s: la firma dice 'dudoso' pero el motivo es %s"
+                        % (job_id, fila["motivo"])
+                    )
+                    continue
+            contador["ok"] += 1
+            log("   %-64s %-14s %-24s" % (job_id[:64], veredicto, fila["estado"]))
+        ok_d = contador["ok"] - ok_a - ok_b - ok_c
+        log("  verificadas (cita literal + efecto): %d / %d" % (ok_d, len(firmadas)))
+
+        log("")
         if fallos:
             log("=== FALLOS: %d ===" % len(fallos))
             for f in fallos:
@@ -857,6 +1006,7 @@ def verificar_evidencia(
                 "descartadas": (ok_a, len(descartadas)),
                 "no_confirmadas": (ok_b, len(noconf)),
                 "promovidas_13": (ok_c, len(PROMOVIDAS_13)),
+                "decisiones_firmadas": (ok_d, len(firmadas)),
             },
         }
     finally:

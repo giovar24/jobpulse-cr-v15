@@ -46,15 +46,15 @@ class TestVersionDelEsquema(unittest.TestCase):
     def test_la_base_nueva_llega_a_la_ultima_migracion(self):
         version = self.database.initialize()
 
-        self.assertEqual(version, 26)
+        self.assertEqual(version, 27)
         with self.database.connection() as connection:
             actual = connection.execute("PRAGMA user_version").fetchone()[0]
-        self.assertEqual(actual, 26)
+        self.assertEqual(actual, 27)
 
     def test_inicializar_de_nuevo_no_cambia_nada(self):
         self.database.initialize()
 
-        self.assertEqual(self.database.initialize(), 26)
+        self.assertEqual(self.database.initialize(), 27)
 
 
 class TestMigracion017(unittest.TestCase):
@@ -346,7 +346,7 @@ class TestMigracion020(unittest.TestCase):
     def test_la_base_nueva_llega_a_la_ultima_migracion(self):
         with self.database.connection() as connection:
             version = connection.execute("PRAGMA user_version").fetchone()[0]
-        self.assertEqual(version, 26)
+        self.assertEqual(version, 27)
 
     def test_las_skills_que_pedia_el_corpus(self):
         for variante in (
@@ -621,7 +621,7 @@ class TestMigracion023(unittest.TestCase):
     def test_la_base_nueva_llega_a_la_ultima_migracion(self):
         with self.database.connection() as connection:
             version = connection.execute("PRAGMA user_version").fetchone()[0]
-        self.assertEqual(version, 26)
+        self.assertEqual(version, 27)
 
     def test_los_alias_apuntan_al_canonico_correcto(self):
         for variante, canonico in (
@@ -884,7 +884,7 @@ class TestMigracion025(unittest.TestCase):
     def test_la_base_nueva_llega_a_la_ultima_migracion(self):
         with self.database.connection() as connection:
             version = connection.execute("PRAGMA user_version").fetchone()[0]
-        self.assertEqual(version, 26)  # la 027 (decisiones) va despues
+        self.assertEqual(version, 27)  # la 027 (decisiones) va despues
 
     def test_los_alias_apuntan_al_canonico_correcto(self):
         for variante, canonico in (
@@ -1028,7 +1028,7 @@ class TestMigracion026(unittest.TestCase):
     def test_la_base_nueva_llega_a_la_ultima_migracion(self):
         with self.database.connection() as connection:
             version = connection.execute("PRAGMA user_version").fetchone()[0]
-        self.assertEqual(version, 26)
+        self.assertEqual(version, 27)
 
     def test_los_alias_apuntan_al_canonico_correcto(self):
         for variante, canonico in (
@@ -1142,6 +1142,125 @@ class TestMigracion026(unittest.TestCase):
                 "SELECT COUNT(*) FROM concepto_no_normalizado"
             ).fetchone()[0]
         self.assertEqual(filas, 0)
+
+
+class TestMigracion027(unittest.TestCase):
+    """027: tabla de DECISIONES FIRMADAS del Paso 5 (`job_match_decision`).
+
+    El motor no puede decidir, por si solo, si un titulo universitario
+    bloquea o no: cuando el texto deja una via alternativa ("or equivalent
+    experience"), el caso queda en `revisar_a_mano / educacion_no_confirmada`
+    esperando el veredicto de una SEGUNDA persona (la revision previa la hizo
+    el autor de la regla -> se descarta por sesgo).
+
+    Estos tests comprueban que:
+      * la tabla existe con sus CHECK (dimension y veredicto validos);
+      * la decision se ancla al sha256 del TEXTO revisado (UNIQUE con
+        `text_hash`): un texto distinto es una fila nueva (historico);
+      * la FK a `jobs` borra la decision si se purga el aviso;
+      * la migracion es idempotente;
+      * NO toca `job_match` (los estados los produce una CORRIDA NUEVA).
+    """
+
+    def setUp(self):
+        self.temp_dir = tempfile.TemporaryDirectory()
+        self.database = Database(Path(self.temp_dir.name) / "test.db")
+        self.database.initialize()
+
+    def tearDown(self):
+        self.temp_dir.cleanup()
+
+    def _insertar_job(self, connection: sqlite3.Connection, job_id: str) -> None:
+        connection.execute(
+            """INSERT INTO jobs (job_id, title, company, posting_language)
+               VALUES (?, 'Puesto', 'Acme', 'undetermined')""",
+            (job_id,),
+        )
+
+    def _firmar(self, connection: sqlite3.Connection, job_id: str, hash_texto: str):
+        return connection.execute(
+            """INSERT INTO job_match_decision
+                   (job_id, dimension, veredicto, criterio, revisor, fecha,
+                    text_hash)
+               VALUES (?, 'educacion', 'no_bloqueo', 'via alternativa', 'Revisor',
+                       '2026-11-08', ?)""",
+            (job_id, hash_texto),
+        ).lastrowid
+
+    def test_la_base_nueva_llega_a_la_ultima_migracion(self):
+        with self.database.connection() as connection:
+            version = connection.execute("PRAGMA user_version").fetchone()[0]
+        self.assertEqual(version, 27)
+
+    def test_la_tabla_existe(self):
+        with self.database.connection() as connection:
+            fila = connection.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name=?",
+                ("job_match_decision",),
+            ).fetchone()
+        self.assertIsNotNone(fila)
+
+    def test_solo_acepta_las_dimensiones_y_veredictos_validos(self):
+        with self.database.connection() as connection:
+            self._insertar_job(connection, "job-1")
+            with self.assertRaises(sqlite3.IntegrityError):
+                connection.execute(
+                    """INSERT INTO job_match_decision
+                           (job_id, dimension, veredicto, criterio, revisor, fecha,
+                            text_hash)
+                       VALUES ('job-1', 'otra', 'no_bloqueo', 'x', 'R', '2026-11-08',
+                               'h')"""
+                )
+            with self.assertRaises(sqlite3.IntegrityError):
+                connection.execute(
+                    """INSERT INTO job_match_decision
+                           (job_id, dimension, veredicto, criterio, revisor, fecha,
+                            text_hash)
+                       VALUES ('job-1', 'educacion', 'quiza', 'x', 'R', '2026-11-08',
+                               'h')"""
+                )
+
+    def test_el_mismo_texto_no_se_firma_dos_veces(self):
+        with self.database.connection() as connection:
+            self._insertar_job(connection, "job-1")
+            self._firmar(connection, "job-1", "hash-1")
+            with self.assertRaises(sqlite3.IntegrityError):
+                self._firmar(connection, "job-1", "hash-1")
+            # Un texto distinto es una fila nueva (historico).
+            self._firmar(connection, "job-1", "hash-2")
+            total = connection.execute(
+                "SELECT COUNT(*) FROM job_match_decision WHERE job_id='job-1'"
+            ).fetchone()[0]
+        self.assertEqual(total, 2)
+
+    def test_la_decision_se_borra_si_se_purga_el_aviso(self):
+        with self.database.connection() as connection:
+            self._insertar_job(connection, "job-1")
+            self._firmar(connection, "job-1", "hash-1")
+            connection.execute("DELETE FROM jobs WHERE job_id='job-1'")
+            total = connection.execute(
+                "SELECT COUNT(*) FROM job_match_decision"
+            ).fetchone()[0]
+        self.assertEqual(total, 0)
+
+    def test_la_migracion_es_idempotente(self):
+        with self.database.connection() as connection:
+            self._insertar_job(connection, "job-1")
+            self._firmar(connection, "job-1", "hash-1")
+            _aplicar(connection, "027_job_match_decision.sql")
+            total = connection.execute(
+                "SELECT COUNT(*) FROM job_match_decision"
+            ).fetchone()[0]
+        self.assertEqual(total, 1)
+
+    def test_la_migracion_no_toca_el_matching(self):
+        with self.database.connection() as connection:
+            columnas = [
+                fila["name"]
+                for fila in connection.execute("PRAGMA table_info(job_match)")
+            ]
+        self.assertNotIn("decision_id", columnas)
+        self.assertNotIn("veredicto_humano", columnas)
 
 
 if __name__ == "__main__":
