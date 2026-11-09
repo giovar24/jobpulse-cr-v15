@@ -1,4 +1,4 @@
-# Paso 5 — HOJA DE REVISIÓN PENDIENTE (corrida `20261108_175932`)
+# Paso 5 — HOJA DE REVISIÓN PENDIENTE (corrida `20261108_214123`)
 
 > Documento GENERADO por `generar_revision_pendientes.py` — los textos
 > son **literales de la BD**; el veredicto es el de la **segunda
@@ -23,7 +23,7 @@ que se decida la cuestión de NEGOCIO que lo bloquea (con una fuente).
 
 | casos abiertos | con firma | firmados "dudoso" (siguen abiertos) | sin firma |
 |---|---|---|---|
-| 2 | 2 | 2 | 0 |
+| 1 | 1 | 1 | 0 |
 
 ### Decisiones de NEGOCIO que siguen pendientes
 
@@ -31,36 +31,18 @@ Estos casos tienen firma, pero el veredicto es **"dudoso"**: dependen
 de una decisión de negocio que todavía NO está tomada (hay que
 decidirla **con una fuente**, no por impulso).
 
-- `workday-Credit---Collections-Specialist--2_R232432` — Credit & Collections Specialist: El aviso pide «Required Associate’s or bachelor’s degree in business, Finance, or a related field». Sigue SIN decidir la REGLA DE NEGOCIO #2 (si 2 anos de educacion superior en CR - fuente CONESUP - cuentan como universitario): el veredicto queda DUDOSO y el caso ABIERTO.
-- `workday-Production-Supervisor-I_31163511` — Production Supervisor I: El aviso pide «80% completeness of a bachelor’s degree program from a four-year college or university». Sigue SIN decidir la REGLA DE NEGOCIO #3 (si un bachillerato PARCIAL del 80 % cuenta como requisito universitario cumplido): el veredicto queda DUDOSO y el caso ABIERTO.
+- `workday-Production-Supervisor-I_31163511` — Production Supervisor I: El aviso pide «80% completeness of a bachelor’s degree program from a four-year college or university». REGLA DE NEGOCIO YA DECIDIDA (2026-11-08; ver docs/REGLAS_NEGOCIO_EDUCACION.md): «80%» es el escalon 'estudiante sin graduar con la mayoria de los creditos completados (80% o mas)', que va POR DEBAJO del titulo universitario y por encima del diploma tecnico (fuente: U.S. Department of State - InfoUSA, Structure of U.S. Education). Lo que falta ya no es la regla sino el DATO del perfil: no hay ningun hecho educativo 'en curso' registrado, asi que no se puede afirmar que el perfil alcance ese escalon. El veredicto queda DUDOSO y el caso ABIERTO: si se registra ese hecho, el motor lo cierra como cumplido; si no, corresponde firmarlo como bloqueo real.
 
-## Casos a revisar (2)
+## Casos a revisar (1)
 
 Columnas de la tabla de firmas: `veredicto` (bloqueo real / no bloqueo /
 dudoso), `criterio que lo justifica`, `revisor`, `fecha`.
 
-### 1. `workday-Credit---Collections-Specialist--2_R232432` — Credit & Collections Specialist
+### 1. `workday-Production-Supervisor-I_31163511` — Production Supervisor I
 
 | veredicto | criterio | revisor | fecha |
 |---|---|---|---|
-| dudoso | El aviso pide «Required Associate’s or bachelor’s degree in business, Finance, or a related field». Sigue SIN decidir la REGLA DE NEGOCIO #2 (si 2 anos de educacion superior en CR - fuente CONESUP - cuentan como universitario): el veredicto queda DUDOSO y el caso ABIERTO. | Giovanni Vargas | 2026-11-08 |
-
-**Texto 1 (verbatim):**
-
-> o resolve past-due balances and communicate account status changes Maintain accurate documentation of all collection and credit activities in the system Research and resolve discrepancies such as short pays, deductions, overpayments, and unapplied cash Support credit memo requests and payment arrangements with appropriate approvals Ensure customer master data is accurate and up to date Deliver excellent customer service to both internal and external partners Participate in special projects and additional duties as assigned Required Associate’s or bachelor’s degree in business, Finance, or a related field 1–2 years of experience in B2B credit, collections, or accounts receivable Excellent communication skills in English (B2+ or higher) and ability to collaborate across functions and geographies. Strong attention to detail and analytical skills Excellent verbal and written communication skills Intermediate pr
-
-**Requisito(s) `education` extraído(s) por el extractor** — la
-citas son literales del texto de la oferta:
-
-- `value_text='bachelor'` · `requirement_level='required'` · evidencia: > Responsibilities Manage and collect accounts receivable for an assigned portfolio of B2B customers Monitor customer aging and enforce credit terms and limits using ERP and A/R systems (SAP, Esker or similar) Review credit applications and evaluate customer creditworthiness using credit bureaus and references Approve new customer credit limits within assigned authority and prepare recommendations for higher limits Place accounts on credit hold , issue final notices, and recommend escalation to third-party collections when necessary Collaborate closely with Sales Representatives to resolve past-due balances and communicate account status changes Maintain accurate documentation of all collection and credit activities in the system Research and resolve discrepancies such as short pays, deductions, overpayments, and unapplied cash Support credit memo requests and payment arrangements with appropriate approvals Ensure customer master data is accurate and up to date Deliver excellent customer service to both internal and external partners Participate in special projects and additional duties as assigned Required Associate’s or bachelor’s degree in business, Finance, or a related field 1–2 years of experience in B2B credit, collections, or accounts receivable Excellent communication skills in English (B2+ or higher) and ability to collaborate across functions and geographies.
-
----
-
-### 2. `workday-Production-Supervisor-I_31163511` — Production Supervisor I
-
-| veredicto | criterio | revisor | fecha |
-|---|---|---|---|
-| dudoso | El aviso pide «80% completeness of a bachelor’s degree program from a four-year college or university». Sigue SIN decidir la REGLA DE NEGOCIO #3 (si un bachillerato PARCIAL del 80 % cuenta como requisito universitario cumplido): el veredicto queda DUDOSO y el caso ABIERTO. | Giovanni Vargas | 2026-11-08 |
+| dudoso | El aviso pide «80% completeness of a bachelor’s degree program from a four-year college or university». REGLA DE NEGOCIO YA DECIDIDA (2026-11-08; ver docs/REGLAS_NEGOCIO_EDUCACION.md): «80%» es el escalon 'estudiante sin graduar con la mayoria de los creditos completados (80% o mas)', que va POR DEBAJO del titulo universitario y por encima del diploma tecnico (fuente: U.S. Department of State - InfoUSA, Structure of U.S. Education). Lo que falta ya no es la regla sino el DATO del perfil: no hay ningun hecho educativo 'en curso' registrado, asi que no se puede afirmar que el perfil alcance ese escalon. El veredicto queda DUDOSO y el caso ABIERTO: si se registra ese hecho, el motor lo cierra como cumplido; si no, corresponde firmarlo como bloqueo real. | Giovanni Vargas | 2026-11-08 |
 
 **Texto 1 (verbatim):**
 

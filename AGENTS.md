@@ -30,6 +30,7 @@ caro de descubrir**; lo puntual vive en los handoffs.
 | `docs/FLUJO_CLI_VS_UI.md` | Qué comparten CLI y UI y qué hace cada uno |
 | `docs/PASO5_EVIDENCIA_*.md` | Evidencia literal del matching (GENERADO, no editar) |
 | `docs/PASO5_REVISION_PENDIENTES.md` | Hoja de firma de `educacion_no_confirmada` |
+| `docs/REGLAS_NEGOCIO_EDUCACION.md` | Regla de negocio del nivel educativo + **todas las fuentes** |
 | `docs/PASO5_FIRMA_EDUCACION.json` | Hoja de firma **aplicada** (29 decisiones, Paso 7) |
 
 ## Dos Pythons (regla que más se rompe)
@@ -288,6 +289,29 @@ anteriores `valida=0`); nunca `UPDATE` in-place.
     `docs/PASO5_FIRMA_EDUCACION.json`.
   - Los estados solo cambian con una **corrida nueva** de Paso 5 (nunca
     `UPDATE` de la anterior). **NO** actualizar estados antes de la firma.
+- **Regla de negocio del nivel educativo** (decidida y firmada 2026-11-08;
+  reglas y **todas las fuentes** en `docs/REGLAS_NEGOCIO_EDUCACION.md`):
+  - **Escalera** (de mayor a menor): posgrado > título universitario >
+    estudiante sin graduar con **80 %+ de los créditos** > diploma técnico >
+    bachillerato de secundaria.
+  - **Referencia**: el sistema educativo de **EE. UU.** (U.S. Dept. of State /
+    InfoUSA, *Structure of U.S. Education*) → "associate" = superior de ciclo
+    corto, "bachelor" = universitario. Es la que usan los avisos y casi todo
+    el mercado de CR (y las multinacionales). El CONESUP queda como **criterio
+    de curación** del perfil (qué título cuenta como académico superior), sin
+    fuente documental aportada.
+  - **El estudiante avanzado NO es un titulado**: un aviso que exige título
+    universitario no lo cumple quien está "en curso" (aunque tenga el 99 % de
+    los créditos). Un aviso que acepta explícitamente el avance parcial ("X %
+    of completeness of a bachelor's degree program") sí lo cumple ese escalón,
+    y solo ese (un diploma técnico está por debajo).
+  - **El motor no modela el campo del título**: si el nivel se cumple pero el
+    campo no (p. ej. el aviso pide business/Finance y el perfil tiene un
+    diplomado en Electrónica), lo cierra la **firma** de la segunda persona.
+  - **Pendiente**: el escalón "estudiante avanzado" **no existe todavía** en el
+    motor (`nivel_escala`/`concepto.nivel_orden`): un hecho `pursuing` cuenta
+    hoy como universitario completo. Plan + medición obligatoria en copia en
+    `docs/PLAN_MEJORAS.md` §6.2 (Ola 6).
 - **Viabilidad ≠ contratación**: `viabilidad.py` dice si el perfil **cumple lo
   que pide el aviso** (ajuste técnico 0-100 + banda). **Ser rechazado NO
   significa que el perfil no califique**: el reclutador decide por presupuesto,

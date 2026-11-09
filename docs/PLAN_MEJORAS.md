@@ -744,11 +744,12 @@ motor no la podía leer, así que los casos firmados seguían contando como
   **el estado de la corrida concuerda con el veredicto**.
 
 **La firma (segunda persona, 2026-11-08)**: 25 `no_bloqueo` (el texto ofrece
-vía alternativa explícita), 2 `bloqueo_real`
-(`workday-Principal-Engineer--Quality_Req-51750` y
-`workday-SharePoint-Application-Developer_R55630-1`) y 2 `dudoso`
-(`workday-Credit---Collections-Specialist--2_R232432` y
-`workday-Production-Supervisor-I_31163511`).
+vía alternativa explícita), 3 `bloqueo_real`
+(`workday-Principal-Engineer--Quality-Req-51750`,
+`workday-SharePoint-Application-Developer_R55630-1` y
+`workday-Credit---Collections-Specialist--2_R232432` — Sysco, firmado el
+2026-11-08 con la regla de negocio ya escrita, ver §5.10) y 1 `dudoso`
+(`workday-Production-Supervisor-I_31163511` — Abbott).
 
 **Medición (copia → real, IDÉNTICA)**: en la copia, el motor **sin** firma
 reproduce la corrida vigente **exactamente** (0 diferencias) → la firma es lo
@@ -758,10 +759,12 @@ cobertura o puntaje (solo `nc_count` 1 → 0), así que ninguno cae a
 **29 → 2**, `descartada` 97 → **99**, `revisar` 389 → **391**; evidencia OK
 (**140 verificaciones literales**) y `db check` ok (esquema 27, 0 FK).
 
-**Lo que sigue abierto**: los 2 casos "dudoso" dependen de 2 decisiones de
-**negocio** que hay que decidir **con una fuente** (no por impulso): si 2 años
-de educación superior en CR cuentan como universitario (CONESUP) y si un
-bachillerato parcial del 80 % cuenta como requisito universitario cumplido.
+**Lo que sigue abierto** (actualizado 2026-11-08): el caso "dudoso"
+(Abbott) depende ya **solo del dato del perfil**, no de una decisión de
+negocio: la regla está escrita y firmada (§5.10) y lo que falta es registrar
+(o no) un hecho educativo "en curso" con 80 %+ de los créditos. Sin ese hecho
+el perfil no alcanza el escalón "estudiante avanzado" y el caso corresponde
+firmarse `bloqueo_real`.
 
 ### 5.8 La UI clásica en el orquestador — **HECHO 2026-11-08** (punto 5)
 
@@ -860,6 +863,119 @@ umbrales de banda (85 / 80) son **ajustes de negocio**: se congelan sin
 acuerdo. Con la medición a la vista, la decisión pendiente es solo "¿lo
 dejamos activo por defecto?" (respuesta: sí, con el opt-out), no "¿cuánto
 pesa?".
+
+### 5.10 La regla de NEGOCIO del nivel educativo — **ESCRITA 2026-11-08**
+
+Los 2 casos que quedaban en `educacion_no_confirmada` no se cerraban "a
+criterio": faltaba **la regla** (y sus fuentes). La regla está escrita en
+`docs/REGLAS_NEGOCIO_EDUCACION.md` y el usuario la firmó:
+
+- **Escalera de niveles** (de mayor a menor): posgrado > título universitario >
+  estudiante sin graduar con 80 %+ de los créditos > diploma técnico >
+  bachillerato de secundaria.
+- **Referencia adoptada**: el sistema educativo de **EE. UU.** (U.S. Dept. of
+  State / InfoUSA, *Structure of U.S. Education*), porque los avisos usan
+  léxico estadounidense y casi todo el mercado de CR (y las multinacionales)
+  sigue esas políticas. Fuentes y criterio de curación en el documento.
+- **R2**: el estudiante avanzado **no** es un titulado (las empresas los
+  contratan por conveniencia, no porque el perfil califique).
+- **R5**: el motor **no** modela el *campo* del título → cuando el nivel se
+  cumple pero el campo no, lo decide la firma de la segunda persona.
+
+**Efecto medido (corrida real `20261108_214123`)**: el único cambio de estado
+en todo el corpus fue Sysco (`revisor_a_mano / educacion_no_confirmada` →
+`descartada / titulo_universitario_requerido`). Abbott sigue **abierto**, pero
+ya no por falta de regla: falta el **dato** del perfil (un hecho educativo
+"en curso" con 80 %+ de los créditos). Si ese hecho existe, el motor lo cierra
+como cumplido; si no, corresponde firmarlo `bloqueo_real`.
+
+---
+
+## Ola 6 — DIFERIDA: lo que puede no implementarse nunca
+
+> Decisión del usuario (2026-11-08): *"lo del RAG, si no aporta mucho en el
+> sistema general, puedes dejarlo para después, como característica opcional
+> que puede no implementarse"*. Esta ola está **documentada, no iniciada**: no
+> hay código, no hay migración y no hay nada que rompa si nunca se hace.
+
+### 6.1 RAG consultivo + carta de presentación — OPCIONAL
+
+Origen: la especificación técnica de arquitectura "Sistema de Ingesta,
+Vectorización y RAG para Ofertas de Empleo Local" (propuesta del usuario,
+2026-11-08), evaluada contra lo que el repo ya tiene.
+
+**Lo que la propuesta ya existe en v1.5 (≈75 %)**:
+
+| Fase de la propuesta | En v1.5 hoy |
+|---|---|
+| Scraping multi-portal (HTML/API/JSON) | `scraper.FETCHERS` + `ejecutar_barrido` (CDP, sesiones ANE/LinkedIn, tableros API) |
+| LLM + regex para normalizar | `analysis.py` (reglas) + pase IA (Gemma 4 E2B local) + `text_hash` |
+| SQLite con filtros estrictos | `jobs` + `job_analysis` + `job_requirements` + `job_field_status` + `concepto` |
+| Embeddings + búsqueda por coseno + Top-K | `search_engine` (cache en disco `.npy`) + `ats.py` + `viabilidad.py` |
+| `search_text` sintético | `search_engine._build_doc_text` / `_build_titulo_text` |
+| Campos estructurados | `jobs.skills` / `languages` / `salary_min` / `work_mode` / `region` / `city` |
+
+**Lo que NO se debe adoptar (empeoraría el objetivo)**:
+
+| Pieza | Por qué no |
+|---|---|
+| Dedupe por `sha256(empresa+titulo+provincia)` | En CR la misma empresa republica el mismo puesto con otro ID → **fundiría avisos distintos**. El repo deduplica **conservador**: duplicado exacto → `dup_of`; lo dudoso → *quality duplicates* a revisión; **nunca automerge**. |
+| `description_clean` como texto único | Rompe la **evidencia literal**: cada requisito cita el texto CRUDO de la BD. |
+| `job_postings` + `job_embeddings` (tablas nuevas) | Duplican `jobs`/`job_analysis` (la cadena de auditoría) y cambian la cache que hoy funciona (2 MB en RAM). |
+| **RAG como juez** (que el LLM ordene y decida) | Rompe 4 reglas duras: auditabilidad (evidencia literal + verificación D), reproducibilidad (temperatura ≠ 0), umbrales congelados (0.60/0.80) y *"una firma nunca pisa un veredicto del motor"*. Además el corpus ya mide que la semántica **ordena pero no veredicta** (0 cambios de banda en 736 avisos). |
+
+**Lo que sí aportaría, si algún día se decide (≈1 día, riesgo bajo, aditivo)**:
+
+- **RAG consultivo, nunca juez**: los avisos que pasan los filtros duros (SQL)
+  → Top-K por coseno (reutilizando `search_engine`, sin nada nuevo) → prompt
+  `[CONTEXTO][PERFIL][INSTRUCCIÓN]` → **texto** con resumen comparativo, brechas y
+  borrador de carta.
+- **Guardado**: como texto, **nunca** como estado (nunca toca `job_match` ni la
+  viabilidad). Si se implementa, tabla nueva por **migración** (p. ej.
+  `job_insight`), nunca `CREATE` a mano.
+- **Bajo demanda** (Top-N de la grilla), no sobre las 736: sobre el corpus serían
+  horas. 1 llamada al modelo local por vacante (~10-20 s).
+- **Privacidad**: el prompt lleva el perfil → con IA externa, aviso +
+  confirmación (regla ya existente).
+- **Endpoints**: `rag top` / `rag carta` en la CLI.
+
+**Por qué puede no implementarse**: el objetivo del repo es *matching
+verificable y auditable*, y el RAG no mejora eso: **ordena** (lo que ya hace la
+semántica) y **no veredicta** (lo que el motor determinista ya hace mejor). Lo
+único genuinamente nuevo es la **carta de presentación**, que es una
+funcionalidad de ayuda, no de matching. Por eso queda como **característica
+opcional**.
+
+### 6.2 El escalón "estudiante avanzado" en el motor — PLANIFICADO
+
+Consecuencia directa de la regla §5.10: hoy el motor **no tiene** el escalón
+"estudiante sin graduar con 80 %+ de los créditos" (entre `diploma técnico` y
+`título universitario`). Un hecho `pursuing` cuenta como universitario
+completo, lo que contradice R2.
+
+Plan (cuando se decida, con **medición obligatoria en copia**):
+
+1. Escalón nuevo en `nivel_escala` y `concepto.nivel_orden` (**migración de
+   datos nueva**, nunca `UPDATE` a mano) — el patrón está en la migración
+   `017_educacion_granular.sql`.
+2. **El estado cuenta**: un hecho `pursuing` no confiere título → su nivel
+   efectivo es el escalón inferior.
+3. El aviso con "X % de completitud" declara el escalón "estudiante avanzado",
+   no el universitario (ISCED 2011: el avance parcial no confiere título).
+4. Medición en copia: el cambio **no debe mover ninguna banda ni estado** del
+   corpus; si mueve alguno, se revisa caso por caso antes de aplicar.
+
+### 6.3 Embeddings: el modelo primario está *gated* — OPCIONAL
+
+`google/embeddinggemma-300m` (el modelo primario previsto) devuelve **401**
+(acceso restringido en Hugging Face) → el repo cae al fallback
+`paraphrase-multilingual-mpnet-base-v2`, que **funciona** y no cambia ninguna
+banda. Opciones si algún día se quiere el primario: pedir acceso al repo de HF
+(1 token + 1 re-vectorización; la cache se invalida porque el metadato guarda
+el modelo) o instalar Ollama local y usar su `embeddinggemma` (paridad con la
+propuesta, pero duplica backends). **Hoy no aporta nada medible**: no se hace.
+
+---
 
 ---
 

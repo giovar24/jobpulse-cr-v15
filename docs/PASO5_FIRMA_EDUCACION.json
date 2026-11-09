@@ -4,7 +4,7 @@
   "revisor": "Giovanni Vargas",
   "fecha": "2026-11-08",
   "corrida_revisada": "20261108_131343",
-  "nota": "Firma de una SEGUNDA persona (la revision previa la hizo el autor de la regla -> se descarta por sesgo). Cada decision queda anclada al sha256 del texto EXACTO que se reviso: si el aviso se re-scrapea y su texto cambia, la decision deja de aplicar y el caso vuelve a revisar_a_mano.",
+  "nota": "Firma de una SEGUNDA persona (la revision previa la hizo el autor de la regla -> se descarta por sesgo). Cada decision queda anclada al sha256 del texto EXACTO que se reviso: si el aviso se re-scrapea y su texto cambia, la decision deja de aplicar y el caso vuelve a revisar_a_mano. La REGLA DE NEGOCIO que aplica a los casos educativo esta escrita y citada en docs/REGLAS_NEGOCIO_EDUCACION.md (escalera de niveles; fuente: U.S. Department of State - InfoUSA, Structure of U.S. Education).",
   "decisiones": [
     {
       "job_id": "recruitee-transperfect-2770002",
@@ -68,8 +68,8 @@
     },
     {
       "job_id": "workday-Credit---Collections-Specialist--2_R232432",
-      "veredicto": "dudoso",
-      "criterio": "El aviso pide «Required Associate’s or bachelor’s degree in business, Finance, or a related field». Sigue SIN decidir la REGLA DE NEGOCIO #2 (si 2 anos de educacion superior en CR - fuente CONESUP - cuentan como universitario): el veredicto queda DUDOSO y el caso ABIERTO.",
+      "veredicto": "bloqueo_real",
+      "criterio": "El aviso pide «Required Associate’s or bachelor’s degree in business, Finance, or a related field». REGLA DE NEGOCIO (decidida el 2026-11-08; escalera de niveles y fuentes en docs/REGLAS_NEGOCIO_EDUCACION.md): el aviso ofrece DOS vias alternativas y la permisiva es «Associate’s» = titulo academico superior de ciclo corto (escalera: posgrado > titulo universitario > estudiante sin graduar con 80% o mas de creditos > diploma tecnico > bachillerato de secundaria; fuente: U.S. Department of State - InfoUSA, Structure of U.S. Education, usinfo.state.gov/infousa/education/overview/edlite-structure-us.html). El perfil SI tiene ese nivel (Diplomado en Electronica, INTEC) pero NO en el campo que pide el aviso (Electronica, no business/Finance): el NIVEL se cumple, el CAMPO no -> el requisito no se cumple -> BLOQUEO REAL -> la vacante se descarta.",
       "text_hash": "72b0ac60a2f390a7835c4ca30f4fd3a134f47db7471eda31801ba6cb37847604"
     },
     {
@@ -129,7 +129,7 @@
     {
       "job_id": "workday-Production-Supervisor-I_31163511",
       "veredicto": "dudoso",
-      "criterio": "El aviso pide «80% completeness of a bachelor’s degree program from a four-year college or university». Sigue SIN decidir la REGLA DE NEGOCIO #3 (si un bachillerato PARCIAL del 80 % cuenta como requisito universitario cumplido): el veredicto queda DUDOSO y el caso ABIERTO.",
+      "criterio": "El aviso pide «80% completeness of a bachelor’s degree program from a four-year college or university». REGLA DE NEGOCIO YA DECIDIDA (2026-11-08; ver docs/REGLAS_NEGOCIO_EDUCACION.md): «80%» es el escalon 'estudiante sin graduar con la mayoria de los creditos completados (80% o mas)', que va POR DEBAJO del titulo universitario y por encima del diploma tecnico (fuente: U.S. Department of State - InfoUSA, Structure of U.S. Education). Lo que falta ya no es la regla sino el DATO del perfil: no hay ningun hecho educativo 'en curso' registrado, asi que no se puede afirmar que el perfil alcance ese escalon. El veredicto queda DUDOSO y el caso ABIERTO: si se registra ese hecho, el motor lo cierra como cumplido; si no, corresponde firmarlo como bloqueo real.",
       "text_hash": "7d56a94aba71677ce2902ec848cfb339d5d5b303186ac50247c1cd6cf2a4879c"
     },
     {

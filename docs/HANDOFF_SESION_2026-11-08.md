@@ -1,5 +1,28 @@
 # Handoff — Sesión 2026-11-08
 
+**TL;DR (turno 5)**: se cerró lo que quedaba abierto del **punto 3**: la
+**regla de negocio del nivel educativo**, escrita **con fuentes** y firmada por
+el usuario. La escalera (de mayor a menor) es: posgrado > título universitario >
+**estudiante sin graduar con 80 %+ de los créditos** > diploma técnico >
+bachillerato de secundaria; la referencia adoptada es el **sistema educativo de
+EE. UU.** (U.S. Dept. of State / InfoUSA) porque es el léxico de los avisos y
+de las multinacionales, y el CONESUP queda como criterio de curación **sin
+fuente documental aportada** (así queda escrito). Reglas y **todas las
+fuentes** en el doc nuevo `docs/REGLAS_NEGOCIO_EDUCACION.md`. La firma se
+**aplicó en la BD real** (backup → `decision sign` → Paso 5 → evidencia → hoja
+→ `db check` ok): el **único cambio de estado en los 735 avisos fue Sysco**
+(`revisar_a_mano / educacion_no_confirmada` → `descartada /
+titulo_universitario_requerido`: el aviso pide business/Finance y el perfil
+tiene un diplomado en Electrónica → el nivel se cumple, el **campo** no, que es
+la limitación R5 que el motor no modela). Abbott queda **abierto**, pero ya no
+por una decisión pendiente: falta el **dato** del perfil (un hecho "en curso"
+con 80 %+ de los créditos). Corrida vigente **`20261108_214123`**, evidencia
+**TODO CUADRA (140 verificaciones literales, 29/29 firmas con cita literal y
+efecto)**. El **RAG queda documentado como Ola 6, opcional y diferido** (puede
+no implementarse): ≈75 % de la propuesta ya existe y mejor; lo único nuevo es
+la carta de presentación; no se adopta el dedupe por hash, ni las tablas
+duplicadas, ni el RAG como juez.
+
 **TL;DR (turno 4)**: se cerró el **punto 5** del backlog (Ola 5). La **UI
 clásica** ya no tiene flujo propio: delega al **orquestador**
 `pipeline.ejecutar` (`analisis → ia → reanalisis → backfill → paso5 →
@@ -378,6 +401,75 @@ tocar). Cambios:
 `tests/test_cli_viabilidad.py::TestCliViabilidadSemantica` (6),
 `tests/test_caches.py::TestDisponibilidadDeEmbeddings` (5).
 
+### 1.12 Turno 5 · La regla de NEGOCIO del nivel educativo (escrita, firmada y aplicada)
+
+El backlog de 5 puntos quedó cerrado en el turno 4. Este turno cerró lo que
+quedaba abierto del **punto 3**: la regla de negocio que el motor **no puede
+deducir del texto** (decidida por el usuario, **con fuentes**).
+
+**a) La regla está escrita** — `docs/REGLAS_NEGOCIO_EDUCACION.md` (nuevo):
+
+- **Escalera** (de mayor a menor): posgrado > título universitario >
+  estudiante sin graduar con **80 %+ de los créditos** > diploma técnico >
+  bachillerato de secundaria.
+- **Referencia adoptada**: el sistema educativo de **EE. UU.** (U.S. Dept. of
+  State / InfoUSA, *Structure of U.S. Education*), porque los avisos usan
+  léxico estadounidense y casi todo el mercado de CR (y las multinacionales)
+  sigue esas políticas. Copia vigente que responde:
+  <https://usinfo.org/enus/education/overview/edlite-structure-us1.html>
+  (el `usinfo.state.gov` original da error de transporte).
+- **CONESUP** queda como **criterio de curación** del perfil (qué título cuenta
+  como académico superior), **sin fuente documental aportada** — así queda
+  escrito en el documento (no se inventó una fuente).
+- **R2**: el estudiante avanzado **no** es un titulado (las empresas los
+  contratan por conveniencia/menor pago, no porque el perfil califique).
+- **R5**: el motor **no** modela el *campo* del título → cuando el nivel se
+  cumple pero el campo no, lo decide la firma de la segunda persona.
+- **Limitaciones del motor detectadas** (documentadas, no parcheadas): (a) no
+  modela el campo del título; (b) no reconoce la alternativa "Associate's **or**
+  bachelor's" (`vias=[]`); (c) un requisito `preferred` también produce
+  `no_confirmado`; (d) `niveles_educativos()` ignora `education_status`.
+
+**b) La firma se aplicó en la BD real** (con backup antes):
+
+| paso | resultado |
+|---|---|
+| backup | `data/backups/pre_regla_educacion_20261108_213631.db` |
+| `decision sign --dry-run` | 29 decisiones · **texto_igual 29** · texto_cambiado 0 |
+| `decision sign` | 29 aplicadas (upsert: Sysco y Abbott actualizan su fila) |
+| `run_paso5.py` | corrida **`20261108_214123`** (735 avisos evaluados) |
+| `generar_evidencia_paso5.py` | 1689 líneas · descartada 100 · no_confirmada 1 |
+| `verificar_evidencia.py` | **TODO CUADRA: 140 verificaciones con frase LITERAL** (29/29 firmas con cita literal + efecto) |
+| `generar_revision_pendientes.py` | 1 caso abierto (Abbott) |
+| `db check` | esquema **27** · `integrity_check` ok · **0 violaciones FK** |
+
+**c) El único cambio de estado en TODO el corpus fue Sysco**:
+
+```
+workday-Credit---Collections-Specialist--2_R232432
+   antes: revisar_a_mano / educacion_no_confirmada
+   ahora: descartada     / titulo_universitario_requerido
+```
+
+(diff de las 2 corridas: **1 job** de 735). Abbott
+(`workday-Production-Supervisor-I_31163511`) sigue **abierto** con
+`revisar_a_mano / educacion_no_confirmada`: la regla ya está decidida, lo que
+falta es el **DATO** del perfil (un hecho educativo "en curso" con 80 %+ de los
+créditos — hoy el perfil tiene **0** hechos `pursuing`).
+
+**d) El RAG queda DIFERIDO y documentado** (Ola 6 de
+`docs/PLAN_MEJORAS.md`, §6.1): decisión del usuario — *"si no aporta mucho en
+el sistema general, puedes dejarlo para después, como característica opcional
+que puede no implementarse"*. Se evaluó la especificación técnica de
+arquitectura (ingesta + vectorización + RAG) contra el repo: **≈75 % ya
+existe** y mejor (scraping, extracción LLM+reglas, SQLite, `search_text`,
+embeddings, filtros SQL, coseno/Top-K). Lo único genuinamente nuevo es la
+**carta de presentación**; lo que **no** se adopta: dedupe por `hash_id`
+(fundiría avisos distintos), `job_postings`/`job_embeddings` (duplican),
+`description_clean` (rompe la evidencia literal) y **RAG como juez** (rompe
+auditabilidad, reproducibilidad, umbrales y la regla "una firma nunca pisa un
+veredicto del motor").
+
 ## 2. Decisiones
 
 1. **La corrida local queda como vigente**: más datos y coste $0. La nube se
@@ -424,16 +516,38 @@ tocar). Cambios:
     de embeddings tiene que cubrir el corpus. Un comando de solo lectura no
     descarga ~500 MB ni re-vectoriza el corpus sin avisar (avisa por
     **stderr**, porque la salida es JSON).
+14. **Turno 5 · la regla educativa se escribe CON fuentes** y la referencia es
+    el sistema de **EE. UU.** (no el CONESUP): el usuario *"no tiene nada del
+    CONESUP"* y *"casi todo lo que hay en CR se basa en políticas de EE. UU."*,
+    que además es la terminología de los avisos y de las multinacionales. El
+    criterio de acreditación del CONESUP queda como **curación del perfil**,
+    marcado en el documento como *"fuente documental no aportada"*.
+15. **Turno 5 · Sysco = `bloqueo_real`**: el aviso pide «Required Associate's or
+    bachelor's degree in business, Finance, or a related field»; el perfil
+    tiene ese **nivel** (diplomado técnico) pero **no ese campo** → el
+    requisito no se cumple → `descartada`. Es el caso donde el motor no
+    modela el campo (R5), no un parche del aviso.
+16. **Turno 5 · Abbott NO se fuerza**: el veredicto sigue `dudoso` porque lo
+    que falta es un **dato del perfil** (un hecho "en curso" con 80 %+ de los
+    créditos), no la regla. Firmarlo `bloqueo_real` sin ese dato sería
+    inventar un hecho.
+17. **Turno 5 · el RAG es OPCIONAL y puede no implementarse**: no aporta al
+    objetivo (matching verificable y auditable); lo único nuevo es la carta de
+    presentación, que es ayuda, no matching. Documentado, sin código.
+18. **Turno 5 · ninguna firma pisa al motor**: el diff de las 2 corridas es de
+    **1 solo aviso** (Sysco); los otros 734 no cambian de estado ni de motivo.
 
 ## 3. Estado de la BD real
 
 - Esquema **27** · **736 avisos** (735 con análisis) · **2956 requisitos**
-  (0 sin código) · **job_match vigente `20261108_175932`**
-  (calificada 202 · revisar 391 · descartada 99 · datos_insuf 36 ·
+  (0 sin código) · **job_match vigente `20261108_214123`**
+  (calificada 202 · revisar 386 · descartada 100 · datos_insuf 36 ·
   sin_requisitos 11) · cola de taxonomía **1150** (1160 menciones) ·
-  conceptos **775** (336 códigos) · `educacion_no_confirmada` **2**
-  (las dos firmadas "dudoso") · **29 decisiones firmadas** en
-  `job_match_decision` (25 `no_bloqueo` · 2 `bloqueo_real` · 2 `dudoso`).
+  conceptos **775** (336 códigos) · `educacion_no_confirmada` **1**
+  (Abbott, firmado "dudoso") · **29 decisiones firmadas** en
+  `job_match_decision` (25 `no_bloqueo` · 3 `bloqueo_real` · 1 `dudoso`).
+  Corridas: `20261108_175932` (pre-firma Sysco) → **`20261108_214123`**
+  (vigente).
 - `.env` **en config local**: `IA_PROVEEDOR=custom`,
   `IA_BASE_URL=http://127.0.0.1:8081/v1`, `IA_MODEL=gemma4-e2b-qat`.
   Para volver a la nube: 2 líneas (`ollama` + `https://ollama.com/v1` +
@@ -441,7 +555,8 @@ tocar). Cambios:
 - Backups: `pre_clean_20261107_181242` · `pre_ia_externa_20261107_203459` ·
   `post_ia_externa_20261107_205655` (nube) · `post_ia_local_20261107_230622` ·
   `pre_tanda3_20261108_131212` · **`pre_firma_educacion_20261108_175903`**
-  (antes de la migración 027).
+  (antes de la migración 027) · **`pre_regla_educacion_20261108_213631`**
+  (antes de aplicar la firma con la regla nueva).
 
 ## 4. Pendiente inmediato (priorizado)
 
@@ -450,12 +565,17 @@ tocar). Cambios:
    en `save_analysis`, 0 inflación del historial) y 5.2 **ya estaba en el
    motor** (lo que faltaba era el valor por defecto, ya activado sin costo
    extra). Ver §1.11 y `docs/PLAN_MEJORAS.md` §5.8-§5.9.
-2. **2 decisiones de negocio bloquean 2 avisos** (firmados "dudoso"):
-   (#2) si 2 años de educación superior en CR cuentan como universitario
-   (fuente CONESUP) — `workday-Credit---Collections-Specialist--2_R232432`;
-   (#3) si un bachillerato parcial del 80 % cuenta como requisito universitario
-   cumplido — `workday-Production-Supervisor-I_31163511`. Hay que decidirlas
-   **con una fuente**, no por impulso; hasta entonces siguen en la hoja.
+2. ~~**2 decisiones de negocio bloquean 2 avisos**~~ → **CERRADO (turno 5)**:
+   la regla quedó **escrita y firmada** (`docs/REGLAS_NEGOCIO_EDUCACION.md`,
+   con fuentes). Sysco se firmó `bloqueo_real` y ya está `descartada`.
+   **Queda 1 caso abierto** (Abbott) y **no es una decisión de negocio**: falta
+   el **dato** del perfil → registrar (o no) un hecho educativo "en curso" con
+   80 %+ de los créditos. Con ese hecho el motor lo cierra como cumplido; sin
+   él, corresponde firmarlo `bloqueo_real`.
+2b. **Ola 6 · R1 (escalón "estudiante avanzado")**: el motor **no tiene** ese
+   escalón (un `pursuing` cuenta como universitario completo, contra R2).
+   **Planificado, no implementado**: migración de datos nueva + medición
+   obligatoria en copia. Ver `docs/PLAN_MEJORAS.md` §6.2.
 3. **`espanol: nativo` es inferencia**, no texto literal (365 avisos): el
    modelo infiere el idioma del aviso. Inofensivo para el matching (el perfil
    lo cubre), pero a tener en cuenta al auditar.
@@ -484,7 +604,11 @@ tocar). Cambios:
   (ancla `text_hash`, persistencia, hoja de firma).
 - `docs/PASO5_FIRMA_EDUCACION.json` — la hoja de firma (29 decisiones).
 - `docs/PASO5_EVIDENCIA_2026-11-08.md` / `docs/PASO5_REVISION_PENDIENTES.md`
-  — generados para la corrida `20261108_175932` (2 casos abiertos).
+  — generados para la corrida `20261108_214123` (1 caso abierto: Abbott).
+- `docs/REGLAS_NEGOCIO_EDUCACION.md` — la regla de negocio del nivel educativo
+  y **todas las fuentes** (turno 5).
+- `docs/PLAN_MEJORAS.md` §5.10 (la regla educativa) y §6.1-§6.3 (**Ola 6**:
+  RAG opcional/diferido, el escalón "estudiante avanzado", embeddings gated).
 - `src/jobpulse_v15/ui.py` — `_post_flujo_completo` (~2119) y
   `open_enriquecimiento` (~2304): las dos ventanas delegan en el orquestador
   (turno 4).
