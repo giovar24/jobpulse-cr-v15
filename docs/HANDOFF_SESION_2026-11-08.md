@@ -81,6 +81,27 @@ modelos** en la UI v2 (Configuración → "Listar modelos" llena el combo) y un
 **arreglo de aislamiento de tests** (el `.env` real se colaba por
 `jobpulse_v15.cli`). Esquema **25** (sin migraciones nuevas).
 
+## 0. Tabla de objetivos (estado al cierre del 2026-11-08)
+
+| Objetivo | Qué es | Estado al cierre |
+|---|---|---|
+| **O1** Enriquecimiento IA | Pase IA (Gemma local) llenando huecos | ✅ COMPLETO (27-10) |
+| **O2** Afinar la búsqueda | Filtros/req. obligatorios; la precisión viene de la data extraída | 🟡 O2.2 cerrado; la semántica queda como **ranking** (por defecto en viabilidad, 0 cambios de banda) |
+| **O3** Fetchers ATS huérfanos | Validar los 7 fetchers + resolver la salud de los sitios | ✅ COMPLETO (04-11) |
+| **O4** Calibración gate-vs-IA | Pearson/Spearman/MAE + umbral | ⏳ **superseded**: el `gate` ya no existe (el motor es `matching.py`) → proponer cerrarlo |
+| **O5** Higiene de datos | Auditoría, re-barrido de los login-wall, identidad por huella | 🟢 solo queda **O5.3** |
+| **O6** Perfil del candidato | Editor, capa IA de CVs, matching (niveles/CEFR), dedupe semántico | 🟢 O6.1/O6.2/O6.3 cerrados · **O6.4** (slugs ES/EN) pendiente de decisión · **O6.5 (nuevo)**: registrar el hecho educativo "en curso" con 80 %+ de créditos (ver §4 punto 2) |
+| **O7** Operación UI-first | La app arranca/detiene lo que necesita | ✅ COMPLETO (27-10) |
+| **O8** Ciclo de vida de la vacante | Áreas (O8.1) + recurrentes/aplicadas ocultas (O8.2) | 🟡 O8.1 cerrado · **O8.2 pendiente** (tombstones/`dup_of` de v1.x, no portados) |
+| **O9** Optimización de UI | Ajustes de interfaz pospuestos | ⏳ placeholder |
+| **O10** Filtros de búsqueda | `elegir_filtro_compatibilidad`, filtro por área, columna "Req." | 🟡 los tres implementados · falta refinar `solo_vigentes` |
+| **O11** IA externa / motor intercambiable | Cualquier motor OpenAI-compatible | ✅ COMPLETO (05-11) |
+| **O12** Paridad CLI/UI | Una sola implementación del pipeline | ✅ COMPLETO (olas 1 y 2; **05-11**) |
+| **O13** Cobertura de fuentes | Que el barrido traiga los avisos que existen | ✅ COMPLETO (ola 3; **06-11**) |
+| **O14** Control del coste de la IA | Límites opt-in y ajustables | ✅ COMPLETO (05-11) |
+| **Backlog de la sesión (5 puntos)** | 1 ciclos IA · 2 taxonomía · 3 firma · 4 tokens · 5 UI clásica | ✅ **CERRADO** (turnos 2-5) |
+| **Ola 6** (RAG consultivo + carta; escalón "estudiante avanzado"; embeddings gated) | Opcional / diferido | ⏸ **DIFERIDA a decisión del usuario** — documentada en `docs/PLAN_MEJORAS.md` §6, sin código |
+
 ## 1. Lo hecho
 
 ### 1.1 Limpieza + scrape fresco (736 avisos)
@@ -587,6 +608,37 @@ veredicto del motor").
    copia): el siguiente pipeline completo debe mostrar menos llamadas por
    aviso y el `uso` guardado en `pipeline_etapa.detalle_json`.
 
+### 4.1 Cómo retomar (comandos exactos)
+
+```powershell
+$py = ".\.venv\Scripts\python.exe"
+
+# 0) Leer primero este handoff y el más reciente (docs/HANDOFF_SESION_*.md)
+# 1) Estado de la BD real
+& $py -X utf8 -m jobpulse_v15 db check
+
+# 2) Ver la corrida vigente y la hoja de los casos abiertos
+& $py -X utf8 -m jobpulse_v15 decision list
+Get-Content docs\PASO5_REVISION_PENDIENTES.md -Encoding UTF8
+
+# 3) Si se decide el dato de Abbott (§4 punto 2): registrar el hecho educativo
+#    "en curso" con 80%+ de creditos -> el motor lo cierra como cumplido;
+#    si no se registra -> firmarlo 'bloqueo_real' (hoja: docs/PASO5_FIRMA_EDUCACION.json)
+#    y luego: run_paso5.py -> generar_evidencia_paso5.py -> verificar_evidencia.py
+#             -> generar_revision_pendientes.py -> db check
+
+# 4) Ola 6 · R1 (el escalon 'estudiante avanzado' que falta en el motor):
+#    migracion de datos nueva + MEDICION OBLIGATORIA en COPIA antes de la BD real
+#    (plan en docs/PLAN_MEJORAS.md 6.2)
+
+# 5) Cola de taxonomia 1150 -> siguiente tanda (migracion 028), priorizando
+#    variantes con >=2 avisos reales (demanda_corpus, NO 'veces')
+```
+
+**Antes de tocar la BD real**: backup siempre
+(`… -m jobpulse_v15 backup --output data\backups\X.db`) y **medición en copia**
+primero. **No pushear sin confirmación del usuario.**
+
 ## 5. Archivos clave
 
 - `src/jobpulse_v15/ia_enrichment.py` — `pase_completo` (ciclos crítico y
@@ -621,12 +673,12 @@ veredicto del motor").
 
 ## 6. Contexto
 
-- Rama `main`, repo `giovar24/jobpulse-cr-v15`. **Commits locales, sin
-  push** (falta confirmación del usuario): `a5a43fb`, `317f908`, `a36ca79`,
-  `3b11a69`, `177de1c` + los de esta sesión (`c6fc8ce` puntos 1+4,
-  `08b111d` punto 2, `6bf1b92` punto 3, y el commit del punto 5 — "feat(pipeline):
-  la UI clasica delega en el orquestador y la semantica es el valor por
-  defecto (punto 5)").
-- **No pushear sin confirmación.**
+- Rama `main`, repo `giovar24/jobpulse-cr-v15`. **Todo pusheado** (el usuario
+  lo confirmó el 2026-11-08): `c6fc8ce` (puntos 1+4), `08b111d` (punto 2),
+  `6bf1b92` (punto 3), `461a21e` (punto 5) y `c42fc47` (la regla educativa con
+  fuentes + Ola 6). Los 5 commits de esta sesión están en `origin/main`
+  (`1a87223..c42fc47`); `main` quedó sincronizada con el remoto.
+- **No pushear sin confirmación** (regla que se mantuvo: el push de esta sesión
+  se hizo **después** de que el usuario lo pidiera explícitamente).
 - La UI clásica (`ui.py`) **no se toca** sin permiso explícito (el permiso
   del turno 4 se usó solo para delegar en el orquestador).
