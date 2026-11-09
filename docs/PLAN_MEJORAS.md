@@ -492,6 +492,76 @@ errores) → `enrich requirements-canonico --apply` (0) → corrida
 pendientes; 1192 los pide UN solo aviso → siguiente tanda cuando entre corpus
 nuevo).
 
+### 4.2 · TANDA 3 — APLICADA A LA BD REAL (2026-11-08)
+
+Migración **`026_taxonomia_curacion_tanda_3.sql`** (esquema **26**). Con el
+corpus de la corrida local (`20261107_225916`) la cola tenía **1198**
+variantes pendientes; la tanda cura las **57 que varios avisos piden**
+(≥ 2 avisos reales, medido con `taxonomia.demanda_corpus` — el contador
+`veces` de la cola ya no sirve como medida).
+
+División de la tanda:
+
+- **25 alias** a conceptos que ya existían: las tres formas de leer planos
+  (`interpretacion de planos` / `interpretacion de diagramas` / `planos` /
+  `drawings` → `lectura-planos`), `diagnostico` / `investigate technical
+  problems` / `network diagnostics` → `troubleshooting`, `business analysis` →
+  `analisis-negocio`, `invoicing` → `facturacion`, `collections` →
+  `cuentas-por-cobrar`, `supply chain` → `abastecimiento`, `timelines` →
+  `project-planning`, `seleccion` → `reclutamiento`, `sap basico` → `sap`,
+  `iis` / `web server technologies` → `servidores`, `digitacion` →
+  `data-entry`, `destrezas electricas` → `electricidad`, `destrezas mecanicas`
+  → `mecanica-industrial`, `almacenamiento de alimentos` /
+  `conservacion de alimentos` → `manipulacion-alimentos`, `protocolos de
+  higiene` → `seguridad-alimentaria`, `phone` / `phone calls` /
+  `llamadas salientes outbound` → `atencion-al-cliente`;
+- **23 variantes con 19 códigos nuevos**: `negociacion`, `cierre-ventas`,
+  `marketing-automation`, `evaluacion-riesgos`, `order-to-cash`,
+  `containerization`, `ich`, `onq`, `reservaciones`, `cocteleria`
+  (cocteleria + técnicas de mixología), `preparacion-alimentos` (técnicas
+  culinarias básicas + cortes + ensaladas + guarniciones), `tecnicas-coccion`,
+  `tecnicas-montaje`, `moto`, `vehiculo-propio`, `ventaneria`, `alarma`,
+  `paneles-control`, `tarjetas-acceso`;
+- **9 variantes se dejan en la cola a propósito** (documentado en la cabecera
+  de la migración): `website` (canal/activo del empleador), `data driven
+  settings` y `upgrades` (ajustes del producto), `four seasons` (nombre de la
+  empresa), `explore products` y `providing product information` (tareas),
+  `buenas practicas` (vaga), `asesor` (el cargo repetido como skill) y
+  `liviano` (calificador ambiguo: "vehículo liviano").
+
+**Medición (copia → real, resultado IDÉNTICO)**:
+
+| Métrica | Antes | Después |
+|---|---|---|
+| Cola `concepto_no_normalizado` | 1198 | **1150** (−48) |
+| Taxonomía (filas `concepto`) | 727 | **775** (+48) |
+| Códigos canónicos | 317 | **336** (+19) |
+| Requisitos vigentes | 2879 (0 sin código) | **2956 (0 sin código)** (+77) |
+| Matching: calificada / revisar | 220 / 365 | **202 / 389** |
+| datos_insuficientes / descartada / sin_requisitos | 42 / 97 / 11 | 36 / 97 / 11 |
+| `educacion_no_confirmada` | 29 | **29 (intacto)** |
+
+El −18 de `calificada` es el efecto esperado: los +77 requisitos recién
+visibles hacen que avisos que parecían cubiertos del todo muestren un
+`required` real que faltaba (tope `revisar`). El motor ve más requisitos, no
+peor matching. Los 29 `educacion_no_confirmada` siguen **intactos** (la firma
+es de una segunda persona).
+
+**Aplicación a la BD real (2026-11-08)**: respaldo
+`data/backups/pre_tanda3_20261108_131212.db` → apertura (aplica la **026**,
+esquema **26**) → `enrich requirements-source --apply` (736 avisos, 735
+analizados, 1756 requisitos de fuente; 1 aviso sin descripción:
+`linkedin-4476184789`) → `enrich requirements-canonico --apply` (0) →
+`taxonomy curate --apply` (cola 1202 → **1150**) → corrida
+**`20261108_131343`** (735 evaluadas, 2956 requisitos) → evidencia
+`docs/PASO5_EVIDENCIA_2026-11-08.md` OK (**136 verificaciones literales**,
+`no_confirmada=29`) → hoja de firma regenerada (29 casos) → `db check` ok
+(esquema 26, integridad ok, 0 FK).
+
+**Lo que queda para la Ola 4.2**: curar el resto de la cola (**1150**
+pendientes; 1141 las pide UN solo aviso → siguiente tanda cuando entre corpus
+nuevo).
+
 **Arreglo de código de los fantasmas + bug "IT" → italiano — APLICADO A LA
 BD REAL el mismo día (2026-11-07, con OK del usuario, medido en copia
 fresca)**:
@@ -610,7 +680,34 @@ real del pipeline.
 | 5.3 | IA externa para **tareas futuras** (matching semántico, resumen de vacantes, extracción de CV) | Requiere primero la Ola 2 (orquestador) para que las tareas nuevas se puedan lanzar igual desde CLI y UI |
 | 5.4 | `ia_api`: streaming / reintentos por token / cache por proveedor | Optimizaciones; el flujo actual ya es estable |
 
----
+### Ola 5 · dos extras del backlog 2026-11-08 — HECHOS
+
+**5.5 Ciclos de IA que no rinden (HECHO 2026-11-08)** — el pase crítico
+reintentaba en cada ciclo los avisos que el modelo NO puede enriquecer (el
+ciclo 3 de la corrida local reintentó 433 avisos y llenó 0: el modelo es
+determinista a temp 0.1 y devuelve lo mismo).
+
+- `run_ia_enrichment(..., exclude_ids=Set[str])` salta los ids excluidos
+  **antes de elegir lote** (ni una llamada).
+- `run_ia_enrichment` devuelve **`ids_estancados`**: los avisos que no
+  rindieron (`failed` = el modelo no halló el campo; `skipped` = devolvió lo
+  que ya estaba).
+- `pase_completo` acumula los estancados y los excluye del **siguiente ciclo
+  y del pase completo**.
+- Sin cambio de esquema; tests en `tests/test_ia_enrichment.py`.
+
+**5.6 Persistir el consumo real de tokens (HECHO 2026-11-08)** — `IAClient.tokens_in/out`
+vivían solo en memoria y se perdían al terminar el pase.
+
+- `pase_completo` usa **un único cliente** para todo el pase (así los tokens
+  se acumulan), lo **cierra al terminar** (pase lo que pase) y devuelve
+  `resumen["uso"] = {llamadas, tokens_in, tokens_out}`.
+- `pipeline_metricas.detalle_etapa("ia")` lo guarda en
+  `pipeline_etapa.detalle_json` (clave `uso`) → el coste de cada corrida es
+  consultable con `jobpulse-v15 pipeline etapas --json`.
+- **Medido en copia** (25 avisos, caché IA nueva, IA local): 123 llamadas,
+  52 827 tokens in / 3 901 tokens out; sin pérdida de datos (2 de 25 avisos
+  con skills distintas por ser el modelo no determinista, no por el cambio).
 
 ## Reglas que NO se tocan en ninguna ola
 

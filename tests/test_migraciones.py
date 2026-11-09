@@ -46,15 +46,15 @@ class TestVersionDelEsquema(unittest.TestCase):
     def test_la_base_nueva_llega_a_la_ultima_migracion(self):
         version = self.database.initialize()
 
-        self.assertEqual(version, 25)
+        self.assertEqual(version, 26)
         with self.database.connection() as connection:
             actual = connection.execute("PRAGMA user_version").fetchone()[0]
-        self.assertEqual(actual, 25)
+        self.assertEqual(actual, 26)
 
     def test_inicializar_de_nuevo_no_cambia_nada(self):
         self.database.initialize()
 
-        self.assertEqual(self.database.initialize(), 25)
+        self.assertEqual(self.database.initialize(), 26)
 
 
 class TestMigracion017(unittest.TestCase):
@@ -346,7 +346,7 @@ class TestMigracion020(unittest.TestCase):
     def test_la_base_nueva_llega_a_la_ultima_migracion(self):
         with self.database.connection() as connection:
             version = connection.execute("PRAGMA user_version").fetchone()[0]
-        self.assertEqual(version, 25)
+        self.assertEqual(version, 26)
 
     def test_las_skills_que_pedia_el_corpus(self):
         for variante in (
@@ -621,7 +621,7 @@ class TestMigracion023(unittest.TestCase):
     def test_la_base_nueva_llega_a_la_ultima_migracion(self):
         with self.database.connection() as connection:
             version = connection.execute("PRAGMA user_version").fetchone()[0]
-        self.assertEqual(version, 25)
+        self.assertEqual(version, 26)
 
     def test_los_alias_apuntan_al_canonico_correcto(self):
         for variante, canonico in (
@@ -884,7 +884,7 @@ class TestMigracion025(unittest.TestCase):
     def test_la_base_nueva_llega_a_la_ultima_migracion(self):
         with self.database.connection() as connection:
             version = connection.execute("PRAGMA user_version").fetchone()[0]
-        self.assertEqual(version, 25)
+        self.assertEqual(version, 26)  # la 027 (decisiones) va despues
 
     def test_los_alias_apuntan_al_canonico_correcto(self):
         for variante, canonico in (
@@ -964,6 +964,172 @@ class TestMigracion025(unittest.TestCase):
                 "SELECT COUNT(*) FROM concepto"
             ).fetchone()[0]
             _aplicar(connection, "025_taxonomia_curacion_tanda_2.sql")
+            despues = connection.execute(
+                "SELECT COUNT(*) FROM concepto"
+            ).fetchone()[0]
+        self.assertEqual(antes, despues)
+
+    def test_la_migracion_no_toca_la_cola(self):
+        """La cola la reconstruye `taxonomy curate` (datos, no esquema)."""
+        with self.database.connection() as connection:
+            filas = connection.execute(
+                "SELECT COUNT(*) FROM concepto_no_normalizado"
+            ).fetchone()[0]
+        self.assertEqual(filas, 0)
+
+
+class TestMigracion026(unittest.TestCase):
+    """026: curacion de la taxonomia, tanda 3 (Ola 4.2).
+
+    La cola `concepto_no_normalizado` tiene 1198 variantes pendientes (tras la
+    curacion de la 025 sobre la corrida local `20261107_225916`); esta tanda
+    cura las **57 que varios avisos piden** (>= 2 avisos reales, medida con
+    `taxonomia.demanda_corpus`, no con el contador `veces` de la cola).
+
+    Division de la tanda:
+      * 25 ALIAS a conceptos existentes ("interpretacion de planos" ->
+        lectura-planos; "sap basico" -> sap; "phone" -> atencion-al-cliente);
+      * 23 variantes con CODIGOS NUEVOS (19 codigos: negociacion,
+        marketing-automation, order-to-cash, cocteleria, preparacion-alimentos,
+        evaluacion-riesgos, containerization, ich, onq, reservaciones,
+        cierre-ventas, tecnicas-coccion, tecnicas-montaje, moto,
+        vehiculo-propio, ventaneria, alarma, paneles-control, tarjetas-acceso);
+      * 9 variantes se DEJAN en la cola a proposito (vagas, tareas, cargo o
+        nombre de empresa: "website", "data driven settings", "upgrades",
+        "four seasons", "explore products", "providing product information",
+        "buenas practicas", "asesor", "liviano").
+
+    Estos tests comprueban que:
+      * los alias apuntan al codigo canonico correcto;
+      * los conceptos nuevos existen con sus variantes;
+      * las variantes que se dejan en la cola siguen SIN codigo;
+      * las variantes son utilizables (minusculas, sin acentos);
+      * la migracion es idempotente (INSERT OR IGNORE);
+      * la migracion NO toca la cola (esa la reconstruye `taxonomy curate`).
+    """
+
+    def setUp(self):
+        self.temp_dir = tempfile.TemporaryDirectory()
+        self.database = Database(Path(self.temp_dir.name) / "test.db")
+        self.database.initialize()
+
+    def tearDown(self):
+        self.temp_dir.cleanup()
+
+    def _codigo(self, categoria: str, variante: str) -> str | None:
+        with self.database.connection() as connection:
+            fila = connection.execute(
+                "SELECT codigo_canonico FROM concepto "
+                "WHERE categoria=? AND variante=?",
+                (categoria, variante),
+            ).fetchone()
+        return fila["codigo_canonico"] if fila else None
+
+    def test_la_base_nueva_llega_a_la_ultima_migracion(self):
+        with self.database.connection() as connection:
+            version = connection.execute("PRAGMA user_version").fetchone()[0]
+        self.assertEqual(version, 26)
+
+    def test_los_alias_apuntan_al_canonico_correcto(self):
+        for variante, canonico in (
+            ("interpretacion de planos", "lectura-planos"),
+            ("interpretacion de diagramas", "lectura-planos"),
+            ("planos", "lectura-planos"),
+            ("drawings", "lectura-planos"),
+            ("diagnostico", "troubleshooting"),
+            ("investigate technical problems", "troubleshooting"),
+            ("network diagnostics", "troubleshooting"),
+            ("business analysis", "analisis-negocio"),
+            ("invoicing", "facturacion"),
+            ("collections", "cuentas-por-cobrar"),
+            ("supply chain", "abastecimiento"),
+            ("timelines", "project-planning"),
+            ("seleccion", "reclutamiento"),
+            ("sap basico", "sap"),
+            ("iis", "servidores"),
+            ("web server technologies", "servidores"),
+            ("digitacion", "data-entry"),
+            ("destrezas electricas", "electricidad"),
+            ("destrezas mecanicas", "mecanica-industrial"),
+            ("almacenamiento de alimentos", "manipulacion-alimentos"),
+            ("conservacion de alimentos", "manipulacion-alimentos"),
+            ("protocolos de higiene", "seguridad-alimentaria"),
+            ("phone", "atencion-al-cliente"),
+            ("phone calls", "atencion-al-cliente"),
+            ("llamadas salientes outbound", "atencion-al-cliente"),
+        ):
+            with self.subTest(variante=variante):
+                self.assertEqual(self._codigo("skill", variante), canonico)
+
+    def test_los_conceptos_nuevos_existen(self):
+        for variante, canonico in (
+            ("negociacion", "negociacion"),
+            ("cierre de ventas", "cierre-ventas"),
+            ("marketing automation", "marketing-automation"),
+            ("risk assessments", "evaluacion-riesgos"),
+            ("order to cash", "order-to-cash"),
+            ("containerization technologies", "containerization"),
+            ("ich", "ich"),
+            ("onq", "onq"),
+            ("procesos de reservaciones", "reservaciones"),
+            ("cocteleria", "cocteleria"),
+            ("tecnicas de mixologia", "cocteleria"),
+            ("tecnicas culinarias basicas", "preparacion-alimentos"),
+            ("cortes", "preparacion-alimentos"),
+            ("ensaladas", "preparacion-alimentos"),
+            ("guarniciones", "preparacion-alimentos"),
+            ("tecnicas de coccion", "tecnicas-coccion"),
+            ("tecnicas de montaje", "tecnicas-montaje"),
+            ("moto", "moto"),
+            ("vehiculo propio", "vehiculo-propio"),
+            ("sistemas de ventaneria", "ventaneria"),
+            ("alarma", "alarma"),
+            ("paneles", "paneles-control"),
+            ("tarjetas", "tarjetas-acceso"),
+        ):
+            with self.subTest(variante=variante):
+                self.assertEqual(self._codigo("skill", variante), canonico)
+
+    def test_las_variantes_dejadas_en_la_cola_no_se_curan(self):
+        """Las 9 variantes que no nombran competencia siguen SIN codigo."""
+        for variante in (
+            "website",
+            "data driven settings",
+            "upgrades",
+            "four seasons",
+            "explore products",
+            "providing product information",
+            "buenas practicas",
+            "asesor",
+            "liviano",
+        ):
+            with self.subTest(variante=variante):
+                self.assertIsNone(self._codigo("skill", variante))
+
+    def test_las_variantes_son_utilizables(self):
+        """El resolver compara `LOWER(TRIM(variante))`: sin acentos, sin
+        espacios dobles y en minusculas."""
+        with self.database.connection() as connection:
+            filas = connection.execute(
+                "SELECT categoria, variante FROM concepto"
+            ).fetchall()
+        for fila in filas:
+            variante = fila["variante"]
+            with self.subTest(variante=variante):
+                self.assertEqual(variante, variante.lower())
+                self.assertEqual(variante, variante.strip())
+                self.assertNotIn("  ", variante)
+                self.assertFalse(
+                    any(c in variante for c in "áéíóúñÁÉÍÓÚÑ"),
+                    "la variante lleva acentos: %r" % variante,
+                )
+
+    def test_la_migracion_es_idempotente(self):
+        with self.database.connection() as connection:
+            antes = connection.execute(
+                "SELECT COUNT(*) FROM concepto"
+            ).fetchone()[0]
+            _aplicar(connection, "026_taxonomia_curacion_tanda_3.sql")
             despues = connection.execute(
                 "SELECT COUNT(*) FROM concepto"
             ).fetchone()[0]

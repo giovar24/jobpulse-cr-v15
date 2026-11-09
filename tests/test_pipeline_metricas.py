@@ -134,6 +134,22 @@ class TestContadores(Base):
         )
         self.assertEqual(contadores["errores"], 1)
 
+    def test_el_detalle_de_la_ia_guarda_el_consumo_real(self):
+        """Ola 5 · 4: llamadas y tokens quedan en `detalle_json`."""
+        detalle = pipeline_metricas.detalle_etapa(
+            "ia",
+            {
+                "stats_ia": {
+                    "ciclos": [{"enriched": 5}],
+                    "uso": {"llamadas": 120, "tokens_in": 900000,
+                            "tokens_out": 120000},
+                }
+            },
+        )
+        self.assertEqual(detalle["uso"]["llamadas"], 120)
+        self.assertEqual(detalle["uso"]["tokens_in"], 900000)
+        self.assertEqual(detalle["uso"]["tokens_out"], 120000)
+
     def test_el_detalle_de_la_ia_distingue_no_mentcionado_de_error(self):
         detalle = pipeline_metricas.detalle_etapa(
             "ia",
@@ -359,12 +375,12 @@ class TestEsquema(Base):
         base = Database(self.db_path)
         avisos = []
         version = pipeline_metricas.asegurar_esquema(base, avisos.append)
-        self.assertEqual(version, 25)
+        self.assertEqual(version, 26)
         # Ya estaba migrada: no avisa.
         self.assertEqual(avisos, [])
 
     def test_asegurar_esquema_migra_una_base_vieja(self):
-        """Una base en esquema 23 recibe la 024 y la 025 al abrirla (convencion)."""
+        """Una base en esquema 23 recibe la 024 y las siguientes al abrirla."""
         viejo = Path(self.temp_dir.name) / "viejo.db"
         shutil.copy2(self.db_path, viejo)
         # Simula una base anterior a la 024.
@@ -374,9 +390,9 @@ class TestEsquema(Base):
 
         avisos = []
         version = pipeline_metricas.asegurar_esquema(Database(viejo), avisos.append)
-        self.assertEqual(version, 25)
+        self.assertEqual(version, 26)
         self.assertTrue(avisos)
-        self.assertIn("25", avisos[0])
+        self.assertIn("26", avisos[0])
 
 
 if __name__ == "__main__":
