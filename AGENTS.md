@@ -7,7 +7,9 @@ caro de descubrir**; lo puntual vive en los handoffs.
 ## Al iniciar sesión
 
 1. Lee el **handoff más reciente**: `docs/HANDOFF_SESION_*.md` (estado exacto,
-   objetivos O1–O10, pendiente inmediato). Arquitectura: `DESARROLLO_v15.md`.
+   tabla de objetivos O1–O14 + Ola 6, pendiente inmediato). Arquitectura:
+   `DESARROLLO_v15.md` (comparación histórica; sus conteos de tests/esquema
+   están viejos — manda el handoff).
 2. Repo **propio e independiente**: el v1.x en `D:\Proyectos\jobpulse_cr` está
    **congelado** (solo lectura) y sus comandos (`main.py`, `unittest`,
    `tools/auditar.py`) NO aplican aquí. La rama `fork-v15` del repo viejo
@@ -32,14 +34,38 @@ caro de descubrir**; lo puntual vive en los handoffs.
 | `docs/PASO5_REVISION_PENDIENTES.md` | Hoja de firma de `educacion_no_confirmada` |
 | `docs/REGLAS_NEGOCIO_EDUCACION.md` | Regla de negocio del nivel educativo + **todas las fuentes** |
 | `docs/PASO5_FIRMA_EDUCACION.json` | Hoja de firma **aplicada** (29 decisiones, Paso 7) |
+| `docs/PLAN_MEJORAS.md` | Backlog por olas (§5 hechos, §6 Ola 6 diferida) |
+
+## Estructura (dónde está cada cosa)
+
+- Paquete `src/jobpulse_v15/` (instalado con `pip install -e .`). Entrypoints en
+  `pyproject.toml`: `jobpulse-v15` → `cli:main`, `jobpulse-v15-ui` → `ui:main`.
+  La UI v2 se lanza con `python -m jobpulse_v15.ui_v2` o
+  `jobpulse-v15-v2.bat` (no tiene entrypoint en `pyproject.toml`).
+- Núcleo: `pipeline.py` (orquestador), `matching.py` (Paso 5), `repository.py`
+  (persistencia), `db.py` + `migrations/` (esquema), `analysis_flow.py`
+  (análisis por reglas, implementación única).
+- Scripts de raíz = operaciones manuales del pipeline: `run_full_flow.py`,
+  `run_enriquecimiento.py`, `run_paso5.py`, `generar_evidencia_paso5.py`,
+  `verificar_evidencia.py`, `clean_run.py`.
+- `tools/` = estado y medición (`corrida_medicion.py` **escribe** en la BD; los
+  `estado_*`/`comparar_*` son de lectura). `tests/` usa BD temporales, sin red
+  ni credenciales.
+- Dependencias solo en `pyproject.toml` (no hay `requirements.txt`); extras
+  `[dev]` (pytest) y `[ia]` (openai, huggingface_hub).
 
 ## Dos Pythons (regla que más se rompe)
 
 - **App/CLI/scripts** → venv: `.\.venv\Scripts\python.exe -X utf8 …`
 - **Tests** → python del **sistema**: `python -m pytest tests/ -q`
-  (pytest **no** está en el venv; ~8–17 min la suite completa; baseline verificado
-  2026-11-08: **1179 passed + 1740 subtests** — 494,53 s; con la 025 + el
-  arreglo de fantasmas + el desplegable de modelos).
+  (pytest **no** está en el venv; suite completa ~8–17 min; baseline verificado
+  2026-11-09: **1233 passed + 2650 subtests** — 1017,54 s). Un archivo o un test:
+  `python -m pytest tests/test_matching.py -q` /
+  `python -m pytest tests/ -k <patrón> -q`.
+- **No hay CI, linter, formatter ni typecheck configurados**: la verificación
+  es la suite de pytest. Muchos tests crean una **BD temporal y aplican las 27
+  migraciones** en `setUp` → la suite tarda minutos, no segundos; no la cortes
+  pensando que se colgó.
 - **`-X utf8` en todo comando que imprima datos de la BD**: sin él, un `\uf0b7`
   o un `\x85` en una descripción rompe la salida (los saves sí se completan).
   Para CSV por consola: `[Console]::OutputEncoding = UTF8` antes.
@@ -53,11 +79,17 @@ caro de descubrir**; lo puntual vive en los handoffs.
 - `data/jobpulse_v15.db` = **corpus real del usuario**. Antes de cualquier
   operación destructiva: `… -m jobpulse_v15 backup --output data\backups\X.db`
   (usa la API de copia de SQLite, valida `integrity_check`, no sobrescribe).
+- La BD **no está en git** (`data/*.db` ignorado): en un clon nuevo no hay
+  corpus; `init-db` crea una base vacía, `init-sources` (o `site seed-cr`)
+  registra plataformas/sitios de CR y los scrapers la llenan.
 - **El CLI migra el esquema al abrir la BD** (avisa `[esquema] Se aplicaron las
   migraciones N-M`). `init-db`, `backup` y `db check` **no** migran.
 - Esquema por migraciones: `src/jobpulse_v15/migrations/0NN_*.sql`. Cambio de
   esquema = **archivo nuevo**; nunca `ALTER` manual ni editar una migración ya
   aplicada. Versionado con `PRAGMA user_version` (actual: **27**).
+  Al añadir una migración hay que actualizar las aserciones de versión
+  hardcodeadas en `tests/test_migraciones.py` y `tests/test_pipeline_metricas.py`
+  (busca `27`), o la suite falla.
 - Si una migración tiene que **recrear una tabla** (cambiar un `CHECK`), SQLite
   no lo permite con `ALTER` y `PRAGMA foreign_keys` no se puede cambiar dentro
   de una transacción: la migración gestiona su propia transacción y lo marca
@@ -66,6 +98,9 @@ caro de descubrir**; lo puntual vive en los handoffs.
   `job_match`); conserva perfil, sitios, taxonomías y reinicia la salud de los
   sitios. **Destructivo**: solo con pedido explícito del usuario.
 - `… -m jobpulse_v15 db check` = integridad + FK (exit≠0 si falla).
+- **`auditoria_db.py` quedó apuntando a la ruta vieja**
+  (`D:\Proyectos\jobpulse_cr\v1_5\data\...`, repo congelado): no lo uses. Para
+  el estado usa `tools/estado_bd.py` (o `db check`).
 
 ## Pipeline completo (el orden NO es negociable)
 
@@ -76,12 +111,14 @@ $py = ".\.venv\Scripts\python.exe"
 # 2. Análisis por reglas (idempotente: solo lo que falta)
 & $py -X utf8 -m jobpulse_v15 analysis extract-pending --limit 500
 # 3. ENRIQUECIMIENTO IA  ← rellena jobs.skills / jobs.languages
-& $py -X utf8 run_enriquecimiento.py
+& $py -X utf8 run_enriquecimiento.py          # con IA externa: --confirmar-externo
 # 4. Re-análisis integrando los CAMPOS ESTRUCTURADOS del aviso
 & $py -X utf8 -m jobpulse_v15 enrich requirements-source --apply
 # 5. Backfill del código canónico de los requisitos ya guardados
 & $py -X utf8 -m jobpulse_v15 enrich requirements-canonico --apply
 # 6. Matching: CORRIDA NUEVA (nunca UPDATE de la anterior)
+#    OJO: por defecto solo evalúa las áreas marcadas en el perfil;
+#    --evaluar-todo ignora ese filtro. --dry no escribe.
 & $py -X utf8 run_paso5.py [--dry] [--evaluar-todo]
 # 7. Evidencia (exit 0 = TODO CUADRA) + hoja de firma
 & $py -X utf8 generar_evidencia_paso5.py
@@ -121,6 +158,9 @@ print(pipeline.resumen_linea(resultado))
 Reglas: una etapa desconocida es `ValueError`; el Paso 5 es siempre **corrida
 nueva**; la etapa `ia` con proveedor externo **no** arranca nada local y la
 confirmación de privacidad la hace el caller (UI) antes de invocar.
+`pipeline.ejecutar(repository)` **sin `etapas`** usa
+`("analisis","ia","reanalisis","paso5","evidencia")`: **no scrapea ni hace
+backfill**; pásalos explícitos si los necesitas (`scrape` exige `sites=`).
 
 ### Métricas por etapa (Ola 4.3)
 
@@ -163,6 +203,9 @@ incompleta.
   **En cambio** `scraper.ejecutar_barrido` (la etapa `scrape` del pipeline, o
   sea `run_full_flow.py`, la UI v2 y `pipeline.ejecutar`) **sí abre Brave bajo
   demanda** y lo cierra **solo si esta corrida lo abrió** (O7.2).
+- **`scrape cinde` y `scrape procomer` son API pública** (GraphQL/REST): no
+  necesitan Brave ni CDP. Los tableros ATS (Workday, Greenhouse, Ashby, Lever,
+  Recruitee, Workable, SuccessFactors) tampoco.
 - **No hay subcomando `scrape elempleo` ni `scrape harvie`**: esos fetchers
   existen en `scraper.FETCHERS` pero solo corren vía `ejecutar_barrido` (sitio
   registrado con esa plataforma), no por CLI directa.
@@ -337,8 +380,10 @@ anteriores `valida=0`); nunca `UPDATE` in-place.
    Curar la taxonomía = **migración de datos** nueva (`02x_taxonomia_*`),
    nunca `UPDATE` a mano. **Para medir la demanda usa
    `taxonomia.demanda_corpus`**, no el `veces` de la cola (se reescribe en
-   cada curación). Estado 2026-11-08: cola **1150** (tanda 3 = migración
-   `026`), conceptos **775** (336 códigos), 2956 requisitos (0 sin código).
+   cada curación). Estado verificado 2026-11-09 (sin cambios desde el cierre
+   del 2026-11-08): cola **1150** (tanda 3 = migración `026`), conceptos
+   **775** (336 códigos), 2956 requisitos (0 sin código), 29 decisiones
+   firmadas, corrida vigente `20261108_214123`.
 3. **Nunca insertar requisitos por SQL directo**: `job_requirements` tiene
    `analysis_id` (FK a `job_analysis`), no `job_id`. Usa `Repository.save_analysis`.
 4. `jobs.posting_language` es NOT NULL (tests: `undetermined`); `mixed` es
@@ -381,8 +426,9 @@ anteriores `valida=0`); nunca `UPDATE` in-place.
     Python, no de Tk).
 15. Retención: la política vive en `ui_config.json` y la comparten UI clásica y
     v2 (merge en `ui_v2/data/retencion.py`); la retención **oculta, nunca borra**.
-16. La etapa `reanalisis` del pipeline solo rehace los avisos que **nunca**
-    integraron `jobs.skills` (`avisos_con_campos_sin_integrar`). Tras cambiar
+16. La etapa `reanalisis` del pipeline rehace **dos** grupos: los avisos que
+    **nunca** integraron `jobs.skills`/idiomas (`avisos_con_campos_sin_integrar`)
+    y los que cambiaron de TEXTO (`avisos_con_texto_cambiado`). Tras cambiar
     la **taxonomía** (una migración `02x_taxonomia_*`), los avisos que ya la
     integraron tienen un análisis **obsoleto** (les faltan requisitos): hay que
     re-analizarlos TODOS con `enrich requirements-source --apply` antes del
