@@ -272,11 +272,17 @@ en copia antes de tocar la BD real (ver `docs/PLAN_MEJORAS.md` §6.2).
 | Caso | Aviso (cita literal) | Escalón que pide | Perfil | Veredicto firmado | Efecto |
 |---|---|---|---|---|---|
 | `workday-Credit---Collections-Specialist--2_R232432` (Sysco) | «Required Associate’s or bachelor’s degree in business, Finance, or a related field» | `associate` (2) + `bachelor` (3) | diplomado técnico (2) **en Electrónica** (el aviso pide business/Finance) | **`bloqueo_real`** | `descartada` (R5: el nivel se cumple, el campo no) |
-| `workday-Production-Supervisor-I_31163511` (Abbott) | «80% completeness of a bachelor’s degree program from a four-year college or university» | estudiante avanzado (3) | diplomado técnico (2), sin hechos "en curso" | **`dudoso`** (sigue abierto) | Falta el **dato** del perfil, no la regla: si se registra "cursando, 80 %+ de los créditos", el motor lo cierra como cumplido; si no, corresponde firmarlo `bloqueo_real` |
+| `workday-Production-Supervisor-I_31163511` (Abbott) | «80% completeness of a bachelor’s degree program from a four-year college or university» | estudiante avanzado (3) | diplomado técnico (2), sin hechos "en curso" | **`bloqueo_real`** (re-firmado el 2026-11-11) | `descartada`: la regla ya estaba decidida y el motor ya la aplicó (el requisito del 80 % quedó `faltante`); la firma solo cerraba el caso |
 
 Las dos firmas están en `docs/PASO5_FIRMA_EDUCACION.json`, ancladas al sha256
 del texto exacto que se leyó (si el aviso se re-raspa y su texto cambia, la
 firma deja de aplicar y el caso vuelve a la hoja).
+
+> **Convención de citas**: en el `criterio` de cada firma, lo que va entre
+> comillas angulares `«...»` es **siempre una cita literal del aviso**. Los
+> nombres de escalones o de reglas van entre comillas simples (`'...'`).
+> `decision sign` lo comprueba al firmar (rechaza la firma y avisa) y
+> `verificar_evidencia.py` lo comprueba al verificar.
 
 ### 5.1 Aplicación en la BD real (2026-11-08)
 
@@ -304,11 +310,11 @@ Abbott (`workday-Production-Supervisor-I_31163511`) sigue **abierto** en
 `revisar_a_mano / educacion_no_confirmada`: la regla ya está decidida, lo que
 falta es el **dato** del perfil.
 
-### 5.2 Qué haría falta para cerrar Abbott
+### 5.2 Qué haría falta para cerrar Abbott (RESUELTO el 2026-11-11)
 
 El aviso pide «80% completeness of a bachelor's degree program» → el escalón
 "estudiante avanzado" (= 80 %+ de los créditos, §4.1). Para que el perfil lo
-alcance hace falta **un hecho educativo en el perfil**:
+alcanzaba hacía falta **un hecho educativo en el perfil**:
 
 - `education_status = 'pursuing'`,
 - `codigo_canonico` de la licenciatura **en curso** (hoy el perfil no tiene
@@ -316,15 +322,25 @@ alcance hace falta **un hecho educativo en el perfil**:
 - y el avance (**80 %+ de los créditos**) registrado en el `qualifier` (o en
   las `notes`) del hecho, o en `numeric_value` + `unit = '%'`.
 
-Con ese hecho, el motor lo cierra como **cumple** (escalón 3 = escalón que
-pide el aviso). Sin él, el perfil solo llega al escalón "diploma técnico" y
-corresponde firmarlo `bloqueo_real` (la escalera de la §1 lo dice: el escalón
+Con ese hecho, el motor lo cerraba como **cumple** (escalón 3 = escalón que
+pide el aviso). Sin él, el perfil solo llegaba al escalón "diploma técnico" y
+correspondía firmarlo `bloqueo_real` (la escalera de la §1 lo dice: el escalón
 "estudiante avanzado" está **por encima** del diploma técnico).
 
 > Nota: el motor ya tiene el escalón "estudiante avanzado" (migración 028,
 > 2026-11-10) **y exige el 80 %**: un `pursuing` en `educacion-universitaria`
 > cuenta como escalón 3 **solo** si documenta el avance → ver §4, §4.1 y
 > `docs/PLAN_MEJORAS.md` §6.2.
+
+**Cómo se cerró (2026-11-11)**: el perfil registra el escalón 2 (diploma
+técnico / associate, completo) y **ningún** hecho `pursuing` → **no alcanza**
+el escalón 3. El motor ya lo había dicho: el requisito del 80 % quedó
+`faltante`. La regla estaba decidida y aplicada, así que lo que faltaba era el
+**veredicto de la segunda persona**, no un dato: se re-firmó como
+`bloqueo_real` (criterio con la cita literal del aviso + la escalera) y Abbott
+pasó a `descartada`. La firma queda **anclada al sha256 del texto**: si el
+perfil registra más adelante esa licenciatura en curso con su avance, la firma
+deja de aplicar y el caso vuelve a abrirse solo.
 
 ---
 

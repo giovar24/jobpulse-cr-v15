@@ -30,6 +30,7 @@ unidos con un salto de linea.
 from __future__ import annotations
 
 import hashlib
+import re
 import sqlite3
 from typing import Any, Mapping
 
@@ -75,6 +76,33 @@ def hash_texto(texto: str) -> str:
 def hash_aviso(requirements_raw: Any, description_raw: Any) -> str:
     """sha256 del texto del aviso, tal como lo lee el motor."""
     return hash_texto(texto_aviso(requirements_raw, description_raw))
+
+
+#: Las comillas angulares «...» del criterio son la CONVENCION de "cita
+#: LITERAL del aviso": lo que va entre ellas tiene que ser un fragmento
+#: exacto del texto del aviso (lo comprueba ``verificar_evidencia.py``).
+#: Los nombres de escalones o de reglas van entre comillas simples ('...'):
+#: si no, la firma se acepta pero la evidencia falla al verificarse.
+CITA_ANGULAR = re.compile(r"«([^»]+)»")
+
+
+def citas_del_criterio(criterio: str) -> list[str]:
+    """Citas literales del aviso que el criterio afirma (``«...»``)."""
+    return [c.strip() for c in CITA_ANGULAR.findall(criterio or "") if c.strip()]
+
+
+def validar_citas(criterio: str, texto_aviso_actual: str) -> list[str]:
+    """Citas del criterio que NO son literales del texto del aviso.
+
+    Devuelve la lista de citas problematicas (vacia = todo bien). No lanza:
+    el llamador decide si es un error (firma) o un aviso (revision).
+    """
+    texto = texto_aviso_actual or ""
+    problematicas: list[str] = []
+    for cita in citas_del_criterio(criterio):
+        if cita not in texto:
+            problematicas.append(cita)
+    return problematicas
 
 
 def validar_dimension(dimension: Any) -> str:
@@ -133,6 +161,23 @@ def hash_aviso_en_base(
     if fila is None:
         return None
     return hash_aviso(fila["requirements_raw"], fila["description_raw"])
+
+
+def texto_aviso_en_base(
+    connection: sqlite3.Connection, job_id: str
+) -> str | None:
+    """Texto ACTUAL del aviso en la base (o ``None`` si no existe).
+
+    Es el mismo texto que se ancla en ``text_hash``: sirve para comprobar
+    que las citas del criterio (``«...»``) son literales de ESTE aviso.
+    """
+    fila = connection.execute(
+        "SELECT requirements_raw, description_raw FROM jobs WHERE job_id = ?",
+        (job_id,),
+    ).fetchone()
+    if fila is None:
+        return None
+    return texto_aviso(fila["requirements_raw"], fila["description_raw"])
 
 
 def guardar_decision(
@@ -325,6 +370,11 @@ def aplicar_firma(
     siendo EXACTAMENTE el que se reviso (``text_hash``). Si el texto cambio,
     la decision NO se aplica (queda pendiente de una firma nueva): una firma
     vieja no puede aplicarse a un texto que nadie leyo.
+
+    Ademas, lo que el criterio cita entre comillas angulares «...» tiene que
+    ser LITERAL del texto del aviso: si no, la firma se RECHAZA (no se
+    escribe). Es la misma comprobacion que hace ``verificar_evidencia.py``,
+    pero aqui falla al firmar y no tres etapas despues.
     """
     dimension = validar_dimension(firma.get("dimension"))
     revisor = str(firma.get("revisor") or "").strip()
@@ -332,6 +382,7 @@ def aplicar_firma(
     aplicadas: list[str] = []
     texto_cambiado: list[str] = []
     desconocidas: list[str] = []
+    citas_no_literal: list[dict[str, str]] = []
     for item in firma.get("decisiones") or []:
         job_id = str(item.get("job_id") or "").strip()
         text_hash = str(item.get("text_hash") or "").strip()
@@ -342,12 +393,20 @@ def aplicar_firma(
         if actual != text_hash:
             texto_cambiado.append(job_id)
             continue
+        criterio = str(item.get("criterio"))
+        texto_actual = texto_aviso_en_base(connection, job_id)
+        problematicas = validar_citas(criterio, texto_actual)
+        if problematicas:
+            citas_no_literal.append(
+                {"job_id": job_id, "citas": " | ".join(problematicas)}
+            )
+            continue
         guardar_decision(
             connection,
             job_id=job_id,
             dimension=dimension,
             veredicto=str(item.get("veredicto")),
-            criterio=str(item.get("criterio")),
+            criterio=criterio,
             revisor=revisor,
             fecha=fecha,
             text_hash=text_hash,
@@ -361,4 +420,5 @@ def aplicar_firma(
         "aplicadas": aplicadas,
         "texto_cambiado": texto_cambiado,
         "desconocidas": desconocidas,
+        "citas_no_literal": citas_no_literal,
     }

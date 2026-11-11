@@ -21,14 +21,20 @@ alcanza el escalón 3 si documenta el avance (si no, no se da por hecho → la
 dimensión queda *no verificable*). **Medición obligatoria en copia: 0
 cambios** en Paso 5 y en viabilidad (735 avisos) en las tres mediciones — el
 perfil no tiene ningún hecho `pursuing`, así que las reglas nuevas no tenían
-sobre qué actuar. La **BD real** quedó migrada a 28, con **tres corridas
-nuevas** del Paso 5 (`20261110_204736`, `20261110_210220` y
-`20261110_222024`), evidencia regenerada (**TODO CUADRA: 140 verificaciones
-literales, 29/29 firmas con cita y efecto**) y `db check` ok (esquema 28,
-`integrity_check` ok, **0 violaciones FK**). Suite completa:
-**1251 passed + 2650 subtests**. Lo único que **no** se puede cerrar sin el
-usuario es el **caso abierto de Abbott**: falta el **dato** del perfil (un
-hecho `pursuing` con el 80 %+ de los créditos) o su firma `bloqueo_real`.
+sobre qué actuar. La **BD real** quedó migrada a 28, con **cuatro corridas nuevas** del Paso 5
+(`20261110_204736`, `20261110_210220`, `20261110_222024` y `20261111_074200`),
+evidencia regenerada (**TODO CUADRA: 140 verificaciones literales, 29/29
+firmas con cita y efecto**) y `db check` ok (esquema 28, `integrity_check` ok,
+**0 violaciones FK**). Suite completa: **1251 passed + 2650 subtests**.
+
+**Abbott quedó CERRADO el 2026-11-11** (`workday-Production-Supervisor-I_31163511`):
+la regla ya estaba decidida y el motor ya la aplicó (el requisito del 80 %
+quedó `faltante`), así que lo que faltaba era el **veredicto de la segunda
+persona**, no un dato: se re-firmó como `bloqueo_real` y la vacante pasó a
+`descartada`. `educacion_no_confirmada` = **0 casos abiertos**. La firma está
+anclada al sha256 del texto: si el perfil registra la licenciatura en curso con
+su avance, el caso se reabre solo. **Regla operativa: no se le pide el dato
+caso por caso** — el motor + la tabla derivan el veredicto.
 ---
 
 ## 0. Tabla de objetivos (estado al cierre del 2026-11-10)
@@ -161,9 +167,11 @@ Quedó explícito y documentado:
 | `run_paso5.py` (tras la 028) | corrida **`20261110_204736`** — 735 avisos, distribución idéntica a `20261108_214123` (0 cambios visibles, 1 cambio interno en Abbott) |
 | `run_paso5.py` (tras el umbral del 80 %) | corrida **`20261110_210220`** — 735 avisos, **0 cambios** frente a la anterior |
 | `run_paso5.py` (tras la corrección de la tabla) | corrida **`20261110_222024`** — 735 avisos, **0 cambios** frente a la anterior |
-| `generar_evidencia_paso5.py` | `docs/PASO5_EVIDENCIA_2026-11-10.md` (1692 líneas) · descartada 100 · no_confirmada 1 |
+| `decision sign` (re-firma de Abbott) | backup `data/backups/pre_firma_abbott_2026-11-11.db` → Abbott `dudoso` → **`bloqueo_real`** (2026-11-11) |
+| `run_paso5.py` (tras la firma) | corrida **`20261111_074200`** — 735 avisos · `descartada` 77→78 · `educacion_no_confirmada` 1→**0** |
+| `generar_evidencia_paso5.py` | `docs/PASO5_EVIDENCIA_2026-11-11.md` (1698 líneas) · descartada 101 · no_confirmada **0** |
 | `verificar_evidencia.py` | **TODO CUADRA: 140 verificaciones con frase LITERAL** · 29/29 firmas con cita y efecto · exit 0 |
-| `generar_revision_pendientes.py` | `docs/PASO5_REVISION_PENDIENTES.md` — **1 caso abierto** (Abbott, `dudoso`), 29 firmados |
+| `generar_revision_pendientes.py` | `docs/PASO5_REVISION_PENDIENTES.md` — **0 casos abiertos**, 29 firmados |
 | `db check` | esquema **28** · `integrity_check` **ok** · **0 violaciones FK** · exit 0 |
 
 ### 1.6 Suite de tests
@@ -173,6 +181,8 @@ Quedó explícito y documentado:
   (755,92 s).
 - Suite completa final (con la corrección de la tabla de EE. UU.): **1251
   passed + 2650 subtests** (1636,67 s).
+- Suite completa final (tras la re-firma de Abbott y el guard de citas):
+  **1255 passed + 2650 subtests** (571,38 s).
 - Baseline actualizado en `AGENTS.md`.
 
 ---
@@ -193,7 +203,34 @@ Quedó explícito y documentado:
 5. **La UI clásica no se tocó** (regla del repo): la ayuda para registrar el
    avance va en la **UI v2** y en la documentación.
 6. **No se registró ningún hecho `pursuing` en el perfil**: es un dato del
-   usuario, no del código. Abbott sigue abierto por eso.
+   usuario, no del código. **Abbott se cerró el 2026-11-11** con la firma
+   `bloqueo_real` (la regla ya estaba decidida y el motor ya la aplicó: el
+   requisito del 80 % quedó `faltante`).
+7. **No se le pregunta el dato caso por caso.** El motor + la tabla derivan el
+   veredicto; lo único que la segunda persona aporta es la firma. La firma
+   queda anclada al texto: si el perfil registra la licenciatura en curso con su
+   avance, el caso se reabre solo.
+
+### 2.1 El fallo de `verificar_evidencia.py` (y su corrección)
+
+La primera re-firma de Abbott **no verificaba**: `verificar_evidencia.py`
+falló con *«la cita firmada NO es literal del texto de la BD»*. La causa no
+era el texto del aviso sino la **convención de citas** de la hoja:
+
+- lo que va entre comillas angulares `«...»` en el `criterio` significa
+  **cita literal del aviso** (lo comprueba `verificar_evidencia.py`);
+- el criterio nombaba el escalón 3 como `«estudiante avanzado»` → el
+  verificador, correctamente, dijo que eso no está en el aviso.
+
+**Corrección**: el nombre del escalón va ahora entre comillas simples
+(`'estudiante avanzado'`) y la única cita `«...»` es la frase real del aviso
+(«80% completeness of a bachelor’s degree program from a four-year college or
+university»).
+
+Además, para que el fallo no vuelva a aparecer **tres etapas después**, la
+firma ahora lo comprueba **al firmar**: `decisiones.validar_citas` +
+`aplicar_firma` rechazan la hoja si una cita no es literal del aviso
+(`decision sign` lo avisa y sale con error; `--dry-run` lo lista).
 
 ---
 
@@ -202,36 +239,31 @@ Quedó explícito y documentado:
 - Esquema **28** · 736 avisos (735 con análisis) · 2956 requisitos (**0** sin
   código canónico) · 775 conceptos (336 códigos) · cola de taxonomía
   **1150** · **29** decisiones firmadas.
-- Corrida vigente del Paso 5: **`20261110_222024`** (735 filas `valida=1`).
+- Corrida vigente del Paso 5: **`20261111_074200`** (735 filas `valida=1`).
 - `db check`: **ok** (integrity ok, 0 FK).
 - Perfil educativo: 2 hechos, ambos `completed` (secundaria + técnico). **No
   hay** ningún `pursuing` → el escalón 3 no lo alcanza nadie todavía.
+- **0 casos abiertos** de `educacion_no_confirmada` (29 firmas vigentes).
 
 ---
 
 ## 4. Pendiente inmediato (priorizado)
 
-1. **Caso abierto de Abbott** (`workday-Production-Supervisor-I_31163511`) —
-   requiere un dato del usuario: registrar un hecho `pursuing` de la
-   licenciatura **con "80 % de créditos completados"** en el campo "Nivel /
-   calificador" (UI v2) → el motor lo cierra como *cumple*; o, si no aplica,
-   firmarlo `bloqueo_real`. Mientras tanto queda `revisar_a_mano /
-   educacion_no_confirmada`.
-2. **Ola 6 · resto** (6.1 RAG consultivo + carta de presentación, 6.3
+1. **Ola 6 · resto** (6.1 RAG consultivo + carta de presentación, 6.3
    embeddings *gated*): sigue **diferido** a decisión del usuario
    (`docs/PLAN_MEJORAS.md` §6).
-3. **Cola de taxonomía 1150** → siguiente tanda de curación. **Ojo: la
+2. **Cola de taxonomía 1150** → siguiente tanda de curación. **Ojo: la
    migración ya no puede ser `028`** (la usa R1) → sería `029`.
    Priorizar variantes con ≥2 avisos reales (`demanda_corpus`, no `veces`).
-4. **Medir el efecto de los puntos 1 y 4 en una corrida real** (no solo en
+3. **Medir el efecto de los puntos 1 y 4 en una corrida real** (no solo en
    copia): el siguiente pipeline completo debe mostrar menos llamadas por
    aviso y el `uso` guardado en `pipeline_etapa.detalle_json`.
-5. **`linkedin-4476184789`** sin descripción: re-scrape del aviso o dejarlo
+4. **`linkedin-4476184789`** sin descripción: re-scrape del aviso o dejarlo
    fuera (no es un bug del extractor).
-6. **`espanol: nativo` es inferencia**, no texto literal (365 avisos): el
+5. **`espanol: nativo` es inferencia**, no texto literal (365 avisos): el
    modelo infiere el idioma del aviso. Inofensivo para el matching (el perfil
    lo cubre), pero a tener en cuenta al auditar.
-7. **Decisiones de usuario pendientes**: **O4** (cerrar el objetivo
+6. **Decisiones de usuario pendientes**: **O4** (cerrar el objetivo
    *superseded*), **O6.4** (slugs ES/EN del perfil).
 
 ---
@@ -242,15 +274,19 @@ Quedó explícito y documentado:
 |---|---|
 | `src/jobpulse_v15/matching.py` | Escalera de 5 niveles, `nivel_efectivo_fact`, `porcentaje_avance_fact`, `porcentaje_estudios_parciales`, `nivel_efectivo_requisito`, `_cargar_facts` trae más columnas del perfil |
 | `src/jobpulse_v15/migrations/028_estudiante_avanzado.sql` | **NUEVO**: migración de datos del escalón 3 |
+| `src/jobpulse_v15/decisiones.py` | `citas_del_criterio`, `validar_citas`, `texto_aviso_en_base`; `aplicar_firma` **rechaza** una firma cuya cita `«...»` no es literal del aviso |
+| `src/jobpulse_v15/cli.py` | `decision sign` reporta `citas_no_literal` (en `--dry-run` y al firmar) y sale con error |
 | `src/jobpulse_v15/ui_v2/tabs/perfil.py` | Pista del avance de créditos en el campo "Nivel / calificador" (UI v2) |
 | `tests/test_matching.py` | Tests de la escalera, del escalón 3, del umbral del 80 % y del aviso parcial |
+| `tests/test_decisiones.py` | `TestCitasLiteralesDeLaFirma`: la firma rechaza citas no literales |
 | `tests/test_migraciones.py` | `TestMigracion028` + versiones 27→28 |
 | `tests/test_pipeline_metricas.py` | Versión del esquema 28 |
-| `docs/REGLAS_NEGOCIO_EDUCACION.md` | **§1.1** (qué dice y qué no dice la tabla de EE. UU.), §4 (escalón 3), **§4.1 (el 80 % exigido)**, §5.2 (qué cerrar Abbott), mediciones |
+| `docs/REGLAS_NEGOCIO_EDUCACION.md` | **§1.1** (qué dice y qué no dice la tabla de EE. UU.), §4 (escalón 3), **§4.1 (el 80 % exigido)**, §5 (Abbott cerrado), §5.2 (la convención de citas), mediciones |
 | `docs/PLAN_MEJORAS.md` | §6.2 HECHO + **§6.2.1** (el 80 %) + **§6.2.2** (nivel efectivo según la tabla) |
-| `docs/PASO5_EVIDENCIA_2026-11-10.md` | **GENERADO** (no editar) |
-| `docs/PASO5_REVISION_PENDIENTES.md` | Hoja de firma regenerada (1 caso abierto) |
-| `AGENTS.md` | Escalera, esquema 28, baseline de tests, regla del 80 % |
+| `docs/PASO5_EVIDENCIA_2026-11-11.md` | **GENERADO** (no editar) |
+| `docs/PASO5_FIRMA_EDUCACION.json` | Hoja firmada (29 decisiones; Abbott en `bloqueo_real` del 2026-11-11) + la convención de citas |
+| `docs/PASO5_REVISION_PENDIENTES.md` | Hoja de firma regenerada (**0 casos abiertos**) |
+| `AGENTS.md` | Escalera, esquema 28, baseline de tests, regla del 80 %, convención de citas, "no pedir el dato caso por caso" |
 
 ---
 

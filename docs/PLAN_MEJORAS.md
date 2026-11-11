@@ -766,6 +766,10 @@ negocio: la regla está escrita y firmada (§5.10) y lo que falta es registrar
 el perfil no alcanza el escalón "estudiante avanzado" y el caso corresponde
 firmarse `bloqueo_real`.
 
+> **Actualizado 2026-11-11**: Abbott quedó **cerrado** con la firma
+> `bloqueo_real` (ver §6.2.3) — la regla ya estaba decidida y el motor ya la
+> aplicó; faltaba el veredicto de la segunda persona, no el dato.
+
 ### 5.8 La UI clásica en el orquestador — **HECHO 2026-11-08** (punto 5)
 
 La UI clásica (`ui.py`) era la **tercera** implementación del flujo: su propio
@@ -888,6 +892,9 @@ en todo el corpus fue Sysco (`revisor_a_mano / educacion_no_confirmada` →
 ya no por falta de regla: falta el **dato** del perfil (un hecho educativo
 "en curso" con 80 %+ de los créditos). Si ese hecho existe, el motor lo cierra
 como cumplido; si no, corresponde firmarlo `bloqueo_real`.
+
+> **Actualizado 2026-11-11**: Abbott se firmó `bloqueo_real` y quedó
+> `descartada` (§6.2.3). `educacion_no_confirmada` = **0 casos abiertos**.
 
 ---
 
@@ -1012,6 +1019,43 @@ actuar; y el único aviso con avance parcial (Abbott) ya pedía 80 %.
 > registre el dato: un hecho `pursuing` de la licenciatura con "80 % de
 > créditos completados" → el motor lo marca *cumple* y el aviso deja de
 > quedar en `revisar_a_mano`.
+
+### 6.2.3 Abbott cerrado con la firma `bloqueo_real` — **HECHO 2026-11-11**
+
+El aviso de Abbott pide el **80 % de un bachelor** → escalón 3 (estudiante
+avanzado). El perfil registra el escalón 2 (diploma técnico / associate,
+completo) y **ningún** hecho `pursuing` → **no alcanza** el escalón 3. El motor
+ya lo había dicho: el requisito del 80 % quedó `faltante`.
+
+La regla estaba **decidida** y el motor **aplicada**: lo que faltaba era el
+**veredicto de la segunda persona** (el sesgo anti-sesgo de la firma), no un
+dato del usuario. Por eso se cerró sin volver a preguntarle nada:
+
+| paso | resultado |
+|---|---|
+| backup | `data/backups/pre_firma_abbott_2026-11-11.db` |
+| `decision sign` | Abbott `dudoso` → **`bloqueo_real`** (2026-11-11), ancla `7d56a94a…` (coincide con el texto actual) |
+| `run_paso5.py` | corrida **`20261111_074200`** — `descartada` 77→78 · `educacion_no_confirmada` 1→**0** |
+| `generar_evidencia_paso5.py` | `docs/PASO5_EVIDENCIA_2026-11-11.md` (1698 líneas) · descartada 101 · no_confirmada 0 |
+| `verificar_evidencia.py` | **TODO CUADRA** · 140 verificaciones literales · 29/29 firmas con cita y efecto · exit 0 |
+| `generar_revision_pendientes.py` | **0 casos abiertos** |
+| `db check` | esquema **28** · integrity ok · **0 violaciones FK** |
+
+La firma queda **anclada al sha256 del texto**: si el perfil registra la
+licenciatura en curso con su avance, el caso se reabre solo (no hay que
+"desfirmar" nada).
+
+**Regla operativa que sale de aquí**: no se le pide el dato caso por caso. Si
+la regla está decidida y el motor ya la aplicó, se deriva del perfil + la
+tabla y se cierra con la firma.
+
+**Guard agregado**: la firma ahora valida sus citas **al firmar**
+(`decisiones.validar_citas`): lo que va entre `«...»` en el `criterio` tiene
+que ser una cita literal del aviso; si no, `decision sign` rechaza la hoja y
+avisa. (Lo que había fallado: el criterio nombraba el escalón 3 como
+`«estudiante avanzado»`, que no es texto del aviso → `verificar_evidencia.py`
+falló en la etapa de verificación. Los nombres de reglas van ahora entre
+comillas simples.)
 
 ### 6.2.2 El nivel efectivo de un programa EN CURSO, según la tabla de EE. UU. — **CORREGIDO 2026-11-10**
 

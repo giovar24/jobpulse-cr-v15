@@ -175,12 +175,24 @@ def _cmd_decision_sign(repository: Repository, args) -> None:
     with repository.database.connection() as connection:
         if args.dry_run:
             actual = []
+            citas_no_literal = []
             for item in firma["decisiones"]:
                 job_id = str(item.get("job_id") or "").strip()
-                actual.append(
+                igual = (
                     decisiones.hash_aviso_en_base(connection, job_id)
                     == str(item.get("text_hash") or "").strip()
                 )
+                actual.append(igual)
+                if not igual:
+                    continue
+                texto = decisiones.texto_aviso_en_base(connection, job_id) or ""
+                problematicas = decisiones.validar_citas(
+                    str(item.get("criterio") or ""), texto
+                )
+                if problematicas:
+                    citas_no_literal.append(
+                        {"job_id": job_id, "citas": " | ".join(problematicas)}
+                    )
             print(
                 json.dumps(
                     {
@@ -190,6 +202,7 @@ def _cmd_decision_sign(repository: Repository, args) -> None:
                         "decisiones": len(firma["decisiones"]),
                         "texto_igual": sum(1 for ok in actual if ok),
                         "texto_cambiado": sum(1 for ok in actual if not ok),
+                        "citas_no_literal": citas_no_literal,
                         "aplicado": False,
                     },
                     ensure_ascii=False,
@@ -203,6 +216,18 @@ def _cmd_decision_sign(repository: Repository, args) -> None:
         print(
             "\n[AVISO] %d aviso(s) cambiaron de texto: su firma NO se aplico."
             % len(resultado["texto_cambiado"])
+        )
+    if resultado.get("citas_no_literal"):
+        print(
+            "\n[ERROR] %d decision(es) citan texto que NO es literal del aviso: "
+            "su firma NO se aplico. Lo que va entre «...» tiene que ser una "
+            "cita EXACTA del aviso (los nombres de reglas van entre comillas "
+            "simples)." % len(resultado["citas_no_literal"])
+        )
+        for item in resultado["citas_no_literal"]:
+            print("  - %s: %s" % (item["job_id"], item["citas"]))
+        raise ValueError(
+            "La firma tiene citas que no son literales del texto del aviso."
         )
 
 

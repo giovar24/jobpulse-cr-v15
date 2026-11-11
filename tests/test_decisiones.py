@@ -376,6 +376,82 @@ class TestHojaDeFirma(unittest.TestCase):
             decisiones.cargar_firma(str(ruta))
 
 
+class TestCitasLiteralesDeLaFirma(unittest.TestCase):
+    """Lo que va entre «...» en el criterio es una CITA LITERAL del aviso.
+
+    `verificar_evidencia.py` lo comprueba; la FIRMA lo comprueba tambien (y
+    falla al firmar, no tres etapas despues). El caso que lo disparo: un
+    criterio que nombraba un escalon de la escalera («estudiante avanzado»)
+    como si fuera texto del aviso -> la firma se aceptaba y la evidencia
+    fallaba al verificarse.
+    """
+
+    def setUp(self):
+        self.tmpdir = tempfile.TemporaryDirectory()
+        self.connection = _crear_base(self.tmpdir.name)
+        _insertar_job(self.connection, "job-1", ALTERNATIVA)
+        self.connection.commit()
+
+    def tearDown(self):
+        self.connection.close()
+        self.tmpdir.cleanup()
+
+    def _firma(self, criterio: str) -> dict:
+        return {
+            "formato": decisiones.FORMATO_FIRMA,
+            "dimension": decisiones.DIMENSION_EDUCACION,
+            "revisor": "Revisor",
+            "fecha": "2026-11-08",
+            "decisiones": [
+                {
+                    "job_id": "job-1",
+                    "veredicto": decisiones.VEREDICTO_BLOQUEO_REAL,
+                    "criterio": criterio,
+                    "text_hash": decisiones.hash_aviso(None, ALTERNATIVA),
+                }
+            ],
+        }
+
+    def test_una_cita_literal_se_aplica(self):
+        firma = self._firma(
+            "El aviso pide «Bachelor's degree or its equivalent» y bloquea."
+        )
+        resultado = decisiones.aplicar_firma(self.connection, firma)
+        self.connection.commit()
+        self.assertEqual(resultado["aplicadas"], ["job-1"])
+        self.assertEqual(resultado["citas_no_literal"], [])
+
+    def test_una_cita_que_no_es_del_aviso_rechaza_la_firma(self):
+        firma = self._firma(
+            "El aviso pide «Bachelor's degree» y es el escalon «estudiante avanzado»."
+        )
+        resultado = decisiones.aplicar_firma(self.connection, firma)
+        self.connection.commit()
+        self.assertEqual(resultado["aplicadas"], [])
+        self.assertEqual(len(resultado["citas_no_literal"]), 1)
+        self.assertEqual(resultado["citas_no_literal"][0]["job_id"], "job-1")
+        self.assertIn("estudiante avanzado", resultado["citas_no_literal"][0]["citas"])
+        # Y NO se escribe nada en la base.
+        self.assertEqual(decisiones.listar_decisiones(self.connection), [])
+
+    def test_un_criterio_sin_citas_se_aplica_normalmente(self):
+        firma = self._firma("El titulo no bloquea: el texto ofrece via alternativa.")
+        resultado = decisiones.aplicar_firma(self.connection, firma)
+        self.connection.commit()
+        self.assertEqual(resultado["aplicadas"], ["job-1"])
+        self.assertEqual(resultado["citas_no_literal"], [])
+
+    def test_validar_citas_devuelve_las_problematicas(self):
+        texto = "Se requiere Bachelor's degree or equivalent experience."
+        self.assertEqual(
+            decisiones.validar_citas("pide «Bachelor's degree»", texto), []
+        )
+        self.assertEqual(
+            decisiones.validar_citas("pide «estudiante avanzado»", texto),
+            ["estudiante avanzado"],
+        )
+
+
 class TestCliDecision(unittest.TestCase):
     """El CLI expone la firma: `decision list` y `decision sign --file`."""
 

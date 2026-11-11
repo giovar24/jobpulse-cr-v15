@@ -59,7 +59,7 @@ caro de descubrir**; lo puntual vive en los handoffs.
 - **App/CLI/scripts** → venv: `.\.venv\Scripts\python.exe -X utf8 …`
 - **Tests** → python del **sistema**: `python -m pytest tests/ -q`
   (pytest **no** está en el venv; suite completa ~13–28 min; baseline verificado
-  2026-11-10: **1251 passed + 2650 subtests** — 1636,67 s). Un archivo o un test:
+  2026-11-11: **1255 passed + 2650 subtests** — 571,38 s). Un archivo o un test:
   `python -m pytest tests/test_matching.py -q` /
   `python -m pytest tests/ -k <patrón> -q`.
 - **No hay CI, linter, formatter ni typecheck configurados**: la verificación
@@ -330,6 +330,15 @@ anteriores `valida=0`); nunca `UPDATE` in-place.
   - CLI: `jobpulse-v15 decision list` / `decision sign --file <firma.json>`
     (`--dry-run` para comprobar sin escribir). La hoja firmada vive en
     `docs/PASO5_FIRMA_EDUCACION.json`.
+  - **Convención de citas**: en el `criterio`, lo que va entre comillas
+    angulares `«...»` es **siempre una cita literal del aviso**; los nombres
+    de escalones o de reglas van entre comillas simples (`'...'`). `decision
+    sign` rechaza la firma si una cita no es literal (y `verificar_evidencia.py`
+    la comprueba al verificar).
+  - **No pedir el dato caso por caso**: si la regla ya está decidida y el
+    motor ya la aplicó, lo que falta es el veredicto de la segunda persona,
+    no un dato del usuario. Derivar del perfil + la tabla y cerrar con la
+    firma (queda anclada al texto: se revierte sola si el perfil cambia).
   - Los estados solo cambian con una **corrida nueva** de Paso 5 (nunca
     `UPDATE` de la anterior). **NO** actualizar estados antes de la firma.
 - **Regla de negocio del nivel educativo** (decidida y firmada 2026-11-08;
