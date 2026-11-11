@@ -1013,6 +1013,29 @@ actuar; y el único aviso con avance parcial (Abbott) ya pedía 80 %.
 > créditos completados" → el motor lo marca *cumple* y el aviso deja de
 > quedar en `revisar_a_mano`.
 
+### 6.2.2 El nivel efectivo de un programa EN CURSO, según la tabla de EE. UU. — **CORREGIDO 2026-11-10**
+
+El motor calculaba el nivel efectivo de un hecho `pursuing` como `nominal − 1`
+(bachelor en curso → associate). Esa resta **suponía** una equivalencia que la
+fuente no dice: la tabla de EE. UU. (*"Completion of each level or stage is a
+prerequisite for access to the next"*) establece que cada etapa **completada**
+es prerrequisito de la siguiente, no que el avance parcial de una etapa valga
+como esa etapa.
+
+Corregido (`matching.nivel_efectivo_fact`):
+
+| Programa en curso | Escalón efectivo | Por qué (tabla de EE. UU.) |
+|---|---|---|
+| associate (ciclo corto) | **1** secundaria | no confiere el associate |
+| bachelor (universitario) | **3** estudiante avanzado (**solo con 80 %+**) | ya tiene el associate (prerrequisito) y le falta el título |
+| master (posgrado) | **4** universitario | el bachelor es prerrequisito y está terminado |
+
+**Medición en copia (2026-11-10, 735 avisos)**: **0 cambios** en Paso 5 y en
+viabilidad (el perfil no tiene hechos `pursuing`). La diferencia es de
+principio: el nivel ya no se deduce de una resta, sino de lo que la tabla dice
+que cada programa presupone. Documentado en
+`docs/REGLAS_NEGOCIO_EDUCACION.md` §1.1.
+
 ### 6.3 Embeddings: el modelo primario está *gated* — OPCIONAL
 
 `google/embeddinggemma-300m` (el modelo primario previsto) devuelve **401**

@@ -833,6 +833,30 @@ class TestSemanticaEducationStatus(unittest.TestCase):
         self.assertEqual(resultado.estado, matching.ESTADO_DESCARTADA)
         self.assertEqual(resultado.motivo, matching.MOTIVO_TITULO_EN_CURSO)
 
+    def test_ciclo_corto_en_curso_no_confiere_el_diploma_tecnico(self):
+        """Tabla de EE. UU.: el associate en curso NO confiere el associate.
+
+        'Completion of each level is a prerequisite for access to the next' no
+        significa que el avance partial del ciclo corto valga como ciclo corto
+        terminado: el unico escalon que puede declarar es secundaria (1).
+        """
+        _insertar_fact(
+            self.connection,
+            "diplomado-en-curso",
+            "educacion-tecnica",
+            "education",
+            education_status="pursuing",
+        )
+        self.connection.commit()
+        evaluador = matching.EvaluadorPaso5(self.connection)
+        self.assertEqual(
+            evaluador.nivel_candidato_educacion(),
+            matching.NIVEL_SECUNDARIA,
+        )
+        self.assertFalse(
+            evaluador.tiene_nivel_educativo(matching.NIVEL_SUPERIOR_CORTO)
+        )
+
     def test_perfil_sin_hechos_educativos_es_no_verificable(self):
         """Sin hechos educativos NO se puede afirmar que 'no cumple'."""
         self._job_estudiante_activo("job-p3")

@@ -38,8 +38,13 @@ Reglas del bloqueante de educacion (acordadas con el usuario):
 * ESCALERA EDUCATIVA (regla de negocio 2026-11-08/10, ver
   ``docs/REGLAS_NEGOCIO_EDUCACION.md``): secundaria (1) < superior de ciclo
   corto (2) < estudiante avanzado (3) < titulo universitario (4) < posgrado
-  (5). Un hecho ``pursuing`` NO confiere titulo: su nivel EFECTIVO es el
-  escalon inferior (un bachelor en curso cuenta como estudiante avanzado).
+  (5). Un hecho ``pursuing`` NO confiere el titulo que estudia: su nivel
+  EFECTIVO lo dice la TABLA DE EE. UU. ("completion of each level is a
+  prerequisite for access to the next"), no una resta:
+    - bachelor (universitario) en curso -> escalon 3 (estudiante avanzado),
+      SOLO con el 80 %+ de los creditos documentado;
+    - associate (ciclo corto) en curso -> escalon 1: no confiere el associate;
+    - master (posgrado) en curso -> escalon 4: el bachelor es prerrequisito.
   Un aviso con "X % de completitud" declara el escalon 3, no el 4.
   "Estudiante avanzado" = **80 % o mas de los creditos** (regla del usuario,
   referencia EE. UU.): el umbral se EXIGE, no se supone. El aviso que pide
@@ -1298,31 +1303,38 @@ class EvaluadorPaso5:
         """Nivel EFECTIVO de un hecho educativo del perfil.
 
         El nivel NOMINAL sale de ``concepto.nivel_orden``. Si el hecho esta
-        ``pursuing`` NO confiere titulo:
+        ``pursuing`` NO confiere el titulo que study (referencia EE. UU.:
 
-        * **Universitario en curso**: solo alcanza el escalon "estudiante
-          avanzado" (3) si el hecho DOCUMENTA el 80 % o mas de los creditos
-          (``porcentaje_avance_fact``). Sin ese dato no se puede afirmar el
-          escalon (devuelve ``None``): "nunca dar por hecho lo que el perfil
-          no dice".
+        * **Universitario (bachelor) en curso**: es el ULTIMO TRAMO del plan
+          de 4 anos, no un ciclo corto. Su nivel efectivo es el escalon
+          "estudiante avanzado" (3) **solo si el hecho DOCUMENTA el 80 % o
+          mas de los creditos** (``porcentaje_avance_fact``). Sin ese dato no
+          se puede afirmar el escalon (devuelve ``None``): "nunca dar por
+          hecho lo que el perfil no dice".
+        * **Ciclo corto (associate) en curso**: NO confiere el associate
+          (un bachelor en curso no es un associate: son titulos distintos de
+          la tabla de EE. UU.) -> nivel efectivo 1 (secundaria).
         * **Posgrado en curso**: el titulo universitario (4) es el requisito
-          de entrada del programa, asi que lo confiere (no depende del avance).
-        * **Ciclo corto o secundaria en curso**: baja un escalon (el avance
-          parcial no confiere titulo), sin bajar nunca de secundaria.
+          de entrada del programa (un master presupone el bachelor
+          terminado), asi que lo confiere; no depende del avance.
+        * **Secundaria en curso**: no confiere el titulo -> nivel efectivo 1
+          (la secundaria).
         """
         nivel = self.nivel_concepto(fact["codigo_canonico"], "education")
         if nivel is None:
             return None
         if fact.get("education_status") != "pursuing":
             return nivel
-        if nivel >= NIVEL_UNIVERSITARIO:
-            if nivel == NIVEL_UNIVERSITARIO:
-                avance = porcentaje_avance_fact(fact)
-                if avance is None or avance < UMBRAL_ESTUDIANTE_AVANZADO:
-                    return None
-                return NIVEL_ESTUDIANTE_AVANZADO
+        if nivel == NIVEL_UNIVERSITARIO:
+            avance = porcentaje_avance_fact(fact)
+            if avance is None or avance < UMBRAL_ESTUDIANTE_AVANZADO:
+                return None
+            return NIVEL_ESTUDIANTE_AVANZADO
+        if nivel == NIVEL_POSGRADO:
             return NIVEL_UNIVERSITARIO
-        return max(NIVEL_SECUNDARIA, nivel - 1)
+        # Ciclo corto o secundaria en curso: el avance parcial no confiere
+        # el titulo -> solo queda el escalon de secundaria.
+        return NIVEL_SECUNDARIA
 
     def nivel_candidato_educacion(self) -> int | None:
         niveles = self.niveles_educativos()

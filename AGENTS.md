@@ -58,8 +58,8 @@ caro de descubrir**; lo puntual vive en los handoffs.
 
 - **App/CLI/scripts** → venv: `.\.venv\Scripts\python.exe -X utf8 …`
 - **Tests** → python del **sistema**: `python -m pytest tests/ -q`
-  (pytest **no** está en el venv; suite completa ~13–19 min; baseline verificado
-  2026-11-10: **1250 passed + 2650 subtests** — 755,92 s). Un archivo o un test:
+  (pytest **no** está en el venv; suite completa ~13–28 min; baseline verificado
+  2026-11-10: **1251 passed + 2650 subtests** — 1636,67 s). Un archivo o un test:
   `python -m pytest tests/test_matching.py -q` /
   `python -m pytest tests/ -k <patrón> -q`.
 - **No hay CI, linter, formatter ni typecheck configurados**: la verificación
@@ -354,13 +354,16 @@ anteriores `valida=0`); nunca `UPDATE` in-place.
   - **El escalón "estudiante avanzado" YA EXISTE** (migración **028**,
     2026-11-10): la escalera es 1 secundaria < 2 ciclo corto < 3 estudiante
     avanzado < 4 universitario < 5 posgrado. Un hecho `pursuing` **no**
-    confiere título: su nivel efectivo es el escalón inferior
-    (`matching.nivel_efectivo_fact`), y un aviso con "X % de completitud"
-    declara el escalón 3, no el 4. **El 80 % es un umbral EXIGIDO** (§4.1 de
-    `docs/REGLAS_NEGOCIO_EDUCACION.md`): un `pursuing` solo alcanza el
-    escalón 3 si documenta el avance (`matching.porcentaje_avance_fact`
-    lee `qualifier`/`notes`/`value_text` o `numeric_value` + `unit='%'`), y
-    un aviso que pida menos del 80 % queda en el escalón 2. Medición en
+    confiere el título que estudia; su nivel efectivo lo dice la **tabla de
+    EE. UU.** (§1.1 de `docs/REGLAS_NEGOCIO_EDUCACION.md`), no una resta:
+    bachelor en curso → escalón 3 (**solo con el 80 %+ documentado**),
+    associate en curso → escalón 1 (no confiere el associate), master en
+    curso → escalón 4 (el bachelor es prerrequisito). Un aviso con "X % de
+    completitud" declara el escalón 3, no el 4. **El 80 % es un umbral
+    EXIGIDO** (§4.1): un `pursuing` solo alcanza el escalón 3 si documenta
+    el avance (`matching.porcentaje_avance_fact` lee
+    `qualifier`/`notes`/`value_text` o `numeric_value` + `unit='%'`), y un
+    aviso que pida menos del 80 % queda en el escalón 2. Mediciones en
     copia: 0 cambios de estado en el Paso 5; el único aviso afectado es el
     caso abierto de Abbott (su requisito del 80 % pasa de `no_confirmado` a
     `faltante` y su banda se topa en `revisar`). Ver

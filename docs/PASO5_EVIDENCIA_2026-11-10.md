@@ -1,4 +1,4 @@
-# Paso 5 — Evidencia del bloqueante educativo (corrida `20261110_210220`)
+# Paso 5 — Evidencia del bloqueante educativo (corrida `20261110_222024`)
 
 > Documento GENERADO por `generar_evidencia_paso5.py` (no editado a mano).
 > Todo el texto citado es **literal** de `jobs.requirements_raw` +
@@ -100,10 +100,11 @@ corrida          filas  valida=1
 20261108_213837  735    0
 20261108_214123  735    0
 20261110_204736  735    0
-20261110_210220  735    735
+20261110_210220  735    0
+20261110_222024  735    735
 ```
 
-## 3. Conteo por estado y motivo (corrida vigente `20261110_210220`)
+## 3. Conteo por estado y motivo (corrida vigente `20261110_222024`)
 
 ```
 calificada             | cumple_umbral                          | 202
@@ -1523,7 +1524,7 @@ corrida `20261029_171039` (106 vacantes en total):
   tres, ordenadas por `job_id`).
 
 Cada caso se revisó a mano contra la frase literal del aviso.
-`Estado final` es el de la corrida vigente `20261110_210220`.
+`Estado final` es el de la corrida vigente `20261110_222024`.
 
 | # | job_id | veredicto manual | por qué | estado final | motivo final |
 |---|---|---|---|---|---|
@@ -1677,7 +1678,7 @@ Cada caso se revisó a mano contra la frase literal del aviso.
 - **B30 `workday-Technical-Project-Manager---HiredScore_JR-0108592-1`** — Preferred Qualifications + Bachelor's degree
   > ...ers and internal teams even when priorities or requirements are evolving Strong problem-solving skills, with the ability to troubleshoot technical issues and drive resolution Preferred Qualifications Bachelor’s degree in Business, Information Systems, Industrial Engineering, or a related field 2+ years of experience delivering AI-enabled solutions, intelligent automation, or ML-powered features wi...
 
-## 8. DELTA vs. la corrida anterior `20261110_204736` (0 avisos cambian)
+## 8. DELTA vs. la corrida anterior `20261110_210220` (0 avisos cambian)
 
 Cada cambio se midió ANTES de escribir la corrida nueva (evaluación en
 seco contra la BD) y aquí queda documentado con la frase literal del

@@ -1,29 +1,34 @@
 # Handoff — Sesión 2026-11-10
 
 **TL;DR**: se implementó y aplicó la **Ola 6 · R1** (el escalón "estudiante
-avanzado" de la escalera educativa) y, a partir de la regla que el usuario
-enunció, el **80 % de los créditos pasó de supuesto a UMBRAL EXIGIDO**. La
-escalera del motor quedó en **cinco** escalones (1 secundaria < 2 ciclo corto <
-3 estudiante avanzado < 4 universitario < 5 posgrado) con la **migración de
-datos 028** (esquema **28**). Además se dejó explícito que **"estudios
-avanzados" NO es postgrado**: posgrado es el nivel 5 (título de posgrado) y
-"advanced university studies" es la única vía que se trata como posgrado sin
-título (presupone el universitario previo); "coursework/studies toward a
-university degree" es nivel 3. La regla del 80 % se exige **en las dos
-direcciones**: el aviso que pide "X % completeness" declara el escalón 3 solo
-si X ≥ 80 (si pide menos, escalón 2) y un hecho `pursuing` **solo** alcanza
-el escalón 3 si documenta el avance (si no, no se da por hecho → la dimensión
-queda *no verificable*). **Medición obligatoria en copia: 0 cambios** en Paso 5
-y en viabilidad (735 avisos) — el perfil no tiene ningún hecho `pursuing`, así
-que el umbral no tenía sobre qué actuar. La **BD real** quedó migrada a 28,
-con **dos corridas nuevas** del Paso 5 (`20261110_204736` y
-`20261110_210220`), evidencia regenerada (**TODO CUADRA: 140 verificaciones
+avanzado" de la escalera educativa) y, a partir de las reglas que el usuario
+enunció, se ajustó el motor en tres puntos: (a) el **80 % de los créditos pasó
+de supuesto a UMBRAL EXIGIDO**; (b) el **nivel efectivo de un programa en
+curso** ya no se deduce de una resta (`nominal − 1`) sino de lo que dice la
+**tabla de EE. UU.** ("completion of each level is a prerequisite for access to
+the next"): bachelor en curso → escalón 3 (solo con el 80 %+), associate en
+curso → escalón 1 (no confiere el associate), master en curso → escalón 4 (el
+bachelor es prerrequisito); (c) **"estudios avanzados" NO es postgrado**:
+posgrado es el nivel 5 (título de posgrado) y "advanced university studies" es
+la única vía que se trata como posgrado sin título (presupone el
+universitario previo); "coursework/studies toward a university degree" es
+nivel 3. La escalera del motor quedó en **cinco** escalones (1 secundaria <
+2 ciclo corto < 3 estudiante avanzado < 4 universitario < 5 posgrado) con la
+**migración de datos 028** (esquema **28**). La regla del 80 % se exige **en
+las dos direcciones**: el aviso que pide "X % completeness" declara el escalón
+3 solo si X ≥ 80 (si pide menos, escalón 2) y un hecho `pursuing` **solo**
+alcanza el escalón 3 si documenta el avance (si no, no se da por hecho → la
+dimensión queda *no verificable*). **Medición obligatoria en copia: 0
+cambios** en Paso 5 y en viabilidad (735 avisos) en las tres mediciones — el
+perfil no tiene ningún hecho `pursuing`, así que las reglas nuevas no tenían
+sobre qué actuar. La **BD real** quedó migrada a 28, con **tres corridas
+nuevas** del Paso 5 (`20261110_204736`, `20261110_210220` y
+`20261110_222024`), evidencia regenerada (**TODO CUADRA: 140 verificaciones
 literales, 29/29 firmas con cita y efecto**) y `db check` ok (esquema 28,
 `integrity_check` ok, **0 violaciones FK**). Suite completa:
-**1249 passed + 2650 subtests**. Lo único que **no** se puede cerrar sin el
+**1251 passed + 2650 subtests**. Lo único que **no** se puede cerrar sin el
 usuario es el **caso abierto de Abbott**: falta el **dato** del perfil (un
 hecho `pursuing` con el 80 %+ de los créditos) o su firma `bloqueo_real`.
-
 ---
 
 ## 0. Tabla de objetivos (estado al cierre del 2026-11-10)
@@ -106,14 +111,36 @@ EE. UU. ya discutida). Implementado como **exigido en las dos direcciones**:
   repo: solo con permiso explícito).
 - Tests: 6 nuevos en `tests/test_matching.py` (sin avance → no escalón 3;
   50 % → no escalón 3; 80 % en `numeric_value` → escalón 3; posgrado en curso
-  → nivel 4; aviso al 50 % → escalón 2; lectura del porcentaje).
+  → nivel 4; aviso al 50 % → escalón 2; lectura del porcentaje) + 1 más en
+  §1.3 (associate en curso → escalón 1).
 
 **Medición en copia (735 avisos)**: **0 cambios** en Paso 5 y **0** en
 viabilidad. Es lo esperado: el perfil **no tiene** hechos `pursuing` (sus 2
 hechos educativos son `completed`) y el único aviso con avance parcial
 (Abbott) ya pedía 80 %.
 
-### 1.3 "Estudios avanzados" NO es postgrado (aclarado por el usuario)
+### 1.3 El nivel efectivo de un programa EN CURSO, corregido con la tabla de EE. UU.
+
+El motor calculaba el nivel efectivo de un hecho `pursuing` como
+`nominal − 1` (bachelor en curso → associate). Esa resta **suponía** una
+equivalencia que la fuente no dice. La tabla de EE. UU. (*"Completion of each
+level or stage is a prerequisite for access to the next"*) dice que cada etapa
+**completada** es prerrequisito de la siguiente, no que el avance parcial de
+una etapa valga como esa etapa.
+
+Corregido (`matching.nivel_efectivo_fact`):
+
+| Programa en curso | Escalón efectivo | Por qué |
+|---|---|---|
+| associate (ciclo corto) | **1** secundaria | no confiere el associate |
+| bachelor (universitario) | **3** estudiante avanzado (**solo con 80 %+**) | ya tiene el associate (prerrequisito) y le falta el título |
+| master (posgrado) | **4** universitario | el bachelor es prerrequisito y está terminado |
+
+**Medición en copia (735 avisos)**: **0 cambios** en Paso 5 y en viabilidad
+(el perfil no tiene hechos `pursuing`). Documentado en
+`docs/REGLAS_NEGOCIO_EDUCACION.md` §1.1 y `docs/PLAN_MEJORAS.md` §6.2.2.
+
+### 1.4 "Estudios avanzados" NO es postgrado (aclarado por el usuario)
 
 Quedó explícito y documentado:
 
@@ -125,24 +152,27 @@ Quedó explícito y documentado:
 | `or coursework / studies toward a university degree` | **3 · estudiante avanzado** (vía) |
 | `or advanced university studies` | **5 · posgrado** (vía) — **excepción**: presupone el título universitario previo, es posgrado *sin el título* |
 
-### 1.4 Aplicación en la BD real (con backup)
+### 1.5 Aplicación en la BD real (con backup)
 
 | paso | resultado |
 |---|---|
-| backup previo | `data/backups/pre-028_2026-11-10.db` y `data/backups/pre-umbral-80_2026-11-10.db` |
+| backup previo | `data/backups/pre-028_2026-11-10.db`, `pre-umbral-80_2026-11-10.db`, `pre-tabla-eeuu_2026-11-10.db` |
 | migración | `[esquema] Se aplicaron las migraciones 28-28` → esquema **28** |
 | `run_paso5.py` (tras la 028) | corrida **`20261110_204736`** — 735 avisos, distribución idéntica a `20261108_214123` (0 cambios visibles, 1 cambio interno en Abbott) |
 | `run_paso5.py` (tras el umbral del 80 %) | corrida **`20261110_210220`** — 735 avisos, **0 cambios** frente a la anterior |
-| `generar_evidencia_paso5.py` | `docs/PASO5_EVIDENCIA_2026-11-10.md` (1691 líneas) · descartada 100 · no_confirmada 1 |
+| `run_paso5.py` (tras la corrección de la tabla) | corrida **`20261110_222024`** — 735 avisos, **0 cambios** frente a la anterior |
+| `generar_evidencia_paso5.py` | `docs/PASO5_EVIDENCIA_2026-11-10.md` (1692 líneas) · descartada 100 · no_confirmada 1 |
 | `verificar_evidencia.py` | **TODO CUADRA: 140 verificaciones con frase LITERAL** · 29/29 firmas con cita y efecto · exit 0 |
 | `generar_revision_pendientes.py` | `docs/PASO5_REVISION_PENDIENTES.md` — **1 caso abierto** (Abbott, `dudoso`), 29 firmados |
 | `db check` | esquema **28** · `integrity_check` **ok** · **0 violaciones FK** · exit 0 |
 
-### 1.5 Suite de tests
+### 1.6 Suite de tests
 
 - Suite completa tras la 028: **1244 passed + 2650 subtests** (1137,35 s).
 - Suite completa tras el umbral del 80 %: **1250 passed + 2650 subtests**
   (755,92 s).
+- Suite completa final (con la corrección de la tabla de EE. UU.): **1251
+  passed + 2650 subtests** (1636,67 s).
 - Baseline actualizado en `AGENTS.md`.
 
 ---
@@ -172,7 +202,7 @@ Quedó explícito y documentado:
 - Esquema **28** · 736 avisos (735 con análisis) · 2956 requisitos (**0** sin
   código canónico) · 775 conceptos (336 códigos) · cola de taxonomía
   **1150** · **29** decisiones firmadas.
-- Corrida vigente del Paso 5: **`20261110_210220`** (735 filas `valida=1`).
+- Corrida vigente del Paso 5: **`20261110_222024`** (735 filas `valida=1`).
 - `db check`: **ok** (integrity ok, 0 FK).
 - Perfil educativo: 2 hechos, ambos `completed` (secundaria + técnico). **No
   hay** ningún `pursuing` → el escalón 3 no lo alcanza nadie todavía.
@@ -187,9 +217,9 @@ Quedó explícito y documentado:
    calificador" (UI v2) → el motor lo cierra como *cumple*; o, si no aplica,
    firmarlo `bloqueo_real`. Mientras tanto queda `revisar_a_mano /
    educacion_no_confirmada`.
-2. **Ola 6 · R2** (siguiente del backlog de Ola 6): el resto de §6 del
-   `docs/PLAN_MEJORAS.md` sigue **diferido** a decisión del usuario
-   (RAG consultivo + carta de presentación, embeddings *gated*).
+2. **Ola 6 · resto** (6.1 RAG consultivo + carta de presentación, 6.3
+   embeddings *gated*): sigue **diferido** a decisión del usuario
+   (`docs/PLAN_MEJORAS.md` §6).
 3. **Cola de taxonomía 1150** → siguiente tanda de curación. **Ojo: la
    migración ya no puede ser `028`** (la usa R1) → sería `029`.
    Priorizar variantes con ≥2 avisos reales (`demanda_corpus`, no `veces`).
@@ -216,8 +246,8 @@ Quedó explícito y documentado:
 | `tests/test_matching.py` | Tests de la escalera, del escalón 3, del umbral del 80 % y del aviso parcial |
 | `tests/test_migraciones.py` | `TestMigracion028` + versiones 27→28 |
 | `tests/test_pipeline_metricas.py` | Versión del esquema 28 |
-| `docs/REGLAS_NEGOCIO_EDUCACION.md` | §4 (escalón 3), **§4.1 (el 80 % exigido)**, §5.2 (qué cerrar Abbott), mediciones |
-| `docs/PLAN_MEJORAS.md` | §6.2 HECHO + **§6.2.1** (el 80 %) |
+| `docs/REGLAS_NEGOCIO_EDUCACION.md` | **§1.1** (qué dice y qué no dice la tabla de EE. UU.), §4 (escalón 3), **§4.1 (el 80 % exigido)**, §5.2 (qué cerrar Abbott), mediciones |
+| `docs/PLAN_MEJORAS.md` | §6.2 HECHO + **§6.2.1** (el 80 %) + **§6.2.2** (nivel efectivo según la tabla) |
 | `docs/PASO5_EVIDENCIA_2026-11-10.md` | **GENERADO** (no editar) |
 | `docs/PASO5_REVISION_PENDIENTES.md` | Hoja de firma regenerada (1 caso abierto) |
 | `AGENTS.md` | Escalera, esquema 28, baseline de tests, regla del 80 % |
@@ -230,6 +260,13 @@ Quedó explícito y documentado:
   of State / InfoUSA, *Structure of U.S. Education*): "associate" = ciclo
   corto, "bachelor" = universitario, y el avance parcial se expresa como
   "X % of completeness of a bachelor's degree program".
+- La tabla tiene **4 etapas de título** (associate < bachelor's < master's <
+  doctorate) con *"completion of each level or stage is a prerequisite for
+  access to the next"*: lo que se **completa** habilita la etapa siguiente.
+  De ahí se deriva el nivel efectivo de un programa en curso (§1.1 del doc de
+  reglas): el bachelor en curso **ya tiene** el associate (por eso el escalón
+  3 está por encima del 2), el associate en curso **no** tiene el associate
+  (escalón 1) y el master en curso **tiene** el bachelor (escalón 4).
 - El **CONESUP** queda como criterio de curación del perfil (qué título
   cuenta como académico superior), **sin fuente documental aportada**.
 - La escalera del CONESUP y la de EE. UU. **coinciden en los niveles**;

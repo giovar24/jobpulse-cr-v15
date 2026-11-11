@@ -23,9 +23,9 @@ posgrado
 ```
 
 En el motor (`src/jobpulse_v15/matching.py`) esos escalones son los
-`NIVEL_*` (`1` secundaria · `2` superior de ciclo corto · `3` universitario ·
-`4` posgrado; el escalón "estudiante avanzado" es el que falta y es el punto
-de la §4).
+`NIVEL_*`: `1` secundaria · `2` superior de ciclo corto · **`3` estudiante
+avanzado** · `4` universitario · `5` posgrado (el escalón 3 es el punto de la
+§4 y llegó con la migración **028**).
 
 ### Fuente de la escalera
 
@@ -58,6 +58,34 @@ entidad acreditada por el CONESUP cuenta como título académico superior"*. Es
 un **criterio de curación del perfil** (qué hecho educativo merece qué código
 canónico), no una comparación del matching: el motor compara **niveles**, y el
 nivel de un hecho lo declara el código canónico curado.
+
+### 1.1 Qué dice la tabla y qué NO dice (2026-11-10)
+
+La tabla de EE. UU. es una escalera de **4 etapas de TÍTULO**
+(associate < bachelor's < master's < doctorate) con la regla *"completion of
+each level or stage is a prerequisite for access to the next"*. Leída al pie:
+
+1. **El associate NO es un bachelor**: es el título de ciclo corto (2 años). El
+   "diploma técnico" CR es su equivalente.
+2. **El prerrequisito es una ETAPA COMPLETADA**: para entrar al bachelor hay
+   que haber **completado** el associate. Quien está en el bachelor **ya tiene
+   el associate** (de ahí que el escalón "estudiante avanzado" esté **por
+   encima** del ciclo corto y no sea un ciclo corto disfrazado).
+3. **La tabla no dice que el avance parcial equivalga a un título**: el
+   avance parcial del bachelor no confiere título (ISCED 2011) → por eso el
+   escalón 3 es propio.
+4. **Lo que la tabla NO autoriza**: tratar "bachelor en curso" como
+   "associate en curso". El `nominal − 1` que el motor usaba hasta el
+   2026-11-10 **suponía** esa equivalencia sin que la fuente la dijera: un
+   associate en curso **no** confiere el associate.
+
+Efectivo de cada programa en curso (`matching.nivel_efectivo_fact`):
+
+| Programa que se cursa | Títulos ya completados (por el prerrequisito) | Escalón efectivo |
+|---|---|---|
+| associate (ciclo corto) en curso | — | **1** (secundaria): no confiere el associate |
+| bachelor (universitario) en curso | associate | **3** (estudiante avanzado) **solo con el 80 %+ documentado**; sin el dato, nada |
+| master (posgrado) en curso | bachelor | **4** (universitario): el bachelor está terminado |
 
 ---
 
@@ -134,11 +162,16 @@ La escalera del motor ya tiene **cinco** escalones:
 
 Cómo lo aplica el motor (`matching.py`):
 
-1. **El estado cuenta**: un hecho `pursuing` no confiere título → su nivel
-   **efectivo** es el escalón inferior (`nivel_efectivo_fact`). Un
-   `pursuing` en `educacion-universitaria` (nominal 4) cuenta como
-   estudiante avanzado (3) **solo si documenta el 80 %+ de los créditos**;
-   un `completed` conserva el nominal.
+1. **El estado cuenta**: un hecho `pursuing` no confiere el título que estudia
+   → su nivel **efectivo** lo dice la tabla de EE. UU. (§1.1), no una resta:
+   - `educacion-universitaria` (bachelor) en curso → **3** (estudiante
+     avanzado) **solo si documenta el 80 %+ de los créditos**; sin el dato no
+     se puede afirmar (nivel `None`).
+   - `educacion-tecnica` (associate) en curso → **1** (secundaria): no
+     confiere el associate.
+   - `educacion-posgrado` (master) en curso → **4** (universitario): el
+     bachelor es el prerrequisito y está terminado.
+   - `completed` conserva el nivel nominal.
 2. **El aviso con "X % de completitud"** declara el escalón 3 (si pide 80 % o
    más) o el escalón 2 (si pide menos), nunca el 4
    (`nivel_efectivo_requisito` + `porcentaje_estudios_parciales`).
@@ -214,6 +247,20 @@ nuevo no tiene sobre qué actuar; y el único aviso con avance parcial
 que se registre un `pursuing` (que es exactamente el caso abierto de
 Abbott: si se registra con 80 %+ de créditos, el motor lo cierra como
 *cumple*).
+
+**Medición de la corrección de la §1.1 (2026-11-10, copia, 735 avisos)** —
+el `nominal − 1` (que suponía "associate en curso" para un bachelor en curso)
+sustituido por la tabla de EE. UU.:
+
+| Dimensión | Cambios |
+|---|---|
+| Paso 5: estado, motivo, puntaje, cobertura, conteos | **0** |
+| Viabilidad: banda, ajuste, veto | **0** |
+
+**0 cambios** otra vez, por el mismo motivo: sin hechos `pursuing` en el
+perfil, ningún nivel efectivo cambia. La diferencia es de **principio**: el
+nivel de un estudiante en curso ya no se deduce de una resta, sino de lo que
+la tabla dice que el programa presupone.
 
 Plan original (histórico): escalón nuevo por migración de datos + medición
 en copia antes de tocar la BD real (ver `docs/PLAN_MEJORAS.md` §6.2).
