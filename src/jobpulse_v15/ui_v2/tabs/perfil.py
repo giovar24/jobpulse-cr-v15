@@ -230,7 +230,15 @@ class PerfilTab(BaseTab):
         self._widgets["valor"] = self._entrada(form, "Valor (texto a mostrar)")
 
         SectionTitle(form, theme, "Detalle").pack(fill="x", pady=(14, 6))
-        self._widgets["qualifier"] = self._entrada(form, "Nivel / calificador")
+        self._widgets["qualifier"] = self._entrada(
+            form,
+            "Nivel / calificador",
+            pista=(
+                "Educación en curso: escribe aquí el avance, p. ej. "
+                "'80 % de créditos completados' (el motor exige el 80 %+ "
+                "para el escalón 'estudiante avanzado')"
+            ),
+        )
         self._widgets["estado_educacion"] = self._combo(
             form, "Estado de educación",
             [etiqueta_estado_educacion(e) for e in ESTADOS_EDUCACION],
@@ -269,7 +277,12 @@ class PerfilTab(BaseTab):
         self._widgets["categoria"].bind("<<ComboboxSelected>>", self._on_categoria)
         self._aplicar_categoria()
 
-    def _entrada(self, parent: tk.Misc, etiqueta: str) -> ttk.Entry:
+    def _entrada(
+        self,
+        parent: tk.Misc,
+        etiqueta: str,
+        pista: str = "",
+    ) -> ttk.Entry:
         theme = self.theme
         marco = tk.Frame(parent, bg=theme.color("surface"))
         marco.pack(fill="x", pady=(0, 8))
@@ -279,6 +292,12 @@ class PerfilTab(BaseTab):
         ).pack(anchor="w", pady=(0, 2))
         entrada = ttk.Entry(marco, font=theme.font(9))
         entrada.pack(fill="x")
+        if pista:
+            tk.Label(
+                marco, text=pista, bg=theme.color("surface"),
+                fg=theme.color("text_faint"), font=theme.font(7), anchor="w",
+                wraplength=280, justify="left",
+            ).pack(anchor="w", pady=(2, 0))
         return entrada
 
     def _combo(self, parent: tk.Misc, etiqueta: str, valores: list[str]) -> ttk.Combobox:

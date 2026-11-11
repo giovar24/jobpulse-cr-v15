@@ -67,7 +67,7 @@ nivel de un hecho lo declara el código canónico curado.
 |---|---|---|---|
 | Posgrado | master's, MBA, doctorate, PhD | posgrado | `educacion-posgrado` |
 | Título universitario | bachelor's degree, university degree, four-year college degree, "licenciatura" | bachillerato universitario / licenciatura | `educacion-universitaria` |
-| Estudiante avanzado (80 %+) | "X % of completeness of a bachelor's degree program" | estudiante avanzado con la mayoría de los créditos | **falta el escalón** (§4) |
+| Estudiante avanzado (80 %+) | "X % of completeness of a bachelor's degree program" | estudiante avanzado con la mayoría de los créditos | escalón `3` (`nivel_escala`); requiere un hecho `pursuing` **con el 80 %+ documentado** (§4, §4.1) |
 | Diploma técnico | associate's degree, two-year college degree, technical degree, "técnico superior" | diploma técnico / técnico superior | `educacion-tecnica` |
 | Bachillerato de secundaria | high school diploma, secondary education | bachillerato en educación media (MEP) | `educacion-secundaria` |
 
@@ -120,30 +120,103 @@ lo cierra la **firma** de la segunda persona, no el motor.
 
 ---
 
-## 4. Lo que falta en el motor (pendiente, con su plan)
+## 4. El escalón "estudiante avanzado" en el motor — **HECHO (migración 028, 2026-11-10)**
 
-El motor tiene la escalera de 4 escalones (`1` secundaria, `2` superior de
-ciclo corto, `3` universitario, `4` posgrado) y **no tiene el escalón
-"estudiante avanzado"**. Efecto actual: un hecho de perfil
-`educacion-universitaria` con `education_status='pursuing'` cuenta como
-universitario completo → un estudiante avanzado "cumple" un aviso que exige
-título (esto contradice **R2**).
+La escalera del motor ya tiene **cinco** escalones:
 
-Plan (Ola 6 · R1, en `docs/PLAN_MEJORAS.md`):
+| orden | escalón | `nivel_escala.codigo` |
+|---|---|---|
+| 1 | bachillerato de secundaria | `secundaria` |
+| 2 | diploma técnico (ciclo corto) | `tecnico` |
+| 3 | estudiante avanzado (80 %+) | `estudiante_avanzado` |
+| 4 | título universitario | `universitaria` |
+| 5 | posgrado | `posgrado` |
 
-1. **Escalón nuevo** en `nivel_escala` y en `concepto.nivel_orden`
-   (migración de datos nueva, nunca `UPDATE` a mano): `avanzado` entre
-   `tecnico` y `universitaria`.
-2. **El estado cuenta**: un hecho `pursuing` no confiere título → su nivel
-   efectivo es el escalón inferior (un `pursuing` en `educacion-universitaria`
-   = escalón "estudiante avanzado"; con el `qualifier` en "% de créditos" se
-   puede exigir el 80 % que fija R2).
-3. **El aviso con "X % de completitud"** declara el escalón "estudiante
-   avanzado", no el universitario (ISCED 2011: el avance parcial no confiere
-   título).
-4. **Medición obligatoria en copia** antes de tocar la BD real: el cambio no
-   debe mover ninguna banda ni ningún estado del corpus; si mueve alguno, se
-   revisa caso por caso antes de aplicar la migración.
+Cómo lo aplica el motor (`matching.py`):
+
+1. **El estado cuenta**: un hecho `pursuing` no confiere título → su nivel
+   **efectivo** es el escalón inferior (`nivel_efectivo_fact`). Un
+   `pursuing` en `educacion-universitaria` (nominal 4) cuenta como
+   estudiante avanzado (3) **solo si documenta el 80 %+ de los créditos**;
+   un `completed` conserva el nominal.
+2. **El aviso con "X % de completitud"** declara el escalón 3 (si pide 80 % o
+   más) o el escalón 2 (si pide menos), nunca el 4
+   (`nivel_efectivo_requisito` + `porcentaje_estudios_parciales`).
+3. **Las vías académicas** ("or coursework/studies toward a university
+   degree") declaran el escalón 3: están disponibles para el estudiante
+   avanzado, no solo para el titulado.
+4. **Un requisito de estudiante activo** ("currently pursuing a Bachelor's
+   degree") sigue comparando el nivel **nominal** del programa que se cursa
+   (`estado_educacion_en_curso`): pregunta qué se estudia, no si el título
+   está terminado.
+5. **Posgrado en curso** (nivel 5) confiere el **título universitario** (4):
+   el bachelor es el requisito de entrada del programa, y no depende del
+   avance.
+
+### 4.1 El 80 % es un UMBRAL EXIGIDO, no supuesto (2026-11-10)
+
+Decisión del usuario, coherente con la referencia de EE. UU.: cuando un
+puesto pide "estudiante avanzado", **se da por hecho que la persona tiene la
+mayor parte de la carrera finalizada: 80 % o más de los créditos**. El motor
+lo **exige en las dos direcciones**:
+
+| Lado | Regla | Implementación |
+|---|---|---|
+| **El aviso** | "X % completeness of a bachelor's degree program" con X ≥ 80 → escalón 3 (estudiante avanzado); con X < 80 → escalón 2 (por debajo del avanzado) | `porcentaje_estudios_parciales` + `nivel_efectivo_requisito` |
+| **El perfil** | Un hecho `pursuing` de nivel universitario **solo** alcanza el escalón 3 si declara el 80 %+; sin ese dato **no** se da por hecho (nivel `None`) | `porcentaje_avance_fact` + `nivel_efectivo_fact` |
+
+Dónde se registra el avance del perfil (`porcentaje_avance_fact`): en el
+texto libre del hecho (`qualifier`, `notes` o `value_text`, p. ej. "80 % de
+créditos completados") **o** en `numeric_value` con `unit` de porcentaje
+(`80` + `%`). En la UI v2 el campo **"Nivel / calificador"** de un dato de
+categoría *Educación* sirve para anotarlo; en la UI clásica el campo
+equivalente es **"Campo"** (queda en `notes`).
+
+Sin ese dato, un `pursuing` **no** alcanza el escalón 3 y el perfil queda
+**no verificable** en esa dimensión (nunca se descarta por falta de
+información). Es la traducción literal de "no se da por hecho": el motor no
+afirma lo que el perfil no dice.
+
+Migración de datos: `src/jobpulse_v15/migrations/028_estudiante_avanzado.sql`
+(inserta el escalón 3 y corre universitario 3→4 y posgrado 4→5). Esquema
+**28**.
+
+**Medición obligatoria en copia (2026-11-10, 735 avisos)** — código anterior
+vs migración 028, mismo corpus:
+
+| Dimensión | Cambios |
+|---|---|
+| Paso 5 (`job_match`): estado, motivo, puntaje, cobertura | **0** |
+| Paso 5: conteos internos | **1** aviso (Abbott): `faltantes` 8→9, `nc` 2→1 (el requisito del 80 % pasa de `no_confirmado` a `faltante`, que es lo correcto: el perfil no tiene el hecho "en curso") |
+| Viabilidad: bandas | **1** aviso (Abbott): `no_prioritario` → `revisar`, mismo ajuste (27,5). Es el **tope duro** documentado: ≥1 requisito `required` faltante ⇒ banda máxima `revisar` |
+| Vetos | **0** nuevos |
+
+Los dos cambios caen en el **mismo caso abierto** (Abbott) y son
+consecuencia directa de la regla, no un efecto colateral: el aviso pide el
+escalón 3, el perfil solo alcanza el 2, y por eso el requisito queda
+`faltante` (no bloqueante, porque el texto ofrece la vía "or other
+technical/scientific experience"). El caso sigue **abierto** (`dudoso`)
+porque falta el dato del perfil (§5.2).
+
+**Medición del umbral del 80 % (2026-11-10, copia, 735 avisos)** — regla del
+§4.1 (avance exigido en aviso y perfil) contra el corpus real:
+
+| Dimensión | Cambios |
+|---|---|
+| Paso 5: estado, motivo, puntaje, cobertura, conteos | **0** |
+| Viabilidad: banda, ajuste, veto | **0** |
+
+**0 cambios**, y es lo esperado: el perfil **no tiene** ningún hecho
+`pursuing` (sus 2 hechos educativos son `completed`), así que el umbral
+nuevo no tiene sobre qué actuar; y el único aviso con avance parcial
+(Abbott) ya pedía 80 % → escalón 3, igual que antes. La regla queda
+**sin efecto sobre el corpus actual** y solo gobierna los casos futuros en
+que se registre un `pursuing` (que es exactamente el caso abierto de
+Abbott: si se registra con 80 %+ de créditos, el motor lo cierra como
+*cumple*).
+
+Plan original (histórico): escalón nuevo por migración de datos + medición
+en copia antes de tocar la BD real (ver `docs/PLAN_MEJORAS.md` §6.2).
 
 ---
 
@@ -187,22 +260,24 @@ falta es el **dato** del perfil.
 ### 5.2 Qué haría falta para cerrar Abbott
 
 El aviso pide «80% completeness of a bachelor's degree program» → el escalón
-"estudiante avanzado". Para que el perfil lo alcance hace falta **un hecho
-educativo en el perfil**:
+"estudiante avanzado" (= 80 %+ de los créditos, §4.1). Para que el perfil lo
+alcance hace falta **un hecho educativo en el perfil**:
 
 - `education_status = 'pursuing'`,
 - `codigo_canonico` de la licenciatura **en curso** (hoy el perfil no tiene
   ninguno: sus 2 hechos educativos son `completed`),
-- y el avance (80 %+ de los créditos) registrado en el `qualifier` del hecho.
+- y el avance (**80 %+ de los créditos**) registrado en el `qualifier` (o en
+  las `notes`) del hecho, o en `numeric_value` + `unit = '%'`.
 
-Con ese hecho, el motor lo cierra como **cumple**. Sin él, el perfil solo
-llega al escalón "diploma técnico" y corresponde firmarlo `bloqueo_real`
-(la escalera de la §1 lo dice: el escalón "estudiante avanzado" está **por
-encima** del diploma técnico).
+Con ese hecho, el motor lo cierra como **cumple** (escalón 3 = escalón que
+pide el aviso). Sin él, el perfil solo llega al escalón "diploma técnico" y
+corresponde firmarlo `bloqueo_real` (la escalera de la §1 lo dice: el escalón
+"estudiante avanzado" está **por encima** del diploma técnico).
 
-> Nota: el motor **todavía no tiene** el escalón "estudiante avanzado" (hoy un
-> `pursuing` cuenta como universitario completo) → ver §4 y el plan de
-> medición en `docs/PLAN_MEJORAS.md` §6.2.
+> Nota: el motor ya tiene el escalón "estudiante avanzado" (migración 028,
+> 2026-11-10) **y exige el 80 %**: un `pursuing` en `educacion-universitaria`
+> cuenta como escalón 3 **solo** si documenta el avance → ver §4, §4.1 y
+> `docs/PLAN_MEJORAS.md` §6.2.
 
 ---
 

@@ -58,12 +58,12 @@ caro de descubrir**; lo puntual vive en los handoffs.
 
 - **App/CLI/scripts** → venv: `.\.venv\Scripts\python.exe -X utf8 …`
 - **Tests** → python del **sistema**: `python -m pytest tests/ -q`
-  (pytest **no** está en el venv; suite completa ~8–17 min; baseline verificado
-  2026-11-09: **1233 passed + 2650 subtests** — 1017,54 s). Un archivo o un test:
+  (pytest **no** está en el venv; suite completa ~13–19 min; baseline verificado
+  2026-11-10: **1250 passed + 2650 subtests** — 755,92 s). Un archivo o un test:
   `python -m pytest tests/test_matching.py -q` /
   `python -m pytest tests/ -k <patrón> -q`.
 - **No hay CI, linter, formatter ni typecheck configurados**: la verificación
-  es la suite de pytest. Muchos tests crean una **BD temporal y aplican las 27
+  es la suite de pytest. Muchos tests crean una **BD temporal y aplican las 28
   migraciones** en `setUp` → la suite tarda minutos, no segundos; no la cortes
   pensando que se colgó.
 - **`-X utf8` en todo comando que imprima datos de la BD**: sin él, un `\uf0b7`
@@ -86,10 +86,10 @@ caro de descubrir**; lo puntual vive en los handoffs.
   migraciones N-M`). `init-db`, `backup` y `db check` **no** migran.
 - Esquema por migraciones: `src/jobpulse_v15/migrations/0NN_*.sql`. Cambio de
   esquema = **archivo nuevo**; nunca `ALTER` manual ni editar una migración ya
-  aplicada. Versionado con `PRAGMA user_version` (actual: **27**).
+  aplicada. Versionado con `PRAGMA user_version` (actual: **28**).
   Al añadir una migración hay que actualizar las aserciones de versión
   hardcodeadas en `tests/test_migraciones.py` y `tests/test_pipeline_metricas.py`
-  (busca `27`), o la suite falla.
+  (busca `28`), o la suite falla.
 - Si una migración tiene que **recrear una tabla** (cambiar un `CHECK`), SQLite
   no lo permite con `ALTER` y `PRAGMA foreign_keys` no se puede cambiar dentro
   de una transacción: la migración gestiona su propia transacción y lo marca
@@ -351,10 +351,20 @@ anteriores `valida=0`); nunca `UPDATE` in-place.
   - **El motor no modela el campo del título**: si el nivel se cumple pero el
     campo no (p. ej. el aviso pide business/Finance y el perfil tiene un
     diplomado en Electrónica), lo cierra la **firma** de la segunda persona.
-  - **Pendiente**: el escalón "estudiante avanzado" **no existe todavía** en el
-    motor (`nivel_escala`/`concepto.nivel_orden`): un hecho `pursuing` cuenta
-    hoy como universitario completo. Plan + medición obligatoria en copia en
-    `docs/PLAN_MEJORAS.md` §6.2 (Ola 6).
+  - **El escalón "estudiante avanzado" YA EXISTE** (migración **028**,
+    2026-11-10): la escalera es 1 secundaria < 2 ciclo corto < 3 estudiante
+    avanzado < 4 universitario < 5 posgrado. Un hecho `pursuing` **no**
+    confiere título: su nivel efectivo es el escalón inferior
+    (`matching.nivel_efectivo_fact`), y un aviso con "X % de completitud"
+    declara el escalón 3, no el 4. **El 80 % es un umbral EXIGIDO** (§4.1 de
+    `docs/REGLAS_NEGOCIO_EDUCACION.md`): un `pursuing` solo alcanza el
+    escalón 3 si documenta el avance (`matching.porcentaje_avance_fact`
+    lee `qualifier`/`notes`/`value_text` o `numeric_value` + `unit='%'`), y
+    un aviso que pida menos del 80 % queda en el escalón 2. Medición en
+    copia: 0 cambios de estado en el Paso 5; el único aviso afectado es el
+    caso abierto de Abbott (su requisito del 80 % pasa de `no_confirmado` a
+    `faltante` y su banda se topa en `revisar`). Ver
+    `docs/PLAN_MEJORAS.md` §6.2.
 - **Viabilidad ≠ contratación**: `viabilidad.py` dice si el perfil **cumple lo
   que pide el aviso** (ajuste técnico 0-100 + banda). **Ser rechazado NO
   significa que el perfil no califique**: el reclutador decide por presupuesto,

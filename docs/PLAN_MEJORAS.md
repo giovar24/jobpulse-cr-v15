@@ -946,24 +946,72 @@ semántica) y **no veredicta** (lo que el motor determinista ya hace mejor). Lo
 funcionalidad de ayuda, no de matching. Por eso queda como **característica
 opcional**.
 
-### 6.2 El escalón "estudiante avanzado" en el motor — PLANIFICADO
+### 6.2 El escalón "estudiante avanzado" en el motor — **HECHO 2026-11-10** (migración 028)
 
-Consecuencia directa de la regla §5.10: hoy el motor **no tiene** el escalón
+Consecuencia directa de la regla §5.10: el motor no tenía el escalón
 "estudiante sin graduar con 80 %+ de los créditos" (entre `diploma técnico` y
-`título universitario`). Un hecho `pursuing` cuenta como universitario
+`título universitario`). Un hecho `pursuing` contaba como universitario
 completo, lo que contradice R2.
 
-Plan (cuando se decida, con **medición obligatoria en copia**):
+Implementado:
 
-1. Escalón nuevo en `nivel_escala` y `concepto.nivel_orden` (**migración de
-   datos nueva**, nunca `UPDATE` a mano) — el patrón está en la migración
-   `017_educacion_granular.sql`.
-2. **El estado cuenta**: un hecho `pursuing` no confiere título → su nivel
-   efectivo es el escalón inferior.
-3. El aviso con "X % de completitud" declara el escalón "estudiante avanzado",
-   no el universitario (ISCED 2011: el avance parcial no confiere título).
-4. Medición en copia: el cambio **no debe mover ninguna banda ni estado** del
-   corpus; si mueve alguno, se revisa caso por caso antes de aplicar.
+1. Escalón nuevo `estudiante_avanzado = 3` en `nivel_escala` y
+   `concepto.nivel_orden` (**migración de datos** `028_estudiante_avanzado.sql`,
+   patrón de la `017`): universitario 3→4 y posgrado 4→5.
+2. **El estado cuenta**: `matching.nivel_efectivo_fact` baja un escalón a los
+   hechos `pursuing` (nunca por debajo de secundaria); `completed` conserva el
+   nominal. `estado_educacion_en_curso` sigue usando el nivel **nominal** para
+   los requisitos de estudiante activo.
+3. El aviso con "X % de completitud" declara el escalón 3
+   (`nivel_efectivo_requisito` + `es_estudios_parciales`); las vías
+   "or coursework/studies toward a university degree" también.
+4. **Medición en copia (2026-11-10, 735 avisos)** — código anterior vs 028:
+
+| Dimensión | Resultado |
+|---|---|
+| Paso 5: estado, motivo, puntaje, cobertura | **0 cambios** |
+| Paso 5: conteos internos | 1 aviso (Abbott): `faltantes` 8→9, `nc` 2→1 |
+| Viabilidad: bandas | 1 aviso (Abbott): `no_prioritario` → `revisar` (mismo ajuste) |
+| Vetos nuevos | **0** |
+
+El único aviso afectado es el caso **abierto** de Abbott: su requisito del
+80 % pasa de `no_confirmado` a `faltante` (el perfil solo alcanza el escalón
+2) y la banda se topa en `revisar` por el tope duro de "required faltante".
+El estado del Paso 5 no cambia (`revisar_a_mano / educacion_no_confirmada`) y
+el caso sigue abierto hasta que se decida el dato del perfil (§5.10).
+
+Tests: `tests/test_migraciones.py::TestMigracion028` + tests nuevos en
+`tests/test_matching.py` (pursuing vs completado, nivel efectivo, requisito
+parcial, vía de coursework para el estudiante en curso).
+
+### 6.2.1 El 80 % del escalón "estudiante avanzado" — **EXIGIDO, HECHO 2026-11-10**
+
+Decisión del usuario: cuando un puesto pide "estudiante avanzado", **se da
+por hecho que la persona tiene la mayor parte de la carrera finalizada: 80 %
+o más de los créditos** (referencia EE. UU.). El motor lo **exige en las dos
+direcciones** (no lo supone):
+
+1. **El aviso**: "X % completeness of a bachelor's degree program" con
+   X ≥ 80 → escalón 3 (estudiante avanzado); con X < 80 → escalón 2.
+   (`matching.porcentaje_estudios_parciales` + `nivel_efectivo_requisito`).
+2. **El perfil**: un hecho `pursuing` de nivel universitario **solo** alcanza
+   el escalón 3 si documenta el avance; sin ese dato no se da por hecho
+   (nivel `None` → la dimensión queda *no verificable*, nunca se descarta
+   por falta de información). El avance se lee del texto libre del hecho
+   (`qualifier`/`notes`/`value_text`) o de `numeric_value` + `unit='%'`
+   (`matching.porcentaje_avance_fact`).
+3. Un `pursuing` de **posgrado** confiere el título universitario (4): el
+   bachelor es el requisito de entrada del programa y no depende del avance.
+
+**Medición en copia (2026-11-10, 735 avisos)**: **0 cambios** en Paso 5 y en
+viabilidad. Es lo esperado: el perfil no tiene ningún hecho `pursuing` (sus
+2 hechos educativos son `completed`), así que el umbral no tiene sobre qué
+actuar; y el único aviso con avance parcial (Abbott) ya pedía 80 %.
+
+> Esta regla es la que **cierra el caso abierto de Abbott** en cuanto se
+> registre el dato: un hecho `pursuing` de la licenciatura con "80 % de
+> créditos completados" → el motor lo marca *cumple* y el aviso deja de
+> quedar en `revisar_a_mano`.
 
 ### 6.3 Embeddings: el modelo primario está *gated* — OPCIONAL
 

@@ -31,14 +31,27 @@ def _insertar_fact(
     canon: str,
     cat: str,
     education_status: str | None = None,
+    qualifier: str | None = None,
+    numeric_value: float | None = None,
+    unit: str | None = None,
 ) -> None:
     connection.execute(
         """
         INSERT INTO candidate_profile_facts
-            (category, value_code, value_text, codigo_canonico, education_status)
-        VALUES (?, ?, ?, ?, ?)
+            (category, value_code, value_text, codigo_canonico, education_status,
+             qualifier, numeric_value, unit)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         """,
-        (cat, code, code, canon, education_status),
+        (
+            cat,
+            code,
+            code,
+            canon,
+            education_status,
+            qualifier,
+            numeric_value,
+            unit,
+        ),
     )
 
 
@@ -851,12 +864,152 @@ class TestSemanticaEducationStatus(unittest.TestCase):
             "educacion-universitaria",
             "education",
             education_status="pursuing",
+            qualifier="80 % de créditos completados",
         )
         self._job_estudiante_activo("job-p5")
         evaluador = matching.EvaluadorPaso5(self.connection)
         resultado = evaluador.evaluar_job("job-p5")
         self.assertNotEqual(resultado.estado, matching.ESTADO_DESCARTADA)
         self.assertNotEqual(resultado.motivo, matching.MOTIVO_EDUCACION_NO_VERIFICABLE)
+
+    def test_nivel_efectivo_de_un_hecho_en_curso_baja_un_escalon(self):
+        """R2: un bachelor en curso es "estudiante avanzado", no titulado."""
+        _insertar_fact(
+            self.connection,
+            "licenciatura-en-curso",
+            "educacion-universitaria",
+            "education",
+            education_status="pursuing",
+            qualifier="80 % de créditos completados",
+        )
+        self.connection.commit()
+        evaluador = matching.EvaluadorPaso5(self.connection)
+        self.assertEqual(
+            evaluador.nivel_candidato_educacion(),
+            matching.NIVEL_ESTUDIANTE_AVANZADO,
+        )
+
+    def test_fact_en_curso_sin_avance_documentado_no_alcanza_el_escalon(self):
+        """El 80 % se EXIGE, no se supone: sin el dato no hay escalon 3."""
+        _insertar_fact(
+            self.connection,
+            "licenciatura-en-curso",
+            "educacion-universitaria",
+            "education",
+            education_status="pursuing",
+        )
+        self.connection.commit()
+        evaluador = matching.EvaluadorPaso5(self.connection)
+        self.assertIsNone(evaluador.nivel_candidato_educacion())
+        self.assertFalse(
+            evaluador.tiene_nivel_educativo(matching.NIVEL_ESTUDIANTE_AVANZADO)
+        )
+
+    def test_fact_en_curso_con_menos_del_80_por_ciento_no_alcanza_el_escalon(self):
+        _insertar_fact(
+            self.connection,
+            "licenciatura-en-curso",
+            "educacion-universitaria",
+            "education",
+            education_status="pursuing",
+            qualifier="50 % de créditos completados",
+        )
+        self.connection.commit()
+        evaluador = matching.EvaluadorPaso5(self.connection)
+        self.assertIsNone(evaluador.nivel_candidato_educacion())
+
+    def test_fact_en_curso_con_el_avance_en_numeric_value_alcanza_el_escalon(self):
+        _insertar_fact(
+            self.connection,
+            "licenciatura-en-curso",
+            "educacion-universitaria",
+            "education",
+            education_status="pursuing",
+            numeric_value=80,
+            unit="%",
+        )
+        self.connection.commit()
+        evaluador = matching.EvaluadorPaso5(self.connection)
+        self.assertEqual(
+            evaluador.nivel_candidato_educacion(),
+            matching.NIVEL_ESTUDIANTE_AVANZADO,
+        )
+
+    def test_fact_de_posgrado_en_curso_confiere_el_titulo_universitario(self):
+        """Un master en curso presupone el bachelor terminado (nivel 4)."""
+        _insertar_fact(
+            self.connection,
+            "maestria-en-curso",
+            "educacion-posgrado",
+            "education",
+            education_status="pursuing",
+        )
+        self.connection.commit()
+        evaluador = matching.EvaluadorPaso5(self.connection)
+        self.assertEqual(
+            evaluador.nivel_candidato_educacion(),
+            matching.NIVEL_UNIVERSITARIO,
+        )
+
+    def test_nivel_efectivo_de_un_hecho_completado_conserva_el_nivel(self):
+        _insertar_fact(
+            self.connection,
+            "licenciatura",
+            "educacion-universitaria",
+            "education",
+            education_status="completed",
+        )
+        self.connection.commit()
+        evaluador = matching.EvaluadorPaso5(self.connection)
+        self.assertEqual(
+            evaluador.nivel_candidato_educacion(),
+            matching.NIVEL_UNIVERSITARIO,
+        )
+
+    def test_fact_pursuing_no_cumple_un_titulo_completado(self):
+        """R2: el estudiante avanzado NO es un titulado -> el aviso bloquea."""
+        _insertar_fact(
+            self.connection,
+            "licenciatura-en-curso",
+            "educacion-universitaria",
+            "education",
+            education_status="pursuing",
+            qualifier="80 % de créditos completados",
+        )
+        _insertar_job(
+            self.connection,
+            "job-p6",
+            "Required Qualifications Bachelor's degree in Accounting required.",
+        )
+        _insertar_requisito(
+            self.connection, "job-p6", "bachelor", "educacion-universitaria", "required"
+        )
+        self.connection.commit()
+        evaluador = matching.EvaluadorPaso5(self.connection)
+        resultado = evaluador.evaluar_job("job-p6")
+        self.assertEqual(resultado.estado, matching.ESTADO_DESCARTADA)
+
+    def test_fact_completado_cumple_un_titulo_completado(self):
+        """Control del test anterior: el titulo TERMINADO si cumple."""
+        _insertar_fact(
+            self.connection,
+            "licenciatura",
+            "educacion-universitaria",
+            "education",
+            education_status="completed",
+        )
+        _insertar_job(
+            self.connection,
+            "job-p7",
+            "Required Qualifications Bachelor's degree in Accounting required.",
+        )
+        _insertar_requisito(
+            self.connection, "job-p7", "bachelor", "educacion-universitaria", "required"
+        )
+        self.connection.commit()
+        evaluador = matching.EvaluadorPaso5(self.connection)
+        resultado = evaluador.evaluar_job("job-p7")
+        self.assertNotEqual(resultado.estado, matching.ESTADO_DESCARTADA)
 
 
 class TestCorridas(unittest.TestCase):
@@ -1107,6 +1260,31 @@ class TestMecanicasGenerales(unittest.TestCase):
         resultado = evaluador.evaluar_job("kimberly")
         self.assertNotEqual(resultado.estado, matching.ESTADO_DESCARTADA)
 
+    def test_via_de_cursos_disponible_para_estudiante_en_curso(self):
+        """La via 'or advanced coursework' alcanza al estudiante avanzado (3)."""
+        _insertar_fact(
+            self.connection,
+            "licenciatura-en-curso",
+            "educacion-universitaria",
+            "education",
+            education_status="pursuing",
+            qualifier="80 % de créditos completados",
+        )
+        _insertar_job(self.connection, "kimberly", self.TEXTO_KIMBERLY)
+        _insertar_requisito(
+            self.connection,
+            "kimberly",
+            "university_degree",
+            "educacion-universitaria",
+            "ambiguous",
+            value_text="University degree",
+            evidence=self.TEXTO_KIMBERLY,
+        )
+        self.connection.commit()
+        evaluador = matching.EvaluadorPaso5(self.connection)
+        resultado = evaluador.evaluar_job("kimberly")
+        self.assertNotEqual(resultado.estado, matching.ESTADO_DESCARTADA)
+
     def test_via_tecnica_disponible_cumple(self):
         """Literal de la BD: 'Bachelor's degree or technical degree' (nivel 2)."""
         _insertar_job(self.connection, "assdirector", self.TEXTO_ASSDIRECTOR)
@@ -1152,6 +1330,69 @@ class TestMecanicasGenerales(unittest.TestCase):
             matching.es_estudios_parciales("Bachelor's degree in Accounting required.")
         )
 
+    def test_el_requisito_parcial_declara_estudiante_avanzado(self):
+        """'80 % de un bachelor' es el escalon 3, NO el titulo universitario."""
+        _insertar_job(self.connection, "abbott", self.TEXTO_ABBOTT)
+        _insertar_requisito(
+            self.connection,
+            "abbott",
+            "bachelor",
+            "educacion-universitaria",
+            "required",
+            value_text="bachelor",
+            evidence=self.TEXTO_ABBOTT,
+        )
+        self.connection.commit()
+        evaluador = matching.EvaluadorPaso5(self.connection)
+        requisito = evaluador.requisitos_por_job["abbott"][0]
+        self.assertEqual(
+            evaluador.nivel_efectivo_requisito(requisito, self.TEXTO_ABBOTT),
+            matching.NIVEL_ESTUDIANTE_AVANZADO,
+        )
+
+    def test_requisito_parcial_de_menos_del_80_queda_bajo_estudiante_avanzado(self):
+        """El aviso que pide MENOS del 80 % no declara el escalon 3."""
+        texto = (
+            "Minimum Qualifications 50% completeness of a bachelor's degree "
+            "program in Business Administration."
+        )
+        _insertar_job(self.connection, "parcial-50", texto)
+        _insertar_requisito(
+            self.connection,
+            "parcial-50",
+            "bachelor",
+            "educacion-universitaria",
+            "required",
+            value_text="bachelor",
+            evidence=texto,
+        )
+        self.connection.commit()
+        evaluador = matching.EvaluadorPaso5(self.connection)
+        requisito = evaluador.requisitos_por_job["parcial-50"][0]
+        self.assertEqual(matching.porcentaje_estudios_parciales(texto), 50.0)
+        self.assertEqual(
+            evaluador.nivel_efectivo_requisito(requisito, texto),
+            matching.NIVEL_SUPERIOR_CORTO,
+        )
+
+    def test_porcentaje_avance_fact_lee_texto_libre_y_numeric_value(self):
+        self.assertEqual(
+            matching.porcentaje_avance_fact({"qualifier": "80 % de créditos"}),
+            80.0,
+        )
+        self.assertEqual(
+            matching.porcentaje_avance_fact({"notes": "Avance: 85% de la carrera"}),
+            85.0,
+        )
+        self.assertEqual(
+            matching.porcentaje_avance_fact({"numeric_value": 90, "unit": "%"}),
+            90.0,
+        )
+        self.assertIsNone(matching.porcentaje_avance_fact({"qualifier": "en curso"}))
+        self.assertIsNone(
+            matching.porcentaje_avance_fact({"numeric_value": 2, "unit": "years"})
+        )
+
     def test_parciales_cumple_con_universitario_en_curso(self):
         """'80 % de un bachelor' lo cumplen los estudios universitarios en curso."""
         _insertar_fact(
@@ -1160,6 +1401,7 @@ class TestMecanicasGenerales(unittest.TestCase):
             "educacion-universitaria",
             "education",
             education_status="pursuing",
+            qualifier="80 % de créditos completados",
         )
         _insertar_job(self.connection, "abbott", self.TEXTO_ABBOTT)
         _insertar_requisito(
@@ -1174,7 +1416,7 @@ class TestMecanicasGenerales(unittest.TestCase):
         self.connection.commit()
         evaluador = matching.EvaluadorPaso5(self.connection)
         resultado = evaluador.evaluar_job("abbott")
-        self.assertNotEqual(resultado.estado, matching.ESTADO_DESCARTADA)
+        self.assertEqual(resultado.estado, matching.ESTADO_CALIFICADA)
 
     def test_parciales_sin_universitarios_no_cumplen(self):
         """Sin estudios universitarios el requisito de parciales no se cumple."""

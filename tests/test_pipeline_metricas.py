@@ -375,7 +375,7 @@ class TestEsquema(Base):
         base = Database(self.db_path)
         avisos = []
         version = pipeline_metricas.asegurar_esquema(base, avisos.append)
-        self.assertEqual(version, 27)
+        self.assertEqual(version, 28)
         # Ya estaba migrada: no avisa.
         self.assertEqual(avisos, [])
 
@@ -390,9 +390,9 @@ class TestEsquema(Base):
 
         avisos = []
         version = pipeline_metricas.asegurar_esquema(Database(viejo), avisos.append)
-        self.assertEqual(version, 27)
+        self.assertEqual(version, 28)
         self.assertTrue(avisos)
-        self.assertIn("27", avisos[0])
+        self.assertIn("28", avisos[0])
 
 
 if __name__ == "__main__":

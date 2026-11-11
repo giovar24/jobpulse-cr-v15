@@ -35,6 +35,16 @@ Reglas del bloqueante de educacion (acordadas con el usuario):
   enrolled") es un criterio DISTINTO del titulo completado: se cumple solo si
   el perfil registra un hecho educativo ``education_status='pursuing'``; si no,
   el motivo es ``titulo_universitario_en_curso_requerido``.
+* ESCALERA EDUCATIVA (regla de negocio 2026-11-08/10, ver
+  ``docs/REGLAS_NEGOCIO_EDUCACION.md``): secundaria (1) < superior de ciclo
+  corto (2) < estudiante avanzado (3) < titulo universitario (4) < posgrado
+  (5). Un hecho ``pursuing`` NO confiere titulo: su nivel EFECTIVO es el
+  escalon inferior (un bachelor en curso cuenta como estudiante avanzado).
+  Un aviso con "X % de completitud" declara el escalon 3, no el 4.
+  "Estudiante avanzado" = **80 % o mas de los creditos** (regla del usuario,
+  referencia EE. UU.): el umbral se EXIGE, no se supone. El aviso que pide
+  menos del 80 % queda por debajo del escalon 3; un hecho ``pursuing`` sin el
+  80 % documentado no alcanza el escalon 3 (ver ``porcentaje_avance_fact``).
 * SEMANTICA DE LA AUSENCIA DEL FACT (acordada 2026-10-29):
   - El perfil registra hechos educativos y NINGUNO dice 'pursuing' -> se sabe
     que la persona NO esta registrada como estudiante activo -> 'NO CUMPLE':
@@ -88,7 +98,7 @@ import re
 import sqlite3
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Iterable, Sequence
+from typing import Any, Iterable, Mapping, Sequence
 
 from jobpulse_v15 import areas
 from jobpulse_v15 import decisiones
@@ -152,10 +162,22 @@ PRIORIDAD_MOTIVOS = (
     MOTIVO_COBERTURA,
 )
 
+# Escalera educativa (de menor a mayor). El escalon "estudiante avanzado" esta
+# entre el superior de ciclo corto y el titulo universitario: un hecho en curso
+# NO confiere titulo (regla de negocio 2026-11-08, R2). Los numeros son los
+# mismos que ``nivel_escala.orden`` y ``concepto.nivel_orden``.
 NIVEL_SECUNDARIA = 1
 NIVEL_SUPERIOR_CORTO = 2
-NIVEL_UNIVERSITARIO = 3
-NIVEL_POSGRADO = 4
+NIVEL_ESTUDIANTE_AVANZADO = 3
+NIVEL_UNIVERSITARIO = 4
+NIVEL_POSGRADO = 5
+
+# "Estudiante avanzado" = la mayor parte de la carrera finalizada: 80 % o mas
+# de los creditos (regla del usuario, referencia del sistema educativo de
+# EE. UU.: "X % of completeness of a bachelor's degree program"). Es un
+# UMBRAL EXIGIDO, no supuesto: ni el aviso que pide menos lo declara ni el
+# hecho del perfil que no lo documenta alcanza el escalon 3.
+UMBRAL_ESTUDIANTE_AVANZADO = 80.0
 
 
 # --------------------------------------------------------------------------
@@ -226,21 +248,23 @@ _CONTEXTO_NO_UNIVERSIDAD = re.compile(
 #   1 = secundaria              high school, secondary school, bachillerato
 #   2 = superior de ciclo corto associate degree, two-year college degree,
 #                                 technical degree, tecnico superior
-#   3 = universitario           bachelor's degree, university degree,
+#   3 = estudiante avanzado     "X% completeness of a bachelor's degree"
+#                                 (avance parcial: NO confiere titulo)
+#   4 = universitario           bachelor's degree, university degree,
 #                                 licenciatura, bachillerato universitario
-#   4 = posgrado                master's degree, MBA, postgraduate degree
+#   5 = posgrado                master's degree, MBA, postgraduate degree
 #
 # Un aviso del extranjero se lee con SU propio vocabulario: lo que decide el
 # nivel es la frase del texto, no la equivalencia de un pais. El perfil se
 # expresa en la misma escalera, de modo que la comparacion no depende de donde
 # viva la persona ni de donde se publico la vacante.
 _FRASES_NIVEL: tuple[tuple[re.Pattern[str], int], ...] = (
-    # --- 4: posgrado ---
+    # --- 5: posgrado ---
     (re.compile(r"\bmaster(?:['\u2019]s|s)?\s+degree\b", re.I), NIVEL_POSGRADO),
     (re.compile(r"\bmba\b", re.I), NIVEL_POSGRADO),
     (re.compile(r"\bpostgraduate\s+degree\b", re.I), NIVEL_POSGRADO),
     (re.compile(r"\bdoctorate\b|\bph\.?\s?d\.?\b", re.I), NIVEL_POSGRADO),
-    # --- 3: universitario ---
+    # --- 4: universitario ---
     (re.compile(r"\bbachelor(?:['\u2019]s|s)?\s+degree\b", re.I), NIVEL_UNIVERSITARIO),
     (re.compile(r"\bbaccalaureate\b", re.I), NIVEL_UNIVERSITARIO),
     (re.compile(r"\buniversity\s+degree\b", re.I), NIVEL_UNIVERSITARIO),
@@ -267,29 +291,41 @@ _FRASES_NIVEL: tuple[tuple[re.Pattern[str], int], ...] = (
 # ESTUDIOS UNIVERSITARIOS PARCIALES: el aviso define su propio umbral
 # ("80% completeness of a bachelor's degree program"). El porcentaje NO
 # confiere titulo (ISCED 2011: "partial level completion" es una subcategoria
-# de nivel, no una cualificacion), asi que el requisito se cumple con el
-# titulo universitario O con estudios universitarios en curso.
+# de nivel, no una cualificacion): si el aviso pide >= 80 % declara el escalon
+# "estudiante avanzado" (3); si pide menos, queda por debajo de ese escalon.
 _PATRON_ESTUDIOS_PARCIALES = re.compile(
-    r"\b\d{1,3}\s*%?\s*(?:of\s+)?completeness\s+of\s+(?:a|an|the)\s+"
+    r"\b(\d{1,3})\s*%?\s*(?:of\s+)?completeness\s+of\s+(?:a|an|the)\s+"
     r"bachelor(?:['\u2019]s|s)?\s+degree\s+program\b"
-    r"|\b\d{1,3}\s*%\s*(?:of\s+)?(?:a|an|the)\s+bachelor(?:['\u2019]s|s)?\s+"
+    r"|\b(\d{1,3})\s*%\s*(?:of\s+)?(?:a|an|the)\s+bachelor(?:['\u2019]s|s)?\s+"
     r"degree\s+program\b"
-    r"|\b\d{1,3}\s*%\s*completion\s+of\s+(?:a|an|the)\s+"
+    r"|\b(\d{1,3})\s*%\s*completion\s+of\s+(?:a|an|the)\s+"
     r"bachelor(?:['\u2019]s|s)?\s+degree\b",
     re.IGNORECASE,
+)
+
+# Porcentaje de avance que puede declarar un HECHO educativo del perfil, en su
+# texto libre (``qualifier``/``notes``/``value_text``) o en ``numeric_value``
+# con una unidad de porcentaje. Sin este dato, un ``pursuing`` no alcanza el
+# escalon "estudiante avanzado".
+_PATRON_PORCENTAJE_AVANCE = re.compile(
+    r"(\d{1,3}(?:[.,]\d+)?)\s*(?:%|percent\b|por\s?ciento\b|pct\b)",
+    re.IGNORECASE,
+)
+_UNIDADES_PORCENTAJE = frozenset(
+    {"%", "percent", "percentage", "porcentaje", "pct", "por ciento"}
 )
 
 # VIAS ALTERNATIVAS ACADEMICAS con el nivel que declara el texto. Una via
 # solo desbloquea al perfil si el perfil tiene ESE nivel de estudios: una via
 # que presupone mas estudios de los que el perfil tiene no es una via.
 # ("or advanced university studies" = posgrado sin titulo: presupone un
-# titulo universitario previo; "or advanced coursework" = cursos
-# universitarios; "or technical degree" = superior de ciclo corto).
+# titulo universitario previo; "or coursework/studies toward a university
+# degree" = estudiante avanzado; "or technical degree" = ciclo corto).
 _VIA_ACADEMICA_NIVEL: tuple[tuple[re.Pattern[str], int], ...] = (
     (re.compile(r"\bor\s+advanced\s+university\s+studies\b", re.I), NIVEL_POSGRADO),
-    (re.compile(r"\bor\s+advanced\s+(?:university\s+)?coursework\b", re.I), NIVEL_UNIVERSITARIO),
-    (re.compile(r"\bor\s+university\s+(?:coursework|studies)\b", re.I), NIVEL_UNIVERSITARIO),
-    (re.compile(r"\bor\s+(?:completing\s+)?coursework\s+(?:in|of|toward|towards)\b", re.I), NIVEL_UNIVERSITARIO),
+    (re.compile(r"\bor\s+advanced\s+(?:university\s+)?coursework\b", re.I), NIVEL_ESTUDIANTE_AVANZADO),
+    (re.compile(r"\bor\s+university\s+(?:coursework|studies)\b", re.I), NIVEL_ESTUDIANTE_AVANZADO),
+    (re.compile(r"\bor\s+(?:completing\s+)?coursework\s+(?:in|of|toward|towards)\b", re.I), NIVEL_ESTUDIANTE_AVANZADO),
     (re.compile(r"\bor\s+(?:an?\s+)?technical\s+degree\b", re.I), NIVEL_SUPERIOR_CORTO),
     (re.compile(r"\bor\s+(?:an?\s+)?associate(?:['\u2019]s)?\s+degree\b", re.I), NIVEL_SUPERIOR_CORTO),
 )
@@ -675,10 +711,41 @@ def nivel_educativo_del_texto(texto: str, termino: str | None = None) -> int | N
     return None
 
 
+def porcentaje_estudios_parciales(texto: str) -> float | None:
+    """Porcentaje que declara el aviso en la frase de avance parcial, o None."""
+    coincidencia = _PATRON_ESTUDIOS_PARCIALES.search(texto or "")
+    if not coincidencia:
+        return None
+    for grupo in coincidencia.groups():
+        if grupo is not None:
+            return float(grupo)
+    return None
+
+
 def es_estudios_parciales(texto: str) -> bool:
     """True si el texto exige ESTUDIOS UNIVERSITARIOS PARCIALES (X % de un
     programa de bachelor). Es un requisito de nivel 3 SIN titulo."""
     return _PATRON_ESTUDIOS_PARCIALES.search(texto or "") is not None
+
+
+def porcentaje_avance_fact(fact: Mapping[str, Any]) -> float | None:
+    """% de creditos completados que declara un HECHO educativo (o None).
+
+    Se acepta el dato en ``numeric_value`` (con ``unit`` de porcentaje) o en
+    el texto libre del hecho (``qualifier``/``notes``/``value_text``). El
+    perfil puede registrar "80 % de creditos", "80% completado", etc.
+    """
+    valores: list[float] = []
+    numero = fact.get("numeric_value")
+    unidad = str(fact.get("unit") or "").strip().casefold()
+    if numero is not None and unidad in _UNIDADES_PORCENTAJE:
+        valores.append(float(numero))
+    for campo in ("qualifier", "notes", "value_text"):
+        for coincidencia in _PATRON_PORCENTAJE_AVANCE.finditer(
+            str(fact.get(campo) or "")
+        ):
+            valores.append(float(coincidencia.group(1).replace(",", ".")))
+    return max(valores) if valores else None
 
 
 def _vias_academicas(ventana: str) -> list[tuple[int, str]]:
@@ -1068,7 +1135,8 @@ class EvaluadorPaso5:
         }
         for row in self.connection.execute(
             """
-            SELECT category, value_code, codigo_canonico, qualifier, education_status
+            SELECT category, value_code, codigo_canonico, qualifier, education_status,
+                   value_text, numeric_value, unit, notes
             FROM candidate_profile_facts
             WHERE codigo_canonico IS NOT NULL
               AND category IN ('skill', 'language', 'education', 'license')
@@ -1080,6 +1148,10 @@ class EvaluadorPaso5:
                     "codigo_canonico": row["codigo_canonico"],
                     "qualifier": row["qualifier"],
                     "education_status": row["education_status"],
+                    "value_text": row["value_text"],
+                    "numeric_value": row["numeric_value"],
+                    "unit": row["unit"],
+                    "notes": row["notes"],
                 }
             )
         return facts
@@ -1210,23 +1282,57 @@ class EvaluadorPaso5:
         return self._niveles[clave]
 
     def niveles_educativos(self) -> list[int]:
-        """Niveles educativos del perfil (los declarados en ``concepto``)."""
+        """Niveles educativos EFECTIVOS del perfil (los declarados en ``concepto``).
+
+        Un hecho ``education_status='pursuing'`` NO confiere el titulo: su
+        nivel efectivo es el escalon inferior (regla de negocio 2026-11-08,
+        R2). Un bachelor en curso cuenta como "estudiante avanzado" (3), no
+        como titulo universitario (4).
+        """
         niveles = [
-            self.nivel_concepto(fact["codigo_canonico"], "education")
-            for fact in self.facts["education"]
+            self.nivel_efectivo_fact(fact) for fact in self.facts["education"]
         ]
         return [n for n in niveles if n is not None]
+
+    def nivel_efectivo_fact(self, fact: dict) -> int | None:
+        """Nivel EFECTIVO de un hecho educativo del perfil.
+
+        El nivel NOMINAL sale de ``concepto.nivel_orden``. Si el hecho esta
+        ``pursuing`` NO confiere titulo:
+
+        * **Universitario en curso**: solo alcanza el escalon "estudiante
+          avanzado" (3) si el hecho DOCUMENTA el 80 % o mas de los creditos
+          (``porcentaje_avance_fact``). Sin ese dato no se puede afirmar el
+          escalon (devuelve ``None``): "nunca dar por hecho lo que el perfil
+          no dice".
+        * **Posgrado en curso**: el titulo universitario (4) es el requisito
+          de entrada del programa, asi que lo confiere (no depende del avance).
+        * **Ciclo corto o secundaria en curso**: baja un escalon (el avance
+          parcial no confiere titulo), sin bajar nunca de secundaria.
+        """
+        nivel = self.nivel_concepto(fact["codigo_canonico"], "education")
+        if nivel is None:
+            return None
+        if fact.get("education_status") != "pursuing":
+            return nivel
+        if nivel >= NIVEL_UNIVERSITARIO:
+            if nivel == NIVEL_UNIVERSITARIO:
+                avance = porcentaje_avance_fact(fact)
+                if avance is None or avance < UMBRAL_ESTUDIANTE_AVANZADO:
+                    return None
+                return NIVEL_ESTUDIANTE_AVANZADO
+            return NIVEL_UNIVERSITARIO
+        return max(NIVEL_SECUNDARIA, nivel - 1)
 
     def nivel_candidato_educacion(self) -> int | None:
         niveles = self.niveles_educativos()
         return max(niveles) if niveles else None
 
     def tiene_nivel_educativo(self, nivel: int) -> bool:
-        """True si el perfil tiene AL MENOS ese nivel de estudios.
+        """True si el perfil alcanza AL MENOS ese nivel EFECTIVO de estudios.
 
-        No mira el ESTADO (completed / pursuing): para saber si una via
-        alternativa esta DISPONIBLE importa el nivel alcanzado, no si el
-        titulo se termino.
+        Mira el nivel alcanzado, no si el titulo se termino: un hecho en curso
+        alcanza el escalon "estudiante avanzado" (3), no el universitario (4).
         """
         return any(n >= nivel for n in self.niveles_educativos())
 
@@ -1236,18 +1342,26 @@ class EvaluadorPaso5:
         El texto manda sobre el codigo canonico: "Two year college degree"
         (que el extractor mapea a ``university_degree``) declara nivel 2. Si
         el texto no declara ningun nivel, se usa el del codigo canonico.
+
+        Un aviso que acepta AVANCE PARCIAL ("X % completeness of a bachelor's
+        degree program") declara el escalon "estudiante avanzado" (3) SOLO si
+        pide el 80 % o mas; si pide menos, queda por debajo de ese escalon
+        (2). El avance parcial no confiere titulo (ISCED 2011).
         """
         nivel_codigo = self.nivel_concepto(requisito.codigo_canonico, "education")
         evidencia = requisito.evidence or ""
+        nivel = None
         if evidencia:
             nivel = nivel_educativo_del_texto(evidencia, requisito.value_text)
-            if nivel is not None:
-                return nivel
-        if texto and texto.strip() != evidencia.strip():
+        if nivel is None and texto and texto.strip() != evidencia.strip():
             nivel = nivel_educativo_del_texto(texto, requisito.value_text)
-            if nivel is not None:
-                return nivel
-        return nivel_codigo
+        if nivel == NIVEL_UNIVERSITARIO:
+            porcentaje = porcentaje_estudios_parciales(evidencia or texto or "")
+            if porcentaje is not None:
+                if porcentaje >= UMBRAL_ESTUDIANTE_AVANZADO:
+                    return NIVEL_ESTUDIANTE_AVANZADO
+                return NIVEL_SUPERIOR_CORTO
+        return nivel if nivel is not None else nivel_codigo
 
     def cumple_skill(self, codigo: str) -> bool:
         return any(f["codigo_canonico"] == codigo for f in self.facts["skill"])
@@ -1375,6 +1489,12 @@ class EvaluadorPaso5:
           'pursuing'.
         * El perfil NO registra ningun hecho educativo: no se puede afirmar
           que "no cumple" -> 'no_verificable' (MOTIVO_EDUCACION_NO_VERIFICABLE).
+
+        OJO: aqui se compara el nivel NOMINAL del hecho (``nivel_concepto``),
+        no el efectivo. Un requisito "currently pursuing a Bachelor's degree"
+        pregunta QUE programa se cursa, no si el titulo esta terminado; por eso
+        un hecho ``pursuing`` de nivel universitario SI lo cumple (aunque su
+        nivel efectivo sea el de "estudiante avanzado").
         """
         hechos = self.facts["education"]
         if not hechos:
@@ -1464,10 +1584,11 @@ class EvaluadorPaso5:
             return "cumple", None
         # ESTUDIOS UNIVERSITARIOS PARCIALES ("80 % de completitud de un
         # bachelor"): el aviso acepta un avance parcial, asi que lo cumplen
-        # los estudios universitarios en curso.
+        # los estudios universitarios en curso (escalon "estudiante
+        # avanzado").
         if (
             es_estudios_parciales(requisito.evidence or texto or "")
-            and self.tiene_nivel_educativo(NIVEL_UNIVERSITARIO)
+            and self.tiene_nivel_educativo(NIVEL_ESTUDIANTE_AVANZADO)
         ):
             return "cumple", None
         if nivel_req < NIVEL_UNIVERSITARIO:

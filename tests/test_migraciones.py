@@ -46,15 +46,15 @@ class TestVersionDelEsquema(unittest.TestCase):
     def test_la_base_nueva_llega_a_la_ultima_migracion(self):
         version = self.database.initialize()
 
-        self.assertEqual(version, 27)
+        self.assertEqual(version, 28)
         with self.database.connection() as connection:
             actual = connection.execute("PRAGMA user_version").fetchone()[0]
-        self.assertEqual(actual, 27)
+        self.assertEqual(actual, 28)
 
     def test_inicializar_de_nuevo_no_cambia_nada(self):
         self.database.initialize()
 
-        self.assertEqual(self.database.initialize(), 27)
+        self.assertEqual(self.database.initialize(), 28)
 
 
 class TestMigracion017(unittest.TestCase):
@@ -89,7 +89,7 @@ class TestMigracion017(unittest.TestCase):
         # En CR 'bachiller' a secas es secundaria: NO es universitario.
         self.assertEqual(self._codigo("bachiller"), "educacion-secundaria")
 
-    def test_la_escalera_de_niveles_cubre_los_cuatro_niveles(self):
+    def test_la_escalera_de_niveles_cubre_los_cinco_niveles(self):
         with self.database.connection() as connection:
             niveles = {
                 fila["codigo"]: fila["orden"]
@@ -103,8 +103,9 @@ class TestMigracion017(unittest.TestCase):
             {
                 "secundaria": 1,
                 "tecnico": 2,
-                "universitaria": 3,
-                "posgrado": 4,
+                "estudiante_avanzado": 3,
+                "universitaria": 4,
+                "posgrado": 5,
             },
         )
 
@@ -346,7 +347,7 @@ class TestMigracion020(unittest.TestCase):
     def test_la_base_nueva_llega_a_la_ultima_migracion(self):
         with self.database.connection() as connection:
             version = connection.execute("PRAGMA user_version").fetchone()[0]
-        self.assertEqual(version, 27)
+        self.assertEqual(version, 28)
 
     def test_las_skills_que_pedia_el_corpus(self):
         for variante in (
@@ -621,7 +622,7 @@ class TestMigracion023(unittest.TestCase):
     def test_la_base_nueva_llega_a_la_ultima_migracion(self):
         with self.database.connection() as connection:
             version = connection.execute("PRAGMA user_version").fetchone()[0]
-        self.assertEqual(version, 27)
+        self.assertEqual(version, 28)
 
     def test_los_alias_apuntan_al_canonico_correcto(self):
         for variante, canonico in (
@@ -884,7 +885,7 @@ class TestMigracion025(unittest.TestCase):
     def test_la_base_nueva_llega_a_la_ultima_migracion(self):
         with self.database.connection() as connection:
             version = connection.execute("PRAGMA user_version").fetchone()[0]
-        self.assertEqual(version, 27)  # la 027 (decisiones) va despues
+        self.assertEqual(version, 28)  # la 027 (decisiones) y la 028 (escalera) van despues
 
     def test_los_alias_apuntan_al_canonico_correcto(self):
         for variante, canonico in (
@@ -1028,7 +1029,7 @@ class TestMigracion026(unittest.TestCase):
     def test_la_base_nueva_llega_a_la_ultima_migracion(self):
         with self.database.connection() as connection:
             version = connection.execute("PRAGMA user_version").fetchone()[0]
-        self.assertEqual(version, 27)
+        self.assertEqual(version, 28)
 
     def test_los_alias_apuntan_al_canonico_correcto(self):
         for variante, canonico in (
@@ -1190,7 +1191,7 @@ class TestMigracion027(unittest.TestCase):
     def test_la_base_nueva_llega_a_la_ultima_migracion(self):
         with self.database.connection() as connection:
             version = connection.execute("PRAGMA user_version").fetchone()[0]
-        self.assertEqual(version, 27)
+        self.assertEqual(version, 28)
 
     def test_la_tabla_existe(self):
         with self.database.connection() as connection:
@@ -1261,6 +1262,81 @@ class TestMigracion027(unittest.TestCase):
             ]
         self.assertNotIn("decision_id", columnas)
         self.assertNotIn("veredicto_humano", columnas)
+
+
+class TestMigracion028(unittest.TestCase):
+    """028: escalon "estudiante avanzado" en la escalera educativa.
+
+    La regla de negocio (2026-11-08) coloca al estudiante sin graduar con
+    80 %+ de los creditos ENTRE el diploma tecnico y el titulo universitario.
+    La migracion inserta el escalon 3 y corre universitario (3->4) y posgrado
+    (4->5). NO toca `job_match`: los estados cambian solo con una corrida
+    nueva del Paso 5.
+    """
+
+    def setUp(self):
+        self.temp_dir = tempfile.TemporaryDirectory()
+        self.database = Database(Path(self.temp_dir.name) / "test.db")
+        self.database.initialize()
+
+    def tearDown(self):
+        self.temp_dir.cleanup()
+
+    def _niveles(self) -> dict[str, int]:
+        with self.database.connection() as connection:
+            return {
+                fila["codigo"]: fila["orden"]
+                for fila in connection.execute(
+                    "SELECT codigo, orden FROM nivel_escala "
+                    "WHERE categoria='education'"
+                )
+            }
+
+    def _nivel_concepto(self, variante: str) -> int | None:
+        with self.database.connection() as connection:
+            fila = connection.execute(
+                "SELECT nivel_orden FROM concepto "
+                "WHERE categoria='education' AND variante=?",
+                (variante,),
+            ).fetchone()
+        return fila["nivel_orden"] if fila else None
+
+    def test_la_base_nueva_llega_a_la_ultima_migracion(self):
+        with self.database.connection() as connection:
+            version = connection.execute("PRAGMA user_version").fetchone()[0]
+        self.assertEqual(version, 28)
+
+    def test_el_escalon_estudiante_avanzado_esta_entre_tecnico_y_universitario(self):
+        niveles = self._niveles()
+        self.assertEqual(niveles["tecnico"], 2)
+        self.assertEqual(niveles["estudiante_avanzado"], 3)
+        self.assertEqual(niveles["universitaria"], 4)
+        self.assertEqual(niveles["posgrado"], 5)
+
+    def test_los_conceptos_educativos_suben_un_escalon(self):
+        self.assertEqual(self._nivel_concepto("bachelor"), 4)
+        self.assertEqual(self._nivel_concepto("master"), 5)
+        self.assertEqual(self._nivel_concepto("tecnico"), 2)
+        self.assertEqual(self._nivel_concepto("high school"), 1)
+
+    def test_no_se_aplica_dos_veces(self):
+        """Reabrir la base (esquema ya en 28) no vuelve a correr la escalera."""
+        self.database.initialize()
+        niveles = self._niveles()
+        self.assertEqual(niveles["universitaria"], 4)
+        self.assertEqual(niveles["posgrado"], 5)
+        self.assertEqual(self._nivel_concepto("bachelor"), 4)
+        self.assertEqual(self._nivel_concepto("master"), 5)
+
+    def test_no_toca_el_matching(self):
+        """Es una migracion de DATOS: no crea ni cambia columnas de `job_match`."""
+        with self.database.connection() as connection:
+            columnas = [
+                fila["name"]
+                for fila in connection.execute("PRAGMA table_info(job_match)")
+            ]
+        self.assertNotIn("nivel_efectivo", columnas)
+        self.assertNotIn("education_status", columnas)
 
 
 if __name__ == "__main__":
