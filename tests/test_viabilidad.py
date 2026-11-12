@@ -259,41 +259,6 @@ class TestViabilidad(unittest.TestCase):
         self.assertGreater(v_cubierto.ajuste, v_parcial.ajuste)
         self.assertEqual(v_cubierto.ajuste, 100.0)
 
-    def test_sin_semantica_el_peso_se_redistribuye(self):
-        job_id = self._job("job-sem")
-        self._analisis(
-            job_id,
-            [
-                requisito("skill", "excel", "Excel"),
-                requisito("skill", "sql", "SQL"),
-            ],
-        )
-
-        sin_semantica = self._evaluar(job_id)
-        con_semantica = self._evaluar(job_id, semantica=90.0)
-        con_semantica_alta = self._evaluar(job_id, semantica=100.0)
-
-        # Sin semantica NO se penaliza: el peso se redistribuye y el aviso
-        # totalmente cubierto queda en 100.
-        self.assertEqual(sin_semantica.ajuste, 100.0)
-        # La semantica es un componente mas: sube o baja segun su valor.
-        self.assertLess(con_semantica.ajuste, sin_semantica.ajuste)
-        self.assertGreater(con_semantica_alta.ajuste, con_semantica.ajuste)
-
-    def test_la_semantica_no_sube_de_banda_a_un_con_faltante(self):
-        job_id = self._job("job-sem-falta")
-        self._analisis(
-            job_id,
-            [
-                requisito("skill", "excel", "Excel"),
-                requisito("skill", "python", "Python"),
-            ],
-        )
-
-        v = self._evaluar(job_id, semantica=100.0)
-
-        self.assertEqual(v.banda, BANDA_REVISAR)
-
     # --------------------------------------------------------------- orden
     def test_ordena_por_banda_y_ajuste(self):
         ids = []

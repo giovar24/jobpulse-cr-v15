@@ -38,9 +38,9 @@ caro de descubrir**; lo puntual vive en los handoffs.
 
 ## Estructura (dónde está cada cosa)
 
-- Paquete `src/jobpulse_v15/` (instalado con `pip install -e .`). Entrypoints en
-  `pyproject.toml`: `jobpulse-v15` → `cli:main`, `jobpulse-v15-ui` → `ui:main`.
-  La UI v2 se lanza con `python -m jobpulse_v15.ui_v2` o
+- Paquete `src/jobpulse_v15/` (instalado con `pip install -e .`). Entrypoint en
+  `pyproject.toml`: `jobpulse-v15` → `cli:main`.
+  La UI (única: la v2) se lanza con `python -m jobpulse_v15.ui_v2` o
   `jobpulse-v15-v2.bat` (no tiene entrypoint en `pyproject.toml`).
 - Núcleo: `pipeline.py` (orquestador), `matching.py` (Paso 5), `repository.py`
   (persistencia), `db.py` + `migrations/` (esquema), `analysis_flow.py`
@@ -58,8 +58,9 @@ caro de descubrir**; lo puntual vive en los handoffs.
 
 - **App/CLI/scripts** → venv: `.\.venv\Scripts\python.exe -X utf8 …`
 - **Tests** → python del **sistema**: `python -m pytest tests/ -q`
-  (pytest **no** está en el venv; suite completa ~13–28 min; baseline verificado
-  2026-11-11: **1255 passed + 2650 subtests** — 571,38 s). Un archivo o un test:
+  (pytest **no** está en el venv; suite completa ~20–25 min; baseline verificado
+  2026-11-12, tras retirar la UI clásica y el motor semántico: **1164 passed +
+  2648 subtests** — 1355,38 s). Un archivo o un test:
   `python -m pytest tests/test_matching.py -q` /
   `python -m pytest tests/ -k <patrón> -q`.
 - **No hay CI, linter, formatter ni typecheck configurados**: la verificación
@@ -129,7 +130,7 @@ $py = ".\.venv\Scripts\python.exe"
 **Por qué el orden**: los scrapers **no** rellenan `jobs.skills`/`jobs.languages`;
 los produce el pase **IA** (paso 3). Sin el paso 3, el paso 4 no integra nada y
 la taxonomía queda sin cubrir. `analysis_flow.extract_job_analysis` es la
-**implementación única** del análisis (la usan CLI, UI clásica, UI v2 y
+**implementación única** del análisis (la usan CLI, UI v2 y
 `run_full_flow`): no dupliques la lógica.
 
 ### Orquestador único (O12 · Ola 2)
@@ -140,14 +141,9 @@ implementación** cada una (`scrape` → `analisis` → `ia` → `reanalisis` �
 
 - la CLI: `run_full_flow.py` (ya es un envoltorio del orquestador);
 - la UI v2: botones **"Procesar"** y **"Enriquecer IA"** (pestaña "Scraping");
-- la UI clásica: **desde 2026-11-08 (punto 5 del backlog, con permiso
-  explícito del usuario) también delega**: su flujo completo llama a
-  `pipeline.ejecutar` con `("analisis","ia","reanalisis","backfill","paso5",
-  "evidencia")` y la ventana "Enriquecer IA" con `("ia","reanalisis")`. Ya no
-  tiene pase de IA ni re-análisis propios (se borró
-  `_reananalizar_con_campos_fuente`). Su **comparación con el perfil** (paso 4)
-  sigue siendo propia e informativa (`compare_jobs_to_candidate_profile`): el
-  veredicto auditable es el del Paso 5.
+  su **comparación con el perfil** (paso 4) es propia e informativa
+  (`compare_jobs_to_candidate_profile`): el veredicto auditable es el del
+  Paso 5. (La UI clásica `ui.py` se retiró el 2026-11-11.)
 
 ```python
 from jobpulse_v15 import pipeline
@@ -429,33 +425,30 @@ anteriores `valida=0`); nunca `UPDATE` in-place.
    y `ids_estancados`). El consumo real (llamadas + tokens) queda en
    `pipeline_etapa.detalle_json` → clave `uso` (`jobpulse-v15 pipeline etapas
    --json`): `pase_completo` usa un único cliente y lo cierra al terminar.
-9. **Caché de embeddings**: el temporal debe terminar en `.npy`
-   (`embeddings_cache.npy.tmp.npy`) o `np.save` añade otra extensión y el
-   `replace()` falla → se re-vectoriza todo el corpus en cada arranque.
-10. `job_field_status` **no** tiene categoría `salary` (el estado del salario se
-    mira en `jobs.salary_min`; la regla de "declara salario" vive en `salario.py`).
-11. El **TÍTULO** de un aviso no es fuente de ubicación; el catálogo Workday
+9. `job_field_status` **no** tiene categoría `salary` (el estado del salario se
+   mira en `jobs.salary_min`; la regla de "declara salario" vive en `salario.py`).
+10. El **TÍTULO** de un aviso no es fuente de ubicación; el catálogo Workday
     devuelve el título entero como ciudad (no hacerlo).
-12. Tk: fuentes con espacio van **entre llaves** (`{Segoe UI} 10`); nunca
+11. Tk: fuentes con espacio van **entre llaves** (`{Segoe UI} 10`); nunca
     mezcles `pack` y `grid` en el mismo padre; un widget sin gestor queda
     invisible (1x1); el callback de `yscrollcommand` solo actualiza el
     scrollbar (tocar el canvas ahí = reentrada infinita).
-13. En tests: `with patch(...) as m` deja `m` **sin definir** fuera del bloque
+12. En tests: `with patch(...) as m` deja `m` **sin definir** fuera del bloque
     → guarda el mock en otra variable. Los tests del cliente IA deben parchear
-    `jobpulse_v15.ui_perfil.asegurar_servidor` (si no, arranca el llama-server
-    real en plena suite → saturación de RAM).
-14. `with ... as X` borra el nombre al salir del bloque (comportamiento de
+    `jobpulse_v15.ui_v2.tabs.configuracion.asegurar_servidor` (si no, arranca
+    el llama-server real en plena suite → saturación de RAM).
+13. `with ... as X` borra el nombre al salir del bloque (comportamiento de
     Python, no de Tk).
-15. Retención: la política vive en `ui_config.json` y la comparten UI clásica y
-    v2 (merge en `ui_v2/data/retencion.py`); la retención **oculta, nunca borra**.
-16. La etapa `reanalisis` del pipeline rehace **dos** grupos: los avisos que
+14. Retención: la política vive en `ui_config.json` y la aplica la UI v2
+    (merge en `ui_v2/data/retencion.py`); la retención **oculta, nunca borra**.
+15. La etapa `reanalisis` del pipeline rehace **dos** grupos: los avisos que
     **nunca** integraron `jobs.skills`/idiomas (`avisos_con_campos_sin_integrar`)
     y los que cambiaron de TEXTO (`avisos_con_texto_cambiado`). Tras cambiar
     la **taxonomía** (una migración `02x_taxonomia_*`), los avisos que ya la
     integraron tienen un análisis **obsoleto** (les faltan requisitos): hay que
     re-analizarlos TODOS con `enrich requirements-source --apply` antes del
     backfill y del Paso 5.
-17. **Los tests NO deben depender del `.env` real**: `jobpulse_v15.cli` hace
+16. **Los tests NO deben depender del `.env` real**: `jobpulse_v15.cli` hace
     `load_dotenv()` **al importarse**, así que cualquier test que importe el
     CLI carga el `.env` del desarrollador en `os.environ` de toda la sesión de
     pytest (p. ej. `IA_BASE_URL=https://ollama.com/v1` → la tarjeta "IA local"
@@ -505,11 +498,11 @@ anteriores `valida=0`); nunca `UPDATE` in-place.
 
 ## UI
 
-- **UI clásica** (`ui.py`): completa — no la toques sin pedirlo. **Excepción
-  ya autorizada (2026-11-08, punto 5 del backlog)**: delegar sus etapas al
-  orquestador `pipeline.ejecutar` y eliminar implementaciones duplicadas.
-- **UI v2** (`ui_v2/`, plana y modular): capas `theme`/`widgets`/`dialogs`/
-  `i18n`/`configuracion` + `data/` (stores sin Tk) + `tabs/`.
+- **UI v2** (`ui_v2/`, plana y modular) es la **única** interfaz gráfica: la
+  UI clásica (`ui.py`) y sus módulos (`ui_perfil.py`, `configuration_window.py`,
+  `cv2profile.py`, `cv_analysis.py`) se retiraron el 2026-11-11. Capas
+  `theme`/`widgets`/`dialogs`/`i18n`/`configuracion` + `data/` (stores sin Tk)
+  + `tabs/`.
   **Agregar una pestaña = módulo nuevo + 1 línea en `PESTANIAS`** (`ui_v2/app.py`).
   Humo sin ventana:
   `python -X utf8 -c "from jobpulse_v15.ui_v2.app import crear_app; r,s=crear_app(); [r.update() for _ in range(20)]; t=s.pestana_activa(); t.refresh(); print(t.key, len(t._widgets['tabla'].get_children())); r.destroy()"`
@@ -540,10 +533,6 @@ $py = ".\.venv\Scripts\python.exe"
 & $py -X utf8 -m jobpulse_v15 taxonomy curate [--apply] [--limit N]
 & $py -X utf8 -m jobpulse_v15 pipeline etapas [--limite N] [--corrida ID] [--json]
 & $py -X utf8 -m jobpulse_v15 viabilidad list [--banda aplicar] | top [--limit N]  # --limit por defecto: 50
-# El componente SEMANTICO (embeddings) es el PREDETERMINADO, pero solo si no cuesta
-# trabajo extra (modelo en la cache local de HF Y cache de embeddings que cubra el
-# corpus); si no, avisa por stderr y sigue sin el. --semantica lo FUERZA,
-# --sin-semantica lo quita (los dos a la vez = error de uso).
 & $py -X utf8 -m jobpulse_v15 postulaciones correo --dias 90 [--apply]
 & $py -X utf8 -m jobpulse_v15 postulaciones workday --apply
 & $py -X utf8 -m jobpulse_v15 db check

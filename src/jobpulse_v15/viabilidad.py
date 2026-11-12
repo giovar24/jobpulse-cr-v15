@@ -58,10 +58,6 @@ PESOS_CATEGORIA: dict[str, float] = {
     "license": 0.10,
 }
 
-#: Peso de la similitud semantica (cargo <-> perfil). Es la senal MAS ruidosa
-#: (embeddings): ordena, pero no define la banda.
-PESO_SEMANTICA = 0.15
-
 #: Peso interno de cada nivel de requisito dentro de su categoria.
 PESO_NIVEL: dict[str, float] = {
     "obligatorio": 2.0,
@@ -82,7 +78,6 @@ MOTIVO_VETO_EDUCACION = "titulo_universitario_requerido"
 MOTIVO_VETO_EN_CURSO = "titulo_universitario_en_curso_requerido"
 MOTIVO_SIN_REQUISITOS = "sin_requisitos_mapeados"
 MOTIVO_OBLIGATORIO_FALTANTE = "requisito_obligatorio_faltante"
-MOTIVO_SEMANTICA_FUERA = "perfil_lejos_del_puesto"
 
 
 @dataclass(frozen=True)
@@ -128,7 +123,6 @@ class Viabilidad:
     desglose: list[DesgloseRequisito] = field(default_factory=list)
     total_requisitos: int = 0
     requisitos_evaluables: int = 0
-    semantica: float | None = None
 
     @property
     def aplicar(self) -> bool:
@@ -325,9 +319,7 @@ def _componentes_de(
 def puntuar_componentes(
     componentes: Mapping[str, float | None],
     *,
-    semantica: float | None = None,
     pesos_categoria: Mapping[str, float] | None = None,
-    peso_semantica: float = PESO_SEMANTICA,
     imputacion: Mapping[str, float] | None = None,
 ) -> tuple[float, dict[str, float]]:
     """Puntaje 0-100 de los componentes de una vacante.
@@ -343,9 +335,7 @@ def puntuar_componentes(
       de dato, pero el score no es comparable con otras vacantes).
     """
     pesos = dict(pesos_categoria or PESOS_CATEGORIA)
-    pesos["semantica"] = peso_semantica
     valores: dict[str, float | None] = dict(componentes)
-    valores["semantica"] = (semantica / 100.0) if semantica is not None else None
 
     if imputacion is not None:
         for clave, valor in list(valores.items()):
@@ -371,7 +361,7 @@ def promedios_componentes(
     promedio de "quien no tiene datos" no debe entrar.
     """
     promedios: dict[str, float] = {}
-    for clave in (*PESOS_CATEGORIA, "semantica"):
+    for clave in PESOS_CATEGORIA:
         valores = [
             float(componentes[clave])
             for componentes in componentes
@@ -386,22 +376,18 @@ def evaluar_viabilidad(
     evaluador: EvaluadorPaso5,
     job_id: str,
     *,
-    semantica: float | None = None,
     pesos_categoria: Mapping[str, float] | None = None,
-    peso_semantica: float = PESO_SEMANTICA,
     umbral_aplicar: float = UMBRAL_APLICAR,
     umbral_revisar: float = UMBRAL_REVISAR,
     imputacion: Mapping[str, float] | None = None,
 ) -> Viabilidad:
     """Indice de ajuste tecnico de una vacante (0-100) + su banda.
 
-    `semantica` es el percentil 0-100 de la similitud cargo<->perfil
-    (opcional: sin el, su peso se redistribuye o se imputa).
     `imputacion`: promedios del corpus (modo comparable, ver
     `puntuar_componentes`).
     """
     pesos_categoria = dict(pesos_categoria or PESOS_CATEGORIA)
-    resultado = Viabilidad(job_id=job_id, semantica=semantica)
+    resultado = Viabilidad(job_id=job_id)
 
     # -- veto de AREA (el perfil no marco esa area) -------------------------
     # Se reutiliza `areas.es_fuera_de_area`: las ofertas `otros` o sin
@@ -463,9 +449,7 @@ def evaluar_viabilidad(
     # -- score ponderado ---------------------------------------------------
     score, _efectivos = puntuar_componentes(
         componentes,
-        semantica=semantica,
         pesos_categoria=pesos_categoria,
-        peso_semantica=peso_semantica,
         imputacion=imputacion,
     )
     resultado.ajuste = round(score * 100.0, 1)
@@ -496,9 +480,7 @@ def evaluar_viabilidades(
     evaluador: EvaluadorPaso5,
     job_ids: Iterable[str],
     *,
-    semantica_por_job: Mapping[str, float] | None = None,
     pesos_categoria: Mapping[str, float] | None = None,
-    peso_semantica: float = PESO_SEMANTICA,
     imputacion: Mapping[str, float] | None = None,
 ) -> list[Viabilidad]:
     """Evalua varias vacantes y las devuelve ordenadas: mejor ajuste primero.
@@ -506,14 +488,11 @@ def evaluar_viabilidades(
     Orden: por banda (aplicar > revisar > no prioritario > sin datos > veto),
     luego por ajuste descendente.
     """
-    semantica_por_job = semantica_por_job or {}
     resultados = [
         evaluar_viabilidad(
             evaluador,
             job_id,
-            semantica=semantica_por_job.get(job_id),
             pesos_categoria=pesos_categoria,
-            peso_semantica=peso_semantica,
             imputacion=imputacion,
         )
         for job_id in job_ids
@@ -549,7 +528,6 @@ def a_fila(v: Viabilidad) -> dict[str, Any]:
         "faltantes_obligatorios": list(v.faltantes_obligatorios),
         "total_requisitos": v.total_requisitos,
         "requisitos_evaluables": v.requisitos_evaluables,
-        "semantica": v.semantica,
         "componentes": dict(v.componentes),
         "resumen": v.resumen,
     }
@@ -559,9 +537,7 @@ def calcular_viabilidades(
     repository: Any,
     job_ids: Iterable[str],
     *,
-    semantica_por_job: Mapping[str, float] | None = None,
     pesos_categoria: Mapping[str, float] | None = None,
-    peso_semantica: float = PESO_SEMANTICA,
     evaluar_todo: bool = False,
 ) -> list[Viabilidad]:
     """Evalua un conjunto de vacantes contra el perfil guardado (2 pasadas).
@@ -576,7 +552,6 @@ def calcular_viabilidades(
     entre si (si no, una vacante con un solo requisito covered sacaria 100
     y subiria sola en el ranking).
     """
-    semantica_por_job = semantica_por_job or {}
     lista_ids = list(job_ids)
     with repository.database.connection() as connection:
         evaluador = EvaluadorPaso5(
@@ -589,24 +564,12 @@ def calcular_viabilidades(
             if componentes is not None:
                 crudos[job_id] = componentes
         promedios = promedios_componentes(list(crudos.values()))
-        if semantica_por_job:
-            valores_semantica = [
-                float(semantica_por_job[job_id]) / 100.0
-                for job_id in crudos
-                if job_id in semantica_por_job
-            ]
-            if valores_semantica:
-                promedios["semantica"] = sum(valores_semantica) / len(
-                    valores_semantica
-                )
         # -- PASADA 2: puntaje comparable ----------------------------------
         resultados = [
             evaluar_viabilidad(
                 evaluador,
                 job_id,
-                semantica=semantica_por_job.get(job_id),
                 pesos_categoria=pesos_categoria,
-                peso_semantica=peso_semantica,
                 imputacion=promedios,
             )
             for job_id in lista_ids

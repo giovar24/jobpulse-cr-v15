@@ -111,10 +111,9 @@ Pesos por categoría (fijos → las vacantes son comparables entre sí):
 | experience | 0.15 |
 | language | 0.10 |
 | license | 0.10 |
-| *semántica* | 0.15 |
 
-La **semántica** (percentil de la similitud cargo↔aviso) es la señal **más
-ruidosa** (embeddings): ordena, pero no define la banda.
+El componente **semántico** (embeddings) se retiró el 2026-11-11: ordenaba pero
+no definía la banda, y el modelo primario estaba *gated*.
 
 ### 2.5 DOS PASADAS (imputación del corpus) — obligatorio
 
@@ -171,9 +170,6 @@ Es la misma regla del ranking ATS (gotcha 26 de `AGENTS.md`).
 # CSV (con la lista de faltantes obligatorios)
 .\.venv\Scripts\python.exe -X utf8 -m jobpulse_v15 viabilidad list --format csv --output viab.csv
 
-# Con el componente semántico (embeddings locales; vectoriza el corpus la 1ª vez)
-.\.venv\Scripts\python.exe -X utf8 -m jobpulse_v15 viabilidad list --semantica
-
 # Ignorar el filtro por áreas del perfil (igual que el Paso 5 con --evaluar-todo)
 .\.venv\Scripts\python.exe -X utf8 -m jobpulse_v15 viabilidad list --evaluar-todo
 ```
@@ -190,8 +186,8 @@ Salida JSON: `{"bandas": {...}, "vacantes": [{...}]}` con `ajuste`, `banda`,
 - Detalle: "Ajuste técnico", "Banda", "Faltantes obligatorios".
 - El CSV de exportación incluye `ajuste`, `banda` y `faltantes_obligatorios`.
 
-CLI y UI comparten **el mismo motor** (`viabilidad.calcular_viabilidades`) y la
-misma fórmula semántica (`ats.percentiles_semanticas`): una sola respuesta.
+CLI y UI comparten **el mismo motor** (`viabilidad.calcular_viabilidades`):
+una sola respuesta.
 
 ---
 
@@ -233,8 +229,9 @@ pero **jamás reentrenar** el score con los rechazos.
    quedan en `sin_datos` o se puntúan con la imputación del corpus.
    *(Mitigado el 2026-11-04 con las migraciones 020/021 y los campos
    estructurados: `sin_datos` 142 → 9.)*
-2. **La semántica es un percentil, no una medida absoluta** (los cosenos viven
-   comprimidos entre 0.1 y 0.6).
+2. **El motor no modela el campo del título**: si el nivel educativo se cumple
+   pero el campo no, lo cierra la firma de la segunda persona (ver
+   `docs/REGLAS_NEGOCIO_EDUCACION.md`).
 3. **No hay validación en vivo** del cruce con postulaciones (falta CDP y la
    app-password de Gmail).
 4. **"Req. = 0" no significa "sin requisitos"**: el extractor puede no marcar
@@ -263,7 +260,7 @@ pero **jamás reentrenar** el score con los rechazos.
 | `src/jobpulse_v15/postulaciones.py` | Estado del **proceso** (núcleo puro) |
 | `src/jobpulse_v15/correo_postulaciones.py` | Lector IMAP (Gmail) |
 | `src/jobpulse_v15/workday_postulaciones.py` | Parser + fetch de "Mis postulaciones" |
-| `src/jobpulse_v15/ats.py` | `percentiles_semanticas` (semántica compartida) |
+| `src/jobpulse_v15/ats.py` | `ranking_ats` (ranking ATS compartido con la UI) |
 | `src/jobpulse_v15/matching.py` | `EvaluadorPaso5` (reglas duras reutilizadas) |
 | `src/jobpulse_v15/areas.py` | `es_fuera_de_area` (veto de área) |
 | `tests/test_viabilidad.py` | 12 tests del motor |

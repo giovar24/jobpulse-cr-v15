@@ -5,11 +5,11 @@ Actualizado: 2026-11-03 (pestaña **Cuentas** + **Paso 5 persistido** +
 tarjetas de **cachés**, **retención** y **diagnóstico**; **punto 7**: densidad
 compacta/normal/amplia + **i18n es/en** con selector en Apariencia).
 
-La **UI clásica** (`src/jobpulse_v15/ui.py`, 3978 líneas) **no se toca**:
-sigue siendo la interfaz completa. La UI v2 vive aparte, en
-`src/jobpulse_v15/ui_v2/`, y por ahora trae seis pestañas (Datos crudos,
-Perfil, Vacantes, Scraping, Cuentas, Configuración). El objetivo es
-**agregar funciones sin comprometer lo que ya funciona**.
+La **UI v2** es la única interfaz gráfica del proyecto: la **UI clásica**
+(`src/jobpulse_v15/ui.py`) y sus módulos se retiraron el 2026-11-11. La UI v2
+vive en `src/jobpulse_v15/ui_v2/` y trae seis pestañas (Datos crudos, Perfil,
+Vacantes, Scraping, Cuentas, Configuración). El objetivo es **agregar funciones
+sin comprometer lo que ya funciona**.
 
 ## Arranque
 
@@ -26,7 +26,7 @@ Perfil, Vacantes, Scraping, Cuentas, Configuración). El objetivo es
 | `ui_v2/widgets.py` | `Card`, `StatTile`, `Badge`, `SearchField`, `FlatButton`, `EmptyState`, `ScrollFrame`, `SectionTitle`, `KeyValue` | Componentes planos reutilizables; **traducción automática** vía `i18n.t()` |
 | `ui_v2/i18n.py` | `t()`, `establecer_idioma()`, `IDIOMAS`, catálogo es→en | **i18n sin Tk**; la clave es el literal en español; sin traducción → devuelve la clave |
 | `ui_v2/dialogs.py` | `RevisionImportacionDialog`, `confirmar()`, `pedir_texto()` | Toplevels reutilizables; no tocan la BD |
-| `ui_v2/configuracion.py` | `cargar`/`guardar` (merge), `paleta_actual`, `densidad_actual`, `idioma_actual`, `directorio_csv`, `guardar_env`, `leer_env`/`valor_env`, `puerto_cdp`, `guardar_navegador` | Persistencia **SIN Tk**: `ui_config.json` (compartido con la UI clásica) y `.env` |
+| `ui_v2/configuracion.py` | `cargar`/`guardar` (merge), `paleta_actual`, `densidad_actual`, `idioma_actual`, `directorio_csv`, `guardar_env`, `leer_env`/`valor_env`, `puerto_cdp`, `guardar_navegador` | Persistencia **SIN Tk**: `ui_config.json` y `.env` |
 | `ui_v2/data/*.py` | `JobsStore`, `ProfileStore`, `AtsStore`, `FuentesStore`, `ScrapingStore`, `CuentasStore`, `Paso5Store`, `RetencionStore` + dataclasses | **SIN Tkinter**: las pestañas no ven SQLite ni el keyring |
 | `ui_v2/tabs/base.py` | `BaseTab`, `TabContext` | El CONTRATO de una pestaña (+ helpers de hilos: cola + vigilante) |
 | `ui_v2/tabs/*.py` | `DatosCrudosTab`, `PerfilTab`, `VacantesTab`, `ScrapingTab`, `CuentasTab`, `ConfiguracionTab` | Composición de widgets; hablan con el store |
@@ -116,7 +116,7 @@ que toca la arquitectura:
 
 - El store `AtsStore` (`data/vacantes.py`) **no ve Tk**; `tabs/vacantes.py`
   arma la pestaña y la pinta.
-- **Pesado en segundo plano**: los embeddings corren en un `thread` y los
+- **Pesado en segundo plano**: el cálculo del ranking corre en un `thread` y los
   resultados vuelven por una `queue.Queue`. La UI solo se toca desde el hilo
   principal con `after` — y **el `after` va por el marco**, no por `self`
   (la pestaña NO es un widget Tk; `self.after` revienta con `AttributeError`).
@@ -172,8 +172,7 @@ CLI: `run_paso5.py`):
 ### Cuentas (`tabs/cuentas.py`)
 
 Las **credenciales de los sitios que piden login** (ANE, Indeed, LinkedIn y
-todo lo que los proveedores detectaron en vivo). Es la versión plana de la
-pestaña "Credenciales / Login" de la UI clásica.
+todo lo que los proveedores detectaron en vivo).
 
 - El store `CuentasStore` (`data/cuentas.py`) envuelve
   `jobpulse_v15.credenciales` (la única verdad) y devuelve dataclasses
@@ -197,8 +196,7 @@ Bugs del dominio corregidos al hacer la pestaña (afectan también al CLI):
 
 ### Configuración (`tabs/configuracion.py`)
 
-Nueve tarjetas (una `Card` cada una), modeladas sobre la ventana de
-configuración de la UI clásica pero **planas** y sin Toplevel:
+Nueve tarjetas (una `Card` cada una), planas y sin Toplevel:
 
 | Tarjeta | Qué configura | Dónde se guarda |
 |---|---|---|
@@ -207,7 +205,7 @@ configuración de la UI clásica pero **planas** y sin Toplevel:
 | **Navegador (Brave / CDP)** | Ruta del ejecutable, perfil con la sesión iniciada y puerto CDP; botones **Verificar CDP**, **Abrir Brave**, **Detener Brave** | `.env` del proyecto (`BRAVE_BIN` / `BRAVE_PERFIL` / `BRAVE_CDP_PORT`) |
 | **Sondas de scraping** | Activa/pausa fuentes (`source_sites.enabled`), con filtro por plataforma, selección múltiple, "todas" y aviso si no queda ninguna activa | BD (`source_sites`) |
 | **Apariencia** | Esquema de color (`theme.PALETAS`: claro azul / claro verde / oscuro) | `~/.jobpulse_v15/ui_config.json` (clave `paleta`) |
-| **Cachés** | Qué ocupa `data/usuario/` (caché de la IA y caché de embeddings) y botones **Limpiar** | — (disco) |
+| **Cachés** | Qué ocupa `data/usuario/` (caché de la IA) y botón **Limpiar** | — (disco) |
 | **Retención y vigencia** | Ventana de meses (1/2/3/6/12) y si se ocultan los avisos vencidos (O8/O10) | `~/.jobpulse_v15/ui_config.json` (`retencion_puestos_meses`, `solo_vigentes`) |
 | **Diagnóstico** | Integridad de la BD, calidad de los datos y huecos del enriquecimiento (botón **Ejecutar diagnóstico**) | — (solo lectura) |
 | **Exportaciones CSV** | Directorio inicial de los diálogos "Exportar CSV" | `~/.jobpulse_v15/ui_config.json` (clave `csv_dir`) |
@@ -270,7 +268,6 @@ Configuración solo lo pinta y pide confirmación.
 | Caché | Dónde | Qué guarda | Coste de borrarla |
 |---|---|---|---|
 | **IA** | `ia_api.CACHE_DIR` (por defecto `data/usuario/ia_cache/`) | Un JSON por petición (`<hash32>.json`) | **Cuesta dinero/tiempo**: el enriquecimiento vuelve a llamar al LLM |
-| **Embeddings** | `data/usuario/embeddings_cache.npy` + `_meta.json` (y los de títulos) | Los vectores del ranking ATS | Solo tiempo: el próximo ranking re-vectoriza (~1–2 min) |
 
 Reglas:
 
@@ -288,9 +285,8 @@ Reglas:
 
 #### Retención y vigencia (O8/O10) — punto 6
 
-La política de qué avisos siguen "vigentes" vive en el **mismo archivo de
-preferencias del sistema** que usa la UI clásica
-(`~/.jobpulse_v15/ui_config.json`):
+La política de qué avisos siguen "vigentes" vive en el archivo de preferencias
+del sistema (`~/.jobpulse_v15/ui_config.json`):
 
 | Clave | Qué es | Por defecto |
 |---|---|---|

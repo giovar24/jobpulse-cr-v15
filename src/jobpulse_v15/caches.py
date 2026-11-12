@@ -1,19 +1,11 @@
 # -*- coding: utf-8 -*-
 """Cachés del sistema: inspección y limpieza (SIN Tk).
 
-Hay dos cachés en disco, de naturaleza distinta:
-
-1. **Caché de la IA** (`ia_api.CACHE_DIR`, por defecto
-   `data/usuario/ia_cache/`): un archivo JSON por petición, con el nombre
-   = hash SHA-256 de 32 hex de la petición. Sirve para NO volver a pagar
-   (ni volver a esperar) una llamada al LLM. Borrarla obliga a repetir las
-   llamadas: por eso la UI pide confirmación y avisa del coste.
-
-2. **Caché de embeddings** (`search_engine`): cuatro archivos
-   (`embeddings_cache.npy` + `embeddings_meta.json` y los equivalentes de
-   TÍTULOS). Guardan los vectores de los avisos para que el ranking ATS no
-   re-vectorice 535 avisos en cada arranque (77 s). Borrarla NO cuesta
-   dinero: solo tiempo de cómputo la próxima vez.
+Hay UNA caché en disco: la **caché de la IA** (`ia_api.CACHE_DIR`, por
+defecto `data/usuario/ia_cache/`): un archivo JSON por petición, con el
+nombre = hash SHA-256 de 32 hex de la petición. Sirve para NO volver a pagar
+(ni volver a esperar) una llamada al LLM. Borrarla obliga a repetir las
+llamadas: por eso la UI pide confirmación y avisa del coste.
 
 REGLA DE SEGURIDAD: en la caché de la IA **solo** se borran archivos que
 cumplen el patrón del sistema (`[0-9a-f]{32}.json`): cualquier otro archivo
@@ -30,10 +22,8 @@ from typing import Iterable
 PATRON_CACHE_IA = re.compile(r"^[0-9a-f]{32}\.json$")
 
 CLAVE_IA = "ia"
-CLAVE_EMBEDDINGS = "embeddings"
 
 TITULO_IA = "Caché de la IA"
-TITULO_EMBEDDINGS = "Caché de embeddings (ranking ATS)"
 
 
 def _tamano_legible(bytes_: int) -> str:
@@ -82,12 +72,8 @@ class EstadoCache:
     def texto_resumen(self) -> str:
         """Resumen de una línea para la tarjeta de la UI."""
         if not self.archivos_totales:
-            if self.clave == CLAVE_IA:
-                return "Vacía (0 respuestas guardadas)"
-            return "Vacía (se re-vectoriza en el próximo ranking)"
-        if self.clave == CLAVE_IA:
-            return f"{self.archivos_totales} respuestas · {self.tamano}"
-        return f"{self.archivos_totales} archivos · {self.tamano}"
+            return "Vacía (0 respuestas guardadas)"
+        return f"{self.archivos_totales} respuestas · {self.tamano}"
 
 
 @dataclass(frozen=True)
@@ -122,18 +108,6 @@ def _ruta_ia() -> Path:
     return Path(ia_api.CACHE_DIR)
 
 
-def _rutas_embeddings() -> tuple[Path, ...]:
-    """Los cuatro archivos de la caché de embeddings."""
-    from jobpulse_v15 import search_engine
-
-    return (
-        Path(search_engine.EMB_CACHE_FILE),
-        Path(search_engine.EMB_META_FILE),
-        Path(search_engine.EMB_TIT_CACHE_FILE),
-        Path(search_engine.EMB_TIT_META_FILE),
-    )
-
-
 def _archivos_ia(ruta: Path) -> list[Path]:
     """Archivos de la caché IA que cumplen el patrón del sistema."""
     if not ruta.is_dir():
@@ -158,28 +132,10 @@ def estado_ia() -> EstadoCache:
     )
 
 
-def estado_embeddings() -> EstadoCache:
-    """Estado de la caché de embeddings (4 archivos)."""
-    rutas = _rutas_embeddings()
-    infos = tuple(_info_archivo(p) for p in rutas)
-    total = sum(i.bytes for i in infos)
-    return EstadoCache(
-        clave=CLAVE_EMBEDDINGS,
-        titulo=TITULO_EMBEDDINGS,
-        ruta=str(rutas[0].parent) if rutas else "",
-        archivos=infos,
-        archivos_totales=sum(1 for i in infos if i.existe),
-        bytes_totales=total,
-        nota=("Borrarla no cuesta dinero: el próximo ranking ATS vuelve a "
-              "vectorizar los avisos (tarda ~1-2 min la primera vez)."),
-    )
-
-
 def estado_caches() -> dict[str, EstadoCache]:
     """Todas las cachés del sistema (para la tarjeta de Configuración)."""
     return {
         CLAVE_IA: estado_ia(),
-        CLAVE_EMBEDDINGS: estado_embeddings(),
     }
 
 
@@ -201,27 +157,10 @@ def limpiar_ia() -> ResultadoLimpieza:
     return ResultadoLimpieza(CLAVE_IA, borrados, bytes_)
 
 
-def limpiar_embeddings() -> ResultadoLimpieza:
-    """Borra los cuatro archivos de la caché de embeddings."""
-    borrados = 0
-    bytes_ = 0
-    try:
-        for ruta in _rutas_embeddings():
-            if ruta.is_file():
-                bytes_ += ruta.stat().st_size
-                ruta.unlink()
-                borrados += 1
-    except OSError as exc:
-        return ResultadoLimpieza(CLAVE_EMBEDDINGS, borrados, bytes_, str(exc))
-    return ResultadoLimpieza(CLAVE_EMBEDDINGS, borrados, bytes_)
-
-
 def limpiar(clave: str) -> ResultadoLimpieza:
     """Limpia la caché indicada por clave."""
     if clave == CLAVE_IA:
         return limpiar_ia()
-    if clave == CLAVE_EMBEDDINGS:
-        return limpiar_embeddings()
     return ResultadoLimpieza(clave, 0, 0, f"Caché desconocida: {clave}")
 
 

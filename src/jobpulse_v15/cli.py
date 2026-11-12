@@ -460,26 +460,6 @@ def _agregar_argumentos_viabilidad(parser: argparse.ArgumentParser) -> None:
         help="Ignorar el filtro por areas del perfil (igual que el Paso 5).",
     )
     parser.add_argument(
-        "--semantica",
-        action="store_true",
-        help=(
-            "Incluir el componente semantico (embeddings locales). Es el "
-            "PREDETERMINADO cuando el modelo y la cache ya estan en disco; "
-            "con este flag se FUERZA (puede descargar el modelo y vectorizar "
-            "el corpus). Es lo mismo que usa la UI."
-        ),
-    )
-    parser.add_argument(
-        "--sin-semantica",
-        action="store_true",
-        help=(
-            "No incluir el componente semantico: mas rapido (no vectoriza el "
-            "corpus). Solo cambia el ORDEN (medido 2026-11-08 sobre 736 "
-            "avisos: 0 cambios de banda, 187 de 622 puntajes se mueven >5 "
-            "puntos)."
-        ),
-    )
-    parser.add_argument(
         "--format",
         choices=("json", "csv"),
         default="json",
@@ -501,56 +481,9 @@ def _cmd_viabilidad(repository: Repository, args) -> None:
         print("No hay vacantes guardadas.")
         return
     job_ids = [str(aviso.get("job_id") or "") for aviso in avisos]
-    semantica_por_job: dict[str, float] = {}
-    if getattr(args, "sin_semantica", False) and getattr(args, "semantica", False):
-        raise ValueError("--semantica y --sin-semantica son incompatibles.")
-    usar_semantica = not getattr(args, "sin_semantica", False)
-    if usar_semantica and not getattr(args, "semantica", False):
-        # El componente semantico es el PREDETERMINADO (es lo que usa la UI),
-        # pero SOLO si no cuesta trabajo extra: el modelo tiene que estar en
-        # la cache local (no se descarga nada) y la cache de embeddings tiene
-        # que cubrir el corpus (no se re-vectoriza nada). Un comando de solo
-        # lectura no descarga ~500 MB ni vectoriza el corpus sin avisar.
-        from jobpulse_v15.search_engine import (
-            embeddings_cache_cubren,
-            modelo_embeddings_disponible,
-        )
-
-        if not modelo_embeddings_disponible():
-            usar_semantica = False
-            # A STDERR: la salida de este comando es JSON (un aviso en el
-            # stdout la volveria invalida).
-            print(
-                "[aviso] Componente semantico omitido (el modelo de embeddings "
-                "no esta en la cache local). Usa --semantica para forzarlo.",
-                file=sys.stderr,
-            )
-        elif not embeddings_cache_cubren(job_ids):
-            usar_semantica = False
-            print(
-                "[aviso] Componente semantico omitido (la cache de embeddings "
-                "no cubre el corpus: habria que vectorizarlo). Usa "
-                "--semantica para forzarlo.",
-                file=sys.stderr,
-            )
-    if usar_semantica:
-        from jobpulse_v15.ats import percentiles_semanticas, perfil_ats_desde_facts
-        from jobpulse_v15.search_engine import SemanticSearchEngine
-
-        perfil = perfil_ats_desde_facts(repository.list_candidate_profile_facts())
-        try:
-            semantica_por_job = percentiles_semanticas(
-                SemanticSearchEngine(), avisos, perfil
-            )
-        except Exception as exc:  # pragma: no cover - depende del motor
-            print(
-                f"[aviso] No se pudo calcular la semantica: {exc}",
-                file=sys.stderr,
-            )
     viabilidades = calcular_viabilidades(
         repository,
         job_ids,
-        semantica_por_job=semantica_por_job,
         evaluar_todo=args.evaluar_todo,
     )
     if args.banda:

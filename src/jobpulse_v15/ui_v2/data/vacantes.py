@@ -23,8 +23,6 @@ from jobpulse_v15 import areas
 from jobpulse_v15.ats import (
     VEREDICTO_SIN_DATOS,
     componentes_ats,
-    percentiles,
-    percentiles_semanticas,
     perfil_ats_desde_facts,
     promedios_componentes,
     ranking_ats,
@@ -68,7 +66,6 @@ class VacanteAts:
     area: str
     score: float | None
     veredicto: str
-    semantica_pct: float | None
     skills_pct: float | None
     experiencia_pct: float | None
     educacion_pct: float | None
@@ -196,14 +193,10 @@ class AtsStore:
     def calcular(
         self,
         *,
-        engine: Any = None,
         limite: int = 5000,
         progreso: Callable[[str], None] | None = None,
     ) -> list[VacanteAts]:
         """Calcula el score ATS de cada aviso y lo ordena de mayor a menor.
-
-        ``engine`` es un :class:`SemanticSearchEngine` (opcional): sin el, el
-        componente semantico queda "n/d" y el resto del score sigue valiendo.
 
         El score se calcula en DOS PASADAS para que los avisos sean
         comparables entre si: primero los componentes de cada aviso (y el
@@ -221,48 +214,27 @@ class AtsStore:
         areas_por_aviso = self.areas_por_aviso()
         estados = self.estados_paso5()
 
-        percentil_sem: dict[str, float] = {}
-        if engine is not None:
-            if progreso:
-                progreso("Vectorizando avisos (la primera vez tarda)…")
-            try:
-                percentil_sem = self._similitudes(engine, avisos, perfil, progreso)
-            except Exception as error:
-                logger.warning("No se pudo calcular la similitud semántica: %s", error)
-                if progreso:
-                    progreso(f"Sin embeddings: {error}")
-
         # -- PASADA 1: los componentes de cada aviso ------------------------
         desgloses: dict[str, Any] = {}
         for aviso in avisos:
             job_id = str(aviso.get("job_id") or "")
             comparacion = comparaciones.get(job_id) or {}
-            percentil = percentil_sem.get(job_id)
-            notas = (
-                {"semantica": f"percentil {percentil:.0f} del corpus"}
-                if percentil is not None
-                else None
-            )
             desgloses[job_id] = componentes_ats(
                 perfil,
                 requisitos=comparacion.get("requirements") or [],
-                semantic_score=(percentil / 100.0) if percentil is not None else None,
                 skills_vacante=skills_de_aviso(aviso.get("skills")),
-                notas=notas,
             )
         imputacion = promedios_componentes(desgloses.values())
 
         # -- AJUSTE TECNICO (motor de viabilidad) --------------------------
         # Es OTRO indice que el ranking ATS: mide si el perfil cumple los
         # requisitos que declara el aviso (y puede vetar: titulo
-        # universitario obligatorio o area fuera del perfil). Reutiliza el
-        # percentil semantico ya calculado.
+        # universitario obligatorio o area fuera del perfil).
         viabilidades: dict[str, Any] = {}
         try:
             for viabilidad in calcular_viabilidades(
                 self.repository,
                 [str(aviso.get("job_id") or "") for aviso in avisos],
-                semantica_por_job=percentil_sem,
             ):
                 viabilidades[viabilidad.job_id] = viabilidad
         except Exception as error:  # pragma: no cover - defensivo
@@ -287,7 +259,6 @@ class AtsStore:
                     area=areas_por_aviso.get(job_id, "") or "—",
                     score=ranking.total,
                     veredicto=ranking.veredicto,
-                    semantica_pct=ranking.componentes["semantica"].pct,
                     skills_pct=ranking.componentes["skills"].pct,
                     experiencia_pct=ranking.componentes["experiencia"].pct,
                     educacion_pct=ranking.componentes["educacion"].pct,
@@ -315,20 +286,6 @@ class AtsStore:
             )
         filas.sort(key=lambda fila: (-(fila.score if fila.score is not None else -1), fila.title))
         return filas
-
-    def _similitudes(
-        self,
-        engine: Any,
-        avisos: Sequence[Mapping[str, Any]],
-        perfil: Mapping[str, Any],
-        progreso: Callable[[str], None] | None = None,
-    ) -> dict[str, float]:
-        """PERCENTIL semantico de cada aviso dentro del corpus (0-100).
-
-        La formula vive en `ats.percentiles_semanticas` (compartida con la
-        CLI y con el motor de viabilidad: un solo calculo, una sola respuesta).
-        """
-        return percentiles_semanticas(engine, avisos, perfil, progreso)
 
 
 # -- presentacion --
@@ -387,7 +344,6 @@ CAMPOS_CSV: tuple[str, ...] = (
     "veredicto",
     "ajuste",
     "banda",
-    "semantica",
     "skills",
     "experiencia",
     "educacion",
@@ -420,7 +376,6 @@ def exportar_csv(filas: Sequence[VacanteAts], ruta: str | Path) -> int:
                     "veredicto": fila.veredicto_legible,
                     "ajuste": fila.ajuste if fila.ajuste is not None else "",
                     "banda": fila.banda_legible,
-                    "semantica": _pct(fila.semantica_pct),
                     "skills": _pct(fila.skills_pct),
                     "experiencia": _pct(fila.experiencia_pct),
                     "educacion": _pct(fila.educacion_pct),

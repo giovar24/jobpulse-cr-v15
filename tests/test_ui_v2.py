@@ -551,13 +551,12 @@ class TestVacantesTab(unittest.TestCase):
             source_url="https://intel.example.test/jobs/REQ-1",
         )
         pestana = self._pestana()
-        with unittest.mock.patch.object(VacantesTab, "_crear_engine", return_value=None):
-            pestana.recalcular()
-            for _ in range(100):
-                self.root.update()
-                if not pestana._calculando:
-                    break
-                time.sleep(0.02)
+        pestana.recalcular()
+        for _ in range(100):
+            self.root.update()
+            if not pestana._calculando:
+                break
+            time.sleep(0.02)
         self.assertFalse(pestana._calculando)
         self.assertEqual(len(pestana._widgets["tabla"].get_children()), 1)
         self.assertEqual(pestana.filas[0].title, "IT Support Specialist")
@@ -568,12 +567,12 @@ class TestVacantesTab(unittest.TestCase):
         pestana.filas = [
             VacanteAts(job_id="job-a", title="Puesto A", company="Acme",
                        area="—", score=70.0, veredicto="ajustable",
-                       semantica_pct=None, skills_pct=None,
+                       skills_pct=None,
                        experiencia_pct=None, educacion_pct=None,
                        idiomas_pct=None, req_obligatorios=3),
             VacanteAts(job_id="job-b", title="Puesto B", company="Acme",
                        area="—", score=50.0, veredicto="debil",
-                       semantica_pct=None, skills_pct=None,
+                       skills_pct=None,
                        experiencia_pct=None, educacion_pct=None,
                        idiomas_pct=None, req_obligatorios=0),
         ]
@@ -602,7 +601,7 @@ class TestVacantesTab(unittest.TestCase):
         pestana.filas = [
             VacanteAts(job_id="job-a", title="Puesto A", company="Acme",
                        area="—", score=70.0, veredicto="ajustable",
-                       semantica_pct=None, skills_pct=None,
+                       skills_pct=None,
                        experiencia_pct=None, educacion_pct=None,
                        idiomas_pct=None)
         ]
@@ -1236,10 +1235,9 @@ class TestConfiguracionTab(unittest.TestCase):
         self.assertIsNone(config_mod._HANDLE_BRAVE)
 
     # -- cachés -----------------------------------------------------
-    def test_la_tarjeta_de_caches_monta_las_dos_filas(self):
+    def test_la_tarjeta_de_caches_monta_la_fila_de_la_ia(self):
         self.root.update()
-        for clave in ("cache_ia", "cache_embeddings",
-                      "cache_boton_1", "cache_boton_2"):
+        for clave in ("cache_ia", "cache_boton_1"):
             with self.subTest(widget=clave):
                 self.assertIn(clave, self.pestana._widgets)
 
@@ -1251,9 +1249,6 @@ class TestConfiguracionTab(unittest.TestCase):
             caches.CLAVE_IA: caches.EstadoCache(
                 clave=caches.CLAVE_IA, titulo=caches.TITULO_IA,
                 ruta="C:/cache/ia", archivos_totales=12, bytes_totales=2048),
-            caches.CLAVE_EMBEDDINGS: caches.EstadoCache(
-                clave=caches.CLAVE_EMBEDDINGS, titulo=caches.TITULO_EMBEDDINGS,
-                ruta="C:/cache/emb", archivos_totales=2, bytes_totales=4096),
         }
         with unittest.mock.patch.object(caches, "estado_caches",
                                         return_value=estados):
@@ -1262,9 +1257,6 @@ class TestConfiguracionTab(unittest.TestCase):
         texto_ia = self.pestana._widgets["cache_ia"].cget("text")
         self.assertIn("12 respuestas", texto_ia)
         self.assertIn("C:/cache/ia", texto_ia)
-        texto_emb = self.pestana._widgets["cache_embeddings"].cget("text")
-        self.assertIn("4.0 KB", texto_emb)
-        self.assertIn("2 archivos", texto_emb)
 
     def test_limpiar_la_cache_ia_pide_confirmacion_y_borra(self):
         from jobpulse_v15 import caches

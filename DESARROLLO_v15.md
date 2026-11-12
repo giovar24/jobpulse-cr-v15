@@ -21,13 +21,141 @@
 | **Orquestación** | `main.py` (asyncio.gather, fases hardcoded en `BARRIDOS`) | CLI `scrape <provider> --site/--group` + `IngestionService.fetch_and_import()` | v1_5 **modular, cada fuente independiente** |
 | **Fuentes** | Hardcoded en `main.py` | Declarativas: `platform add` + `site add` (JSON config, sin credenciales) | v1_5 **config en BD, no en código** |
 | **Dedupe** | `core/dedupe.py` (boards vs directos cross-source) | `job_field_status` + `source_job_memory` + review manual (no automerge) | v1_5 **más conservador** |
-| **Búsqueda** | Semántica (embeddings) + ATS score + keywords | SQL estructurada (texto + filtros + requisitos + `profile_compatibility`) + embeddings (`search_engine.py`) | Paridad razonable |
+| **Búsqueda** | Semántica (embeddings) + ATS score + keywords | SQL estructurada (texto + filtros + requisitos + `profile_compatibility`) + ranking ATS (`ats.py`) | Paridad razonable |
 | **IA/Embeddings** | `sentence-transformers` + `core/ia_api.py` (Gemini/NVIDIA/OpenRouter) | `ia_api.py` (OpenAI-compatible) + **enriquecimiento IA local** (`ia_enrichment.py`, Gemma en 8081) + `ia_calibracion.py` | ✅ Cliente externo + pase IA local |
-| **CV Parsing** | `cv2profile.py` + `reporte_cv.py` (PDF→perfil Harvard/ATS completo) | Editor harvard-ats-v1 (`ui_perfil.py`) + reglas + **pase IA `cv_ia.py`** (E2E Gemma/Gemini, integrado al asistente de import) | ✅ Gap cerrado (O6.2) |
+| **CV Parsing** | `cv2profile.py` + `reporte_cv.py` (PDF→perfil Harvard/ATS completo) | `candidate_profile.extract_candidate_profile` (CV PDF/DOCX → hechos del perfil) + **pase IA** | ✅ Gap cerrado (O6.2) |
 | **Auth/Session** | `core/browser_manager.py` + `hacer_login.py` + `credenciales.py` + `providers/login/` | ✅ FASE 3 completa: `browser_manager` + `credenciales` (keyring) + `providers/login/auto_login.py` + `browser_sites.py` | Cerrado |
 | **Scheduler** | `recordatorio.py` + `jobpulse.cmd` (login + recordatorio Windows) | Parcial: launcher `jobpulse-v15.bat` (venv + IA + Brave CDP + UI); sin recordatorio | Gap medio |
 | **Tests** | 7 unitarios (texto, dedupe, gate) | 25 suites / 358 tests + 44 subtests (pytest, python del sistema) | v1_5 **mejor cobertura** |
-| **UI** | Streamlit (`app.py`) legacy + Tkinter (`ui.py`) completa | Tkinter (`ui.py`) completa (filtros, edición, seguimiento, perfil, calidad, duplicados, admin fuentes) | Similares |
+| **UI** | Streamlit (`app.py`) legacy + Tkinter (`ui.py`) completa | Tkinter **UI v2** (`ui_v2/`, modular) — la clásica `ui.py` se retiró el 2026-11-11 | v1_5 **más modular** |
+
+---
+
+## 1 bis. EL OBJETIVO PRINCIPAL DEL PROYECTO (prioridad #1 desde 2026-11-11)
+
+> **"Evaluar los puestos y obtener los que sean los mejores para el CV que se
+> evalúa."**
+>
+> *(Enunciado del usuario, 2026-11-11.)*
+
+Este objetivo **pondera por encima de cualquier otro trabajo del repo**. Todo lo
+demás (Ola 6, taxonomía, RAG) es secundario frente a él.
+
+### 1 bis.1 Qué significa "los mejores para mi CV" — y por qué hoy NO existe
+
+Hoy el sistema produce **tres veredictos distintos** y ninguno es la lista que
+el usuario quiere:
+
+| Capa | Qué mide | Archivo | Por qué NO es la respuesta |
+|---|---|---|---|
+| **Paso 5** | ¿el perfil **cumple** lo que pide el aviso? | `matching.py` | Veredicto **binario** (cumple / no cumple / no sé). No dice *qué tan bueno* es el encaje |
+| **Viabilidad** | ¿cuánto **ajuste técnico**? (0-100 + banda) | `viabilidad.py` | Es un **índice**, no un ranking de candidatos |
+| **Ranking ATS** | ¿qué aviso se parece más al **cargo** del CV? (0-100) | `ats.py` | Mide cargo↔vacante con 4 componentes (skills/experiencia/educación/idiomas): **ordena, no califica** |
+
+**Medido sobre la BD real** (735 avisos, corrida vigente `20261111_074200`):
+
+| Estado | Avisos | Lectura |
+|---|---:|---|
+| `calificada` | **202** | El perfil cumple el umbral (0.60 cobertura / 0.80 puntaje) |
+| `revisar_a_mano` / `skill_faltante` | **302** (41 %) | De ellos, **134 fallan por 1 solo requisito** |
+| `revisar_a_mano` / `educacion_no_cumple` | **79** | 23 fallan por 1 solo requisito |
+| `descartada` | **101** | Bloqueo duro (título universitario confirmado) |
+| `datos_insuficientes` | **36** | Cobertura insuficiente o falta de datos comparables |
+| `sin_requisitos` | **11** | Sin requisitos mapeados |
+
+**El dato que explica por qué hoy no hay ranking útil**: los avisos tienen
+**1,8 requisitos evaluables de media** (máx. 15), mientras el perfil tiene
+**23 skills + 9 experience + 6 certifications**. El motor no puede comparar
+lo que el extractor no leyó: un aviso con 2 requisitos extraídos no es
+"fácil", es **pobre**. Y de los 302 `skill_faltante`, una parte son **falsos
+positivos de mapeo** (`Word`→`microsoft-365`, `mantenimiento preventivo`→
+`mantenimiento`): requisitos que nadie puede "cumplir" ni le faltan a nadie.
+
+### 1 bis.2 Lo que YA está construido (no hay que rehacerlo)
+
+- **Motor determinista** (`matching.py`): reglas de negocio congeladas,
+  corridas nuevas, evidencia literal, decisiones firmadas.
+- **Viabilidad** (`viabilidad.py`): ajuste 0-100 + bandas (`aplicar` ≥85,
+  `revisar` 80-85, `no_prioritario` <80, `sin_datos`, `veto`).
+- **Ranking ATS** (`ats.py`): score 0-100 con 4 componentes (skills 0.65 /
+  experiencia 0.15 / educación 0.10 / idiomas 0.10) + imputación del promedio
+  del corpus (evita el score degenerado de 1 solo requisito).
+- **Paridad CLI/UI v2 en el motor**: la UI v2 importa las **mismas** funciones
+  del núcleo (`calcular_viabilidades`, `ranking_ats`) — no reimplementa nada.
+
+> **El componente semántico (embeddings) se retiró el 2026-11-11**: `search_engine.py`,
+> `gate.py` e `ia_calibracion.py` se borraron, junto con su caché en disco y
+> las dependencias `sentence-transformers`/`torch`. Ordenaba pero no calificaba,
+> y el modelo primario estaba *gated*. El ranking ATS y la viabilidad quedaron
+> con sus componentes deterministas.
+
+### 1 bis.3 Por qué "solo embeddings" NO es la respuesta
+
+Un embedding **compara texto completo ↔ texto completo**: no sabe si el aviso
+pide un título, una skill o 3 años de experiencia. Con solo embeddings:
+
+- los **101 `descartada`** (bloqueo duro de título) subirían al principio de
+  la lista: "se parece a tu CV" y punto;
+- los **79 `educacion_no_cumple`** también;
+- los **11 `sin_requisitos`** se ordenarían por parecido, sin veredicto.
+
+Es decir: se perdería el **59 %** del corpus (todo lo que el motor sí puede
+decidir) para ganar un orden. El embedding **ordena; no califica**.
+
+**Uso correcto del embedding**: como **desempate dentro de la banda**, nunca
+como filtro de elegibilidad. Se midió (2026-11-07/08): con y sin semántica,
+**0 cambios de banda** (solo cambiaba el orden) — por eso el componente se
+**retiró** el 2026-11-11 en vez de mantenerse *gated*.
+
+### 1 bis.4 El plan de trabajo (3 capas, en este orden)
+
+| Capa | Qué | Por qué en este orden | Estado |
+|---|---|---|---|
+| **1 · Entrada** | Limpiar los requisitos mal extraídos/mapeados (los `ambiguous`/`inferred` de skills) y **subir la cobertura de requisitos por aviso** | Es el cuello de botella real: sin requisitos comparables, ningún ranking puede ser justo. Es también lo que hace que los 134 "1 faltante" sean reales | 🟡 **pendiente** |
+| **2 · Criterio** | Congelar la regla de "mejor puesto": veto fuera → banda → **desempate** (cobertura + ranking ATS, pesos fijos) | Sin un criterio congelado, la lista no es reproducible ni auditable (misma regla que los umbrales 0.60/0.80) | 🟡 **pendiente** |
+| **3 · Salida** | **Una lista única, ordenada, con el "por qué"** — disponible **en la CLI y en la UI v2** | Es el objetivo del usuario, literal | 🟡 **pendiente** |
+
+### 1 bis.5 REGLA DE ACEPTACIÓN: todo debe correr en la UI, no solo en la CLI
+
+> **Ninguna capacidad del objetivo principal se entrega "solo en la CLI".**
+> La CLI y la UI v2 deben dar **el mismo número con el mismo criterio**.
+
+Esto NO es una idea nueva: es **O12 (paridad CLI/UI)** aplicada al objetivo
+principal, y es la regla que este repo ya se aplica (una sola implementación
+por etapa, `pipeline.ejecutar`, `analysis_flow.extract_job_analysis`).
+
+**Cómo se cumple en la práctica:**
+
+| Regla | Consecuencia técnica |
+|---|---|
+| El criterio de orden vive en **un módulo del núcleo** (p. ej. `viabilidad.py` / `ats.py`), no en el CLI ni en el widget | La CLI y la UI v2 lo importan (como ya hacen con `ranking_ats`) |
+| La UI v2 llama a la **misma** función que la CLI | Cero lógica duplicada |
+| La UI v2 es la **única** interfaz gráfica | La UI clásica (`ui.py`) se retiró el 2026-11-11: no hay paridad que mantener con ella |
+| **Tests de paridad**: el mismo corpus, la misma lista, los mismos números | Un test compara la salida de la CLI con la de la UI v2 sobre la misma BD |
+
+**Estado de la paridad en la capa de evaluación (verificado 2026-11-11):**
+
+| Pieza | CLI | UI v2 | ¿Paridad? |
+|---|---|---|---|
+| Viabilidad (ajuste + banda) | `calcular_viabilidades` | `calcular_viabilidades` | ✅ misma función |
+| Ranking ATS (score) | `ranking_ats` | `ranking_ats` | ✅ misma función |
+| **Lista única "mejores puestos" con el por qué** | ❌ no existe | ❌ no existe | 🟡 **lo que falta (Capa 3)** |
+
+**El trabajo de la Capa 3 es, por definición, un trabajo de UI + CLI a la vez.**
+
+### 1 bis.6 Orden de ejecución (con lo medido)
+
+1. **Medir** (solo lectura): cuántos de los 302 `skill_faltante` son falsos
+   positivos de mapeo. Decide si el esfuerzo va a la Capa 1 o a la Capa 2.
+2. **Capa 1**: migración **029** de taxonomía + reglas de mapeo → más
+   requisitos comparables por aviso. *(Medición obligatoria en copia antes de
+   tocar la BD real, como siempre.)*
+3. **Capa 2**: congelar el criterio de orden en el núcleo.
+4. **Capa 3**: `viabilidad top` (CLI) + vista "Mis mejores puestos" (UI v2),
+   con el **por qué** explicito: *"ajuste 87 · te faltan SQL y Tableau
+   (2 de 8 requisitos) · el cargo coincide 82 % con tu CV"*.
+
+Detalle operativo y criterios de aceptación: `docs/PLAN_MEJORAS.md` §6.4.
 
 ---
 
@@ -43,7 +171,7 @@
 | CLI base (`init-db`, `backup`, `db check`, `platform`, `site`, `run`, `search`, `quality`, `ingest`, `location`) | `cli.py` | ✅ Completo |
 | Scrapers API-only | `workday.py`, `greenhouse.py`, `ashby.py`, `lever.py`, `recruitee.py`, `workable.py`, `successfactors.py` | ✅ Completo + tests |
 | Análisis estructurado (`rules-1`) | `analysis.py` | ✅ Completo |
-| UI Tkinter completa | `ui.py` | ✅ Completa |
+| UI Tkinter completa (**UI v2**) | `ui_v2/` | ✅ Completa |
 | Tests (13 suites) | `tests/test_*.py` | ✅ Pasan |
 | Config declarativa (platform/site) | `repository.py` + CLI | ✅ Funcional |
 
@@ -458,8 +586,8 @@ py -3.11 -m venv .venv
 .\.venv\Scripts\python.exe -X utf8 -m jobpulse_v15 enrich requirements-source
 .\.venv\Scripts\python.exe -X utf8 -m jobpulse_v15 enrich requirements-source --apply
 
-# === UI ===
-.\.venv\Scripts\python.exe -m jobpulse_v15.ui
+# === UI (única: la v2) ===
+.\.venv\Scripts\python.exe -m jobpulse_v15.ui_v2
 
 # === TESTS ===
 python -m pytest tests/ -q    # pytest vive en el python del sistema (el venv no lo trae)
@@ -999,7 +1127,7 @@ dice QUÉ pide, no si es obligatorio); (4) evidencia literal; (5) no se
 duplica lo que el texto ya dio.
 
 **2. `analysis_flow.py`** pasa a ser la implementación **única** del análisis
-(la usan la CLI, la UI clásica, la UI v2 y `run_full_flow`): integra texto +
+(la usan la CLI, la UI v2 y `run_full_flow`): integra texto +
 campos estructurados, con `VERSION_ANALISIS = "rules-2+fuente"` (las
 revisiones viejas quedan como historial).
 

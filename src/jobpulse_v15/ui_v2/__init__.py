@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 """UI v2 de JobPulse CR: interfaz **plana** (flat) y **modular**.
 
-La UI clásica (`jobpulse_v15.ui`) NO se toca: esta versión vive aparte y
-se puede abrir al mismo tiempo.
+Es la ÚNICA interfaz gráfica del proyecto: la UI clásica (`ui.py`) se
+retiró el 2026-11-11 junto con sus módulos.
 
 CÓMO AGREGAR UNA PESTAÑA
 -------------------------

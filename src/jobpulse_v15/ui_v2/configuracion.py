@@ -1,11 +1,10 @@
 # -*- coding: utf-8 -*-
 """Configuración persistente de la UI v2 (SIN Tk).
 
-Comparte el archivo con la UI clásica: `~/.jobpulse_v15/ui_config.json`.
-REGLA DE ORO: SIEMPRE cargar → update → guardar. El mismo archivo lo
-escriben `ciclo_vida` (O8) y la ventana de configuración clásica:
-sobrescribir el dict completo perdería sus claves (bug ya vivido en
-`configuration_window._save_all`).
+Comparte el archivo con `ciclo_vida`: `~/.jobpulse_v15/ui_config.json`.
+REGLA DE ORO: SIEMPRE cargar → update → guardar: sobrescribir el dict
+completo perdería claves de otros módulos (bug ya vivido en la extinta
+ventana de configuración clásica).
 
 Claves que usa la UI v2:
 - `paleta`   : nombre del esquema de color (ver `theme.PALETAS`).

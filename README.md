@@ -165,10 +165,11 @@ seleccionada, con su estado, conteos y errores:
 
 ```powershell
 .\.venv\Scripts\python.exe -m pip install -e .
-.\.venv\Scripts\python.exe -m jobpulse_v15.ui
+.\.venv\Scripts\python.exe -m jobpulse_v15.ui_v2
 ```
 
-Tambien se instala el lanzador `jobpulse-v15-ui`.
+La UI v2 (`jobpulse_v15.ui_v2`) es la unica interfaz grafica; tambien se abre
+con `jobpulse-v15-v2.bat`.
 
 ## Ingesta controlada de ofertas
 

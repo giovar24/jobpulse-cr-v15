@@ -2,7 +2,6 @@
 """Tests O8 ciclo de vida: herencia de republicaciones + vigencia.
 
 Patron de tests/test_repository.py (tempdir + Database + Repository).
-NO instancia ConfigurationWindow (patron test_configuration_window.py).
 """
 
 import json

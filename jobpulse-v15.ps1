@@ -90,7 +90,7 @@ Write-Host "============================================================`n" -For
 
 # Usar python del venv si existe
 $pythonExe = if (Test-Path ".venv\Scripts\python.exe") { ".venv\Scripts\python.exe" } else { "python" }
-& $pythonExe -m jobpulse_v15.ui
+& $pythonExe -m jobpulse_v15.ui_v2
 
 Write-Host "`nJobPulse CR finalizado." -ForegroundColor Cyan
 Read-Host "Presiona Enter para salir"

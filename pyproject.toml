@@ -14,8 +14,6 @@ dependencies = [
     "httpx[http2]>=0.27",
     "playwright>=1.44",
     "beautifulsoup4>=4.12",
-    "sentence-transformers>=3.0",
-    "torch>=2.3",
     "python-dotenv>=1.0",
     "aiosqlite>=0.19",
     "keyring>=25",
@@ -33,7 +31,6 @@ ia = [
 
 [project.scripts]
 jobpulse-v15 = "jobpulse_v15.cli:main"
-jobpulse-v15-ui = "jobpulse_v15.ui:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}

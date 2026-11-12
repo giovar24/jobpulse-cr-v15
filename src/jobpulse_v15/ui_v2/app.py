@@ -151,7 +151,7 @@ class AppShell:
             fg=theme.color("sidebar_text"), font=theme.font(8, "bold"),
         ).pack(anchor="w")
         tk.Label(
-            pie, text=t("La UI clásica sigue disponible:\npython -m jobpulse_v15.ui"),
+            pie, text=t("JobPulse CR · v1.5"),
             bg=theme.color("sidebar_bg"), fg=theme.color("sidebar_text"),
             font=theme.font(8), justify="left", wraplength=180,
         ).pack(anchor="w", pady=(4, 0))

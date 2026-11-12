@@ -47,9 +47,9 @@ Ollama Cloud y LM Studio dan acceso (a veces gratis) al mismo enriquecimiento.
 |---|---|---|
 | `ia_servidor.es_endpoint_local()` + `asegurar_servidor()` no arranca nada local con endpoint externo | `src/jobpulse_v15/ia_servidor.py` | ✅ |
 | Degradación `json_schema` → `json_object` → sin `response_format` | `src/jobpulse_v15/ia_api.py` | ✅ |
-| Presets unificados (`ollama`=Cloud, `ollama-local`, `lmstudio`, …) en las dos UIs | `ia_api.PRESETS` + `configuration_window.IA_PROVIDERS` | ✅ |
-| Aviso de privacidad + confirmación (UI) / `--confirmar-externo` (CLI) | `ui.py`, `run_enriquecimiento.py` | ✅ |
-| Tope de avisos **opt-in y ajustable** (`IA_MAX_VACANTES`, vacío = sin tope) | `ia_api.py`, `ia_enrichment.py`, ambas UIs | ✅ |
+| Presets unificados (`ollama`=Cloud, `ollama-local`, `lmstudio`, …) en la UI | `ia_api.PRESETS` + `ui_v2/ia_providers.py` | ✅ |
+| Aviso de privacidad + confirmación (UI) / `--confirmar-externo` (CLI) | `ui_v2/`, `run_enriquecimiento.py` | ✅ |
+| Tope de avisos **opt-in y ajustable** (`IA_MAX_VACANTES`, vacío = sin tope) | `ia_api.py`, `ia_enrichment.py`, la UI | ✅ |
 | Tests | `tests/test_ia_externa.py` (35 tests, incl. end-to-end HTTP) | ✅ |
 
 **Lo que abre:** el mismo cliente sirve para el enriquecimiento y para las
@@ -676,7 +676,7 @@ real del pipeline.
 | # | Mejora | Por qué al final |
 |---|---|---|
 | 5.1 | Re-análisis **sin inflar el historial** (`save_analysis` marca `is_current=0` y crea fila nueva): hacer upsert cuando el texto no cambió pero sí los campos | Toca la auditoría del análisis (riesgo medio); el beneficio es disco/tiempo, no resultados — **medido: ya NO ocurre** (§5.9) |
-| 5.2 | Semántica/embeddings en el motor de **viabilidad** (hoy solo el ranking ATS los usa) | El percentile es el único componente ruidoso; overhaul grande (alto) y el motor ya es conservador — **medido: el motor YA lo usa**; lo que faltaba era el valor por defecto (§5.9) |
+| 5.2 | ~~Semántica/embeddings en el motor de viabilidad~~ | ❌ **eliminado 2026-11-11** (§6.3): ordenaba pero no definía la banda |
 | 5.3 | IA externa para **tareas futuras** (matching semántico, resumen de vacantes, extracción de CV) | Requiere primero la Ola 2 (orquestador) para que las tareas nuevas se puedan lanzar igual desde CLI y UI |
 | 5.4 | `ia_api`: streaming / reintentos por token / cache por proveedor | Optimizaciones; el flujo actual ya es estable |
 
@@ -868,6 +868,11 @@ acuerdo. Con la medición a la vista, la decisión pendiente es solo "¿lo
 dejamos activo por defecto?" (respuesta: sí, con el opt-out), no "¿cuánto
 pesa?".
 
+> **Nota (2026-11-11)**: el componente semántico se **eliminó** poco después
+> (ver §6.3): `search_engine.py`, `--semantica`/`--sin-semantica`, `PESO_SEMANTICA`
+> y la caché de embeddings ya no existen. Lo de arriba queda como historial de
+> la medición que justificó la decisión.
+
 ### 5.10 La regla de NEGOCIO del nivel educativo — **ESCRITA 2026-11-08**
 
 Los 2 casos que quedaban en `educacion_no_confirmada` no se cerraban "a
@@ -951,8 +956,8 @@ Vectorización y RAG para Ofertas de Empleo Local" (propuesta del usuario,
 | Scraping multi-portal (HTML/API/JSON) | `scraper.FETCHERS` + `ejecutar_barrido` (CDP, sesiones ANE/LinkedIn, tableros API) |
 | LLM + regex para normalizar | `analysis.py` (reglas) + pase IA (Gemma 4 E2B local) + `text_hash` |
 | SQLite con filtros estrictos | `jobs` + `job_analysis` + `job_requirements` + `job_field_status` + `concepto` |
-| Embeddings + búsqueda por coseno + Top-K | `search_engine` (cache en disco `.npy`) + `ats.py` + `viabilidad.py` |
-| `search_text` sintético | `search_engine._build_doc_text` / `_build_titulo_text` |
+| Embeddings + búsqueda por coseno + Top-K | ~~`search_engine` (cache en disco `.npy`)~~ **eliminado 2026-11-11** + `ats.py` + `viabilidad.py` |
+| `search_text` sintético | ~~`search_engine._build_doc_text` / `_build_titulo_text`~~ (eliminado con el motor semántico) |
 | Campos estructurados | `jobs.skills` / `languages` / `salary_min` / `work_mode` / `region` / `city` |
 
 **Lo que NO se debe adoptar (empeoraría el objetivo)**:
@@ -967,7 +972,8 @@ Vectorización y RAG para Ofertas de Empleo Local" (propuesta del usuario,
 **Lo que sí aportaría, si algún día se decide (≈1 día, riesgo bajo, aditivo)**:
 
 - **RAG consultivo, nunca juez**: los avisos que pasan los filtros duros (SQL)
-  → Top-K por coseno (reutilizando `search_engine`, sin nada nuevo) → prompt
+  → Top-K (hoy **sin** embeddings: habría que reintroducir un índice semántico,
+  ver §6.3) → prompt
   `[CONTEXTO][PERFIL][INSTRUCCIÓN]` → **texto** con resumen comparativo, brechas y
   borrador de carta.
 - **Guardado**: como texto, **nunca** como estado (nunca toca `job_match` ni la
@@ -1113,15 +1119,18 @@ principio: el nivel ya no se deduce de una resta, sino de lo que la tabla dice
 que cada programa presupone. Documentado en
 `docs/REGLAS_NEGOCIO_EDUCACION.md` §1.1.
 
-### 6.3 Embeddings: el modelo primario está *gated* — OPCIONAL
+### 6.3 Embeddings: el modelo primario está *gated* — ✅ CERRADO (eliminado, 2026-11-11)
 
-`google/embeddinggemma-300m` (el modelo primario previsto) devuelve **401**
-(acceso restringido en Hugging Face) → el repo cae al fallback
-`paraphrase-multilingual-mpnet-base-v2`, que **funciona** y no cambia ninguna
-banda. Opciones si algún día se quiere el primario: pedir acceso al repo de HF
-(1 token + 1 re-vectorización; la cache se invalida porque el metadato guarda
-el modelo) o instalar Ollama local y usar su `embeddinggemma` (paridad con la
-propuesta, pero duplica backends). **Hoy no aporta nada medible**: no se hace.
+`google/embeddinggemma-300m` (el modelo primario previsto) devolvía **401**
+(acceso restringido en Hugging Face) → el repo caía al fallback
+`paraphrase-multilingual-mpnet-base-v2`, que funcionaba y no cambiaba ninguna
+banda. **Decisión del usuario (2026-11-11): el componente semántico se
+ELIMINÓ** en vez de mantenerse *gated*: medido con y sin semántica, **0 cambios
+de banda** (solo cambiaba el orden), y ordenar sin calificar no sirve al
+objetivo principal. Se borraron `search_engine.py`, `gate.py`,
+`ia_calibracion.py`, la caché de embeddings, `sentence-transformers` y `torch`.
+Si algún día se quiere un desempate semántico dentro de la banda, se
+reintroduce como **componente nuevo** con medición previa (ver §6.4).
 
 ---
 

@@ -21,9 +21,8 @@ Nueve tarjetas (una Card cada una):
 5. **Apariencia** — esquema de color (`theme.PALETAS`) y densidad
    (`theme.DENSIDADES`) → `ui_config.json` y reconstrucción en caliente vía
    el servicio `reconstruir_ui`.
-6. **Cachés** — qué ocupa `data/usuario/` (caché de la IA y caché de
-   embeddings) y botones para limpiarlas (el dominio está en
-   `jobpulse_v15.caches`, sin Tk).
+6. **Cachés** — qué ocupa `data/usuario/` (caché de la IA) y botón para
+   limpiarla (el dominio está en `jobpulse_v15.caches`, sin Tk).
 7. **Retención y vigencia** — ventana de meses (1/2/3/6/12) y si se ocultan
    los avisos vencidos (O8/O10: ocultar, nunca borrar).
 8. **Diagnóstico** — integridad de la BD, calidad de los datos y huecos del
@@ -42,12 +41,12 @@ from tkinter import filedialog, messagebox, ttk
 from typing import Any
 
 from jobpulse_v15.ciclo_vida import MESES_PERMITIDOS
-from jobpulse_v15.configuration_window import IA_PROVIDERS
 from jobpulse_v15.ia_servidor import asegurar_servidor, servidor_arriba
 from jobpulse_v15.ui_v2 import configuracion
 from jobpulse_v15.ui_v2.data.fuentes import FuentesStore
 from jobpulse_v15.ui_v2.data.retencion import RetencionStore
 from jobpulse_v15.ui_v2.dialogs import confirmar
+from jobpulse_v15.ui_v2.ia_providers import IA_PROVIDERS
 from jobpulse_v15.ui_v2.tabs.base import BaseTab
 from jobpulse_v15.ui_v2.theme import (
     DENSIDAD_DEFECTO,
@@ -97,7 +96,7 @@ class ConfiguracionTab(BaseTab):
         # Estado de las cachés (medido en disco al abrir la pestaña).
         self._estados_cache: dict[str, Any] = {}
         # Fila de la tarjeta -> clave de caché (para el botón "Limpiar").
-        self._cache_claves: dict[int, str] = {1: "ia", 2: "embeddings"}
+        self._cache_claves: dict[int, str] = {1: "ia"}
 
     # ================================================================
     # Construcción
@@ -499,9 +498,6 @@ class ConfiguracionTab(BaseTab):
         self._widgets["cache_ia"] = self._fila_cache(
             card.body, 1, "Caché de la IA",
             "las respuestas ya pagadas al LLM (se repiten al enricher)")
-        self._widgets["cache_embeddings"] = self._fila_cache(
-            card.body, 2, "Caché de embeddings",
-            "los vectores del ranking ATS (no cuesta dinero re-vectorizar)")
 
         botones = tk.Frame(card.body, bg=theme.color("surface"))
         botones.grid(row=3, column=0, sticky="w", pady=(10, 0))
@@ -512,9 +508,7 @@ class ConfiguracionTab(BaseTab):
             card.body,
             text=(t("Borrar la caché de la IA hace que el enriquecimiento "
                   "vuelva a llamar al modelo (con IA externa, cuesta dinero). "
-                  "Borrar la de embeddings solo obliga a re-vectorizar los "
-                  "avisos la próxima vez. Los archivos ajenos al sistema no "
-                  "se tocan.")),
+                  "Los archivos ajenos al sistema no se tocan.")),
             bg=theme.color("surface"), fg=theme.color("text_faint"),
             font=theme.font(8), anchor="w", wraplength=760, justify="left",
         ).grid(row=4, column=0, sticky="ew", pady=(8, 0))
@@ -557,14 +551,13 @@ class ConfiguracionTab(BaseTab):
         try:
             estados = caches.estado_caches()
         except Exception as exc:  # noqa: BLE001
-            for clave in ("cache_ia", "cache_embeddings"):
+            for clave in ("cache_ia",):
                 etiqueta = self._widgets.get(clave)
                 if etiqueta is not None:
                     etiqueta.configure(text=f"No se pudo leer: {exc}")
             return
         self._estados_cache = estados
-        for clave, etiqueta_clave in (("ia", "cache_ia"),
-                                      ("embeddings", "cache_embeddings")):
+        for clave, etiqueta_clave in (("ia", "cache_ia"),):
             etiqueta = self._widgets.get(etiqueta_clave)
             estado = estados.get(clave)
             if etiqueta is None or estado is None:

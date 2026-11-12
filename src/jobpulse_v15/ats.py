@@ -6,7 +6,7 @@ experimentos LiveCareer/ResumeWorded):
 
 Componentes y pesos default (suman 1.0):
 - Hard Skills / Keywords:       40%  (coincidencia de requisitos explicitos)
-- Titulo del puesto:            30%  (similitud semantica via embeddings)
+- Titulo del puesto:            30%  (solape de tokens normalizados)
 - Experiencia (anos vs min):    15%  (cobertura del minimo requerido)
 - Educacion (nivel vs req):     7.5% (jerarquia: doctorado > master > bachelor > tecnico > bachiller)
 - Idiomas (nivel explicito):    7.5% (coincidencia codigo + nivel >= requerido)
@@ -17,6 +17,10 @@ Umbrales de veredicto:
 - < 70   -> "Debil" / "Rechazo probable" (Weak match)
 
 El score es 0-100. Componentes ausentes en la vacante se redistribuyen.
+
+NOTA: el componente SEMANTICO (embeddings) se elimino el 2026-11-11: el
+modelo primario estaba *gated* (401) y el fallback no movia ninguna banda
+(solo el orden). Todo lo que queda aqui es determinista y explicable.
 """
 
 from __future__ import annotations
@@ -25,10 +29,6 @@ import logging
 import re
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Mapping, Optional, Set, Tuple
-
-import numpy as np
-
-from jobpulse_v15.search_engine import SemanticSearchEngine
 
 logger = logging.getLogger("jobpulse.ats")
 
@@ -280,21 +280,11 @@ def extract_languages_required(job: Dict[str, Any]) -> Dict[str, str]:
     return found
 
 
-def title_semantic_match(profile_titles: List[str], job_title: str, engine: SemanticSearchEngine) -> float:
-    """Similitud coseno entre titulos del perfil y titulo de la vacante (0-1)."""
-    if not profile_titles or not job_title:
-        return 0.0
-    # Embedding del titulo de la vacante
-    job_emb = engine._model.encode([engine._get_doc_prompt() + job_title], convert_to_numpy=True, normalize_embeddings=True)[0]
-    # Embeddings de titulos del perfil
-    profile_embs = engine._model.encode([engine._get_query_prompt() + t for t in profile_titles], convert_to_numpy=True, normalize_embeddings=True)
-    # Max similitud
-    sims = profile_embs @ job_emb
-    return float(np.max(sims))
+def title_match_simple(profile_titles: List[str], job_title: str) -> float:
+    """Similitud entre titulos del perfil y titulo de la vacante (0-1).
 
-
-def title_semantic_match_simple(profile_titles: List[str], job_title: str) -> float:
-    """Fallback simple sin embeddings: overlap de tokens normalizados."""
+    Solape de tokens normalizados (Jaccard). Determinista y sin modelo.
+    """
     if not profile_titles or not job_title:
         return 0.0
     job_tokens = set(_normalize_skill(job_title).split())
@@ -314,7 +304,6 @@ def title_semantic_match_simple(profile_titles: List[str], job_title: str) -> fl
 def ats_score(
     profile: Dict[str, Any],
     job: Dict[str, Any],
-    engine: Optional[SemanticSearchEngine] = None,
     weights: Optional[Dict[str, float]] = None,
 ) -> ATSScore:
     """
@@ -330,7 +319,6 @@ def ats_score(
 
     job: dict normalizado de la vacante (title, description_raw, requirements_raw, etc.)
 
-    engine: SemanticSearchEngine para similitud de titulo (opcional; si None usa fallback simple)
     weights: override de pesos (skills, title, experience, education, languages)
     """
     w = weights or profile.get("pesos_ats", DEFAULT_WEIGHTS).copy()
@@ -353,10 +341,7 @@ def ats_score(
     # 2. TITLE (30%)
     profile_titles = profile.get("titulos", [])
     job_title = job.get("title", "")
-    if engine and profile_titles and job_title:
-        title_pct = 100.0 * title_semantic_match(profile_titles, job_title, engine)
-    else:
-        title_pct = 100.0 * title_semantic_match_simple(profile_titles, job_title)
+    title_pct = 100.0 * title_match_simple(profile_titles, job_title)
 
     # 3. EXPERIENCE (15%)
     req_years = extract_years_required(job)
@@ -446,30 +431,23 @@ def ats_score(
 def rank_with_ats(
     jobs: List[Dict],
     profile: Dict[str, Any],
-    engine: Optional[SemanticSearchEngine] = None,
     weights: Optional[Dict[str, float]] = None,
-    semantic_weight: float = 0.6,
 ) -> List[Dict]:
-    """
-    Reordena jobs combinando score semantico (0-1) + ATS (0-100).
+    """Reordena jobs por su score ATS (0-100).
 
-    Combinado = semantic_weight * (semantic_score * 100) + (1 - semantic_weight) * ats_score
+    El score ATS es el unico criterio: el componente semantico (embeddings) se
+    elimino el 2026-11-11, asi que ya no se mezcla con un score de texto
+    libre.
     """
     for job in jobs:
-        ats = ats_score(profile, job, engine, weights)
+        ats = ats_score(profile, job, weights)
         job["ats_score"] = ats.total
         job["ats_veredicto"] = ats.veredicto
         job["ats_missing"] = ats.missing_keywords
         job["ats_skills_pct"] = ats.skills_pct
         job["ats_title_pct"] = ats.title_pct
 
-    # Asumimos que job ya tiene 'semantic_score' (0-1) del search_engine
-    for job in jobs:
-        sem = job.get("semantic_score", 0.0) or 0.0
-        ats = job.get("ats_score", 0.0) or 0.0
-        job["combined_score"] = round(semantic_weight * (sem * 100) + (1 - semantic_weight) * ats, 1)
-
-    jobs.sort(key=lambda j: -j.get("combined_score", 0))
+    jobs.sort(key=lambda j: -(j.get("ats_score", 0.0) or 0.0))
     return jobs
 
 
@@ -495,15 +473,13 @@ def rank_with_ats(
 #   congelados del Paso 5 (cobertura 0.60 / puntaje 0.80).
 
 PESOS_RANKING: Dict[str, float] = {
-    "semantica": 0.35,
-    "skills": 0.45,
-    "experiencia": 0.10,
-    "educacion": 0.05,
-    "idiomas": 0.05,
+    "skills": 0.65,
+    "experiencia": 0.15,
+    "educacion": 0.10,
+    "idiomas": 0.10,
 }
 
 ETIQUETAS_COMPONENTE: Dict[str, str] = {
-    "semantica": "Semántica (perfil ↔ aviso)",
     "skills": "Skills",
     "experiencia": "Experiencia",
     "educacion": "Educación",
@@ -643,94 +619,6 @@ def promedios_componentes(
         for clave in sumas
         if conteos.get(clave)
     }
-
-
-def percentiles(valores: Sequence[float]) -> List[float]:
-    """Percentil 0-100 de cada valor dentro del corpus (rank based).
-
-    Los cosenos de embeddings viven comprimidos (0.1-0.6 para 535 avisos):
-    como valor absoluto no distinguen nada. El percentil los hace
-    comparables y reparte el componente semantico en todo el rango.
-    """
-    datos = [float(v) for v in valores]
-    total = len(datos)
-    if total == 0:
-        return []
-    if total == 1:
-        return [100.0]
-    orden = sorted(range(total), key=lambda i: datos[i])
-    rangos = [0.0] * total
-    i = 0
-    while i < total:
-        j = i
-        while j + 1 < total and datos[orden[j + 1]] == datos[orden[i]]:
-            j += 1
-        # Empate: todos comparten el percentil promedio del tramo.
-        promedio = (i + j) / 2.0
-        pct = 100.0 * promedio / (total - 1)
-        for k in range(i, j + 1):
-            rangos[orden[k]] = pct
-        i = j + 1
-    return rangos
-
-
-#: Mezcla de las dos senales semanticas (calibrada sobre el corpus real):
-#: 65 % la familia de puesto (cargos del perfil vs TITULO del aviso) y 35 %
-#: el contenido (cargos del perfil vs aviso completo). Con solo el titulo se
-#: pierde precision; con solo el documento el ruido del texto domina.
-PESO_SEMANTICA_TITULO = 0.65
-PESO_SEMANTICA_DOCUMENTO = 0.35
-
-
-def percentiles_semanticas(
-    engine: Any,
-    avisos: Sequence[Mapping[str, Any]],
-    perfil: Mapping[str, Any],
-    progreso: Optional[Callable[[str], None]] = None,
-) -> Dict[str, float]:
-    """PERCENTIL semantico de cada aviso dentro del corpus (0-100).
-
-    Formula (calibrada sobre el corpus real): la media de los cosenos entre
-    los CARGOS del perfil y (a) el titulo del aviso y (b) el aviso completo,
-    mezcladas 65/35. El percentil (no el coseno crudo) es lo que se usa: los
-    cosenos viven comprimidos y no distinguen nada.
-
-    Es la MISMA fuente para el ranking ATS y para el motor de viabilidad
-    (CLI y UI): un solo calculo, una sola respuesta.
-    """
-    titulos = [str(t) for t in (perfil.get("titulos") or []) if str(t).strip()]
-    if not titulos:
-        return {}
-    jobs = [dict(aviso) for aviso in avisos]
-    engine.index_jobs(jobs)
-    engine.index_titulos(jobs)
-    if progreso:
-        progreso("Embeddings listos · calculando similitud…")
-    e_perfil = engine.embed_texts(titulos, tipo="query")
-    ids_doc, mat_doc = engine.vectors("doc")
-    ids_tit, mat_tit = engine.vectors("titulo")
-    if mat_doc is None or mat_tit is None or len(e_perfil) == 0:
-        return {}
-    indice_doc = {job_id: i for i, job_id in enumerate(ids_doc)}
-    indice_tit = {job_id: i for i, job_id in enumerate(ids_tit)}
-    claves: List[str] = []
-    crudos: List[float] = []
-    for aviso in avisos:
-        job_id = str(aviso.get("job_id") or "")
-        if job_id not in indice_doc or job_id not in indice_tit:
-            continue
-        vec_doc = mat_doc[indice_doc[job_id]]
-        vec_tit = mat_tit[indice_tit[job_id]]
-        titulo_score = float((e_perfil @ vec_tit).mean())
-        documento_score = float((e_perfil @ vec_doc).mean())
-        crudos.append(
-            PESO_SEMANTICA_TITULO * titulo_score
-            + PESO_SEMANTICA_DOCUMENTO * documento_score
-        )
-        claves.append(job_id)
-    if progreso:
-        progreso(f"Similitud calculada ({len(claves)} avisos).")
-    return dict(zip(claves, percentiles(crudos)))
 
 
 @dataclass
@@ -921,11 +809,6 @@ def perfil_ats_desde_facts(
                 educacion_en_curso = True
 
     anios = anios_total if anios_total is not None else (anios_suma or None)
-    texto_semantico = " | ".join(
-        ([temas[0]] if temas else [])
-        + skills
-        + titulos
-    )
     return {
         "skills": skills,
         "titulos": titulos,
@@ -934,7 +817,6 @@ def perfil_ats_desde_facts(
         "experiencia_anios": anios,
         "educacion_nivel": educacion_nivel,
         "educacion_en_curso": educacion_en_curso,
-        "texto_semantico": texto_semantico,
     }
 
 
@@ -969,15 +851,13 @@ def componentes_ats(
     perfil: Mapping[str, Any],
     *,
     requisitos: Sequence[Mapping[str, Any]] = (),
-    semantic_score: Optional[float] = None,
     skills_vacante: Sequence[str] = (),
     notas: Optional[Mapping[str, str]] = None,
 ) -> DesgloseATS:
-    """Calcula los 5 componentes del score de UNA vacante (sin ponderar).
+    """Calcula los 4 componentes del score de UNA vacante (sin ponderar).
 
     * ``requisitos``: los requisitos del aviso (con la regla de idioma ya
       aplicada). Los obligatorios pesan; "preferred" no bloquea.
-    * ``semantic_score``: similitud (0-1) perfil↔aviso, o None.
     * ``skills_vacante``: skills extraidas del aviso (``jobs.skills``): el
       respaldo cuando el aviso no declara requisitos obligatorios.
     * ``notas``: texto extra del detalle de cada componente.
@@ -986,19 +866,7 @@ def componentes_ats(
     notas = dict(notas or {})
     componentes: Dict[str, ComponenteATS] = {}
 
-    # 1) SEMANTICA (perfil <-> aviso)
-    if semantic_score is None:
-        componentes["semantica"] = ComponenteATS(
-            ETIQUETAS_COMPONENTE["semantica"], None, "sin embeddings"
-        )
-    else:
-        pct = max(0.0, min(1.0, float(semantic_score))) * 100.0
-        componentes["semantica"] = ComponenteATS(
-            ETIQUETAS_COMPONENTE["semantica"], pct,
-            notas.get("semantica") or f"similitud {pct:.0f} %",
-        )
-
-    # 2) SKILLS: el GAP de skills del aviso (lo que un ATS verifica).
+    # 1) SKILLS: el GAP de skills del aviso (lo que un ATS verifica).
     #    Denominador: los requisitos obligatorios del aviso (con evidencia) +
     #    las skills extraidas que son COMPETENCIAS (las frases de tarea se
     #    filtran: "elaborar cotizaciones" no es una competencia verificable).
@@ -1037,7 +905,7 @@ def componentes_ats(
             or f"{len(cubiertas)}/{len(cubiertas) + len(faltantes)} ({origen})",
         )
 
-    # 3) EXPERIENCIA
+    # 2) EXPERIENCIA
     minimos = [
         float(requisito["minimum"])
         for requisito in requisitos
@@ -1064,7 +932,7 @@ def componentes_ats(
             f"{cand:g} de {req_anos:g} años",
         )
 
-    # 4) EDUCACION
+    # 3) EDUCACION
     edu_requisitos = [
         requisito
         for requisito in requisitos
@@ -1103,7 +971,7 @@ def componentes_ats(
             f"nivel {cand} vs {req_nivel}",
         )
 
-    # 5) IDIOMAS
+    # 4) IDIOMAS
     pedidos: Dict[str, str] = {}
     for requisito in requisitos:
         if str(requisito.get("category") or "") != "language":
@@ -1150,7 +1018,6 @@ def ranking_ats(
     perfil: Mapping[str, Any],
     *,
     requisitos: Sequence[Mapping[str, Any]] = (),
-    semantic_score: Optional[float] = None,
     skills_vacante: Sequence[str] = (),
     weights: Optional[Mapping[str, float]] = None,
     imputacion: Optional[Mapping[str, float]] = None,
@@ -1161,7 +1028,6 @@ def ranking_ats(
 
     * ``requisitos``: los requisitos del aviso (con la regla de idioma ya
       aplicada). Los obligatorios pesan; "preferred" no bloquea.
-    * ``semantic_score``: similitud (0-1) perfil↔aviso, o None.
     * ``skills_vacante``: skills extraidas del aviso (respaldo cuando el
       aviso no declara requisitos obligatorios).
     * ``imputacion``: valor por componente para cuando el aviso NO tiene
@@ -1175,7 +1041,6 @@ def ranking_ats(
         desglose = componentes_ats(
             perfil,
             requisitos=requisitos,
-            semantic_score=semantic_score,
             skills_vacante=skills_vacante,
             notas=notas,
         )

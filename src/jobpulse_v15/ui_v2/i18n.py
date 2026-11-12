@@ -40,8 +40,7 @@ IDIOMA_DEFECTO = "es"
 # código y añadir aquí su traducción (el test de cobertura lo exige).
 _EN: dict[str, str] = {
     # --- shell (app.py) ---
-    "La UI clásica sigue disponible:\npython -m jobpulse_v15.ui":
-        "The classic UI is still available:\npython -m jobpulse_v15.ui",
+    "JobPulse CR · v1.5": "JobPulse CR · v1.5",
     "Actualizar": "Refresh",
     # --- títulos y subtítulos de las pestañas ---
     "Datos crudos": "Raw data",

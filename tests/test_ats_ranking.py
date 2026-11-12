@@ -23,7 +23,6 @@ from jobpulse_v15.ats import (
     cobertura_skills,
     componentes_ats,
     es_frase_de_tarea,
-    percentiles,
     perfil_ats_desde_facts,
     promedios_componentes,
     ranking_ats,
@@ -115,11 +114,6 @@ class TestPerfilAts(unittest.TestCase):
     def test_extrae_el_cargo_de_la_experiencia(self):
         self.assertEqual(self.perfil["titulos"], ["IT Support & Application Support Analyst"])
 
-    def test_el_texto_semantico_reune_perfil_skills_y_cargos(self):
-        texto = self.perfil["texto_semantico"]
-        self.assertIn("Profesional de Soporte IT", texto)
-        self.assertIn("Active Directory", texto)
-
 
 class TestCoberturaSkills(unittest.TestCase):
     """Cotejo de skills del aviso contra las del perfil."""
@@ -175,17 +169,11 @@ class TestRankingAts(unittest.TestCase):
                     "value_text": "Active Directory", "requirement_level": "required",
                 }
             ],
-            semantic_score=0.9,
         )
-        self.assertEqual(set(ranking.pesos_usados), {"semantica", "skills"})
+        self.assertEqual(set(ranking.pesos_usados), {"skills"})
         self.assertAlmostEqual(sum(ranking.pesos_usados.values()), 1.0)
-        # skills 100 % (la tiene) + semantica 90 %
         self.assertEqual(ranking.componentes["skills"].pct, 100.0)
-        esperado = (
-            0.9 * 100 * PESOS_RANKING["semantica"]
-            + 100 * PESOS_RANKING["skills"]
-        ) / (PESOS_RANKING["semantica"] + PESOS_RANKING["skills"])
-        self.assertAlmostEqual(ranking.total, esperado, places=1)
+        self.assertAlmostEqual(ranking.total, 100.0, places=1)
 
     def test_con_imputacion_los_pesos_son_fijos(self):
         """Con imputacion el score es comparable entre avisos: un aviso sin
@@ -193,7 +181,6 @@ class TestRankingAts(unittest.TestCase):
         pesos NO se redistribuyen."""
         ranking = ranking_ats(
             self.perfil,
-            semantic_score=0.9,
             imputacion={
                 "skills": 40.0, "experiencia": 100.0,
                 "educacion": 50.0, "idiomas": 100.0,
@@ -201,10 +188,8 @@ class TestRankingAts(unittest.TestCase):
         )
         self.assertEqual(ranking.componentes["skills"].pct, 40.0)
         self.assertIn("promedio del corpus", ranking.componentes["skills"].detalle)
-        # el 35 % de semantica NO se redistribuye
         esperado = (
-            0.9 * 100 * PESOS_RANKING["semantica"]
-            + 40.0 * PESOS_RANKING["skills"]
+            40.0 * PESOS_RANKING["skills"]
             + 100.0 * PESOS_RANKING["experiencia"]
             + 50.0 * PESOS_RANKING["educacion"]
             + 100.0 * PESOS_RANKING["idiomas"]
@@ -212,7 +197,7 @@ class TestRankingAts(unittest.TestCase):
         self.assertAlmostEqual(ranking.total, esperado, places=1)
 
     def test_sin_imputacion_el_componente_sin_dato_se_excluye(self):
-        ranking = ranking_ats(self.perfil, semantic_score=0.9)
+        ranking = ranking_ats(self.perfil)
         self.assertIsNone(ranking.componentes["skills"].pct)
         self.assertNotIn("skills", ranking.pesos_usados)
 
@@ -351,9 +336,53 @@ class TestRankingAts(unittest.TestCase):
         self.assertEqual(ranking.componentes["idiomas"].pct, 0.0)
 
     def test_veredictos_por_umbral(self):
-        fuerte = ranking_ats(self.perfil, semantic_score=1.0)
+        fuerte = ranking_ats(
+            self.perfil,
+            requisitos=[
+                {
+                    "category": "skill", "value_code": "active-directory",
+                    "value_text": "Active Directory", "requirement_level": "required",
+                },
+                {
+                    "category": "experience", "value_code": "years_experience",
+                    "value_text": "5 years", "minimum": 5.0, "unit": "years",
+                    "requirement_level": "required",
+                },
+                {
+                    "category": "education", "value_code": "bachiller",
+                    "value_text": "Bachiller", "requirement_level": "required",
+                },
+                {
+                    "category": "language", "value_code": "ingles",
+                    "value_text": "Inglés", "qualifier": "b2",
+                    "requirement_level": "required",
+                },
+            ],
+        )
         self.assertEqual(fuerte.veredicto, "fuerte")
-        debil = ranking_ats(self.perfil, semantic_score=0.0)
+        debil = ranking_ats(
+            self.perfil,
+            requisitos=[
+                {
+                    "category": "skill", "value_code": "kubernetes",
+                    "value_text": "Kubernetes", "requirement_level": "required",
+                },
+                {
+                    "category": "experience", "value_code": "years_experience",
+                    "value_text": "50 years", "minimum": 50.0, "unit": "years",
+                    "requirement_level": "required",
+                },
+                {
+                    "category": "education", "value_code": "doctorado",
+                    "value_text": "Doctorado", "requirement_level": "required",
+                },
+                {
+                    "category": "language", "value_code": "fr",
+                    "value_text": "French", "qualifier": "b2",
+                    "requirement_level": "required",
+                },
+            ],
+        )
         self.assertEqual(debil.veredicto, "debil")
 
 
@@ -378,40 +407,24 @@ class TestFiltroSkills(unittest.TestCase):
         self.assertEqual(utiles, ["Active Directory", "ServiceNow"])
 
 
-class TestPercentiles(unittest.TestCase):
-    """Normalizacion del componente semantico dentro del corpus."""
-
-    def test_el_mayor_es_100_y_el_menor_0(self):
-        valores = percentiles([0.1, 0.4, 0.2, 0.9])
-        self.assertAlmostEqual(max(valores), 100.0)
-        self.assertAlmostEqual(min(valores), 0.0)
-
-    def test_conserva_el_orden(self):
-        valores = percentiles([0.1, 0.4, 0.2, 0.9])
-        orden = sorted(range(4), key=lambda i: valores[i])
-        self.assertEqual(orden, [0, 2, 1, 3])
-
-    def test_los_empates_comparten_percentil(self):
-        valores = percentiles([0.5, 0.5, 0.1])
-        self.assertAlmostEqual(valores[0], valores[1])
-
-    def test_una_sola_observacion(self):
-        self.assertEqual(percentiles([0.5]), [100.0])
-
-    def test_lista_vacia(self):
-        self.assertEqual(percentiles([]), [])
-
-
 class TestPromedios(unittest.TestCase):
     """La imputacion: un componente sin dato toma el promedio del corpus."""
 
     def test_el_promedio_solo_cuenta_los_que_tienen_dato(self):
         perfil = perfil_ats_desde_facts(HECHOS_PERFIL)
-        con_dato = componentes_ats(perfil, semantic_score=1.0)
+        con_dato = componentes_ats(
+            perfil,
+            requisitos=[
+                {
+                    "category": "skill", "value_code": "active-directory",
+                    "value_text": "Active Directory", "requirement_level": "required",
+                }
+            ],
+        )
         sin_dato = componentes_ats(perfil)
         promedios = promedios_componentes([con_dato, sin_dato])
-        self.assertEqual(promedios["semantica"], 100.0)
-        self.assertNotIn("skills", promedios)
+        self.assertEqual(promedios["skills"], 100.0)
+        self.assertNotIn("experiencia", promedios)
 
 
 class TestAtsStore(unittest.TestCase):
@@ -503,9 +516,8 @@ class TestAtsStore(unittest.TestCase):
         self.assertGreater(filas[0].score, filas[1].score)
         self.assertEqual(filas[1].skills_faltantes, ("Contabilidad general",))
 
-    def test_sin_embeddings_el_score_sigue_saliendo(self):
+    def test_el_score_sale_sin_embeddings(self):
         filas = self.store.calcular()
-        self.assertIsNone(filas[0].semantica_pct)
         self.assertIsNotNone(filas[0].score)
 
     def test_las_skills_faltantes_son_las_del_aviso(self):

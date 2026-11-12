@@ -57,7 +57,6 @@ COLUMNAS = (
     "titulo",
     "empresa",
     "area",
-    "semantica",
     "skills",
     "experiencia",
     "idiomas",
@@ -73,7 +72,6 @@ TITULOS = {
     "titulo": "Puesto",
     "empresa": "Empresa",
     "area": "Área",
-    "semantica": "Sem.",
     "skills": "Skills",
     "experiencia": "Exp.",
     "idiomas": "Idiomas",
@@ -89,7 +87,6 @@ ANCHOS = {
     "titulo": 300,
     "empresa": 160,
     "area": 150,
-    "semantica": 70,
     "skills": 70,
     "experiencia": 70,
     "idiomas": 80,
@@ -357,7 +354,6 @@ class VacantesTab(BaseTab):
 
         bloque_comp = seccion("Componentes")
         for clave, etiqueta in (
-            ("semantica", "Semántica"),
             ("skills", "Skills"),
             ("experiencia", "Experiencia"),
             ("educacion", "Educación"),
@@ -461,9 +457,7 @@ class VacantesTab(BaseTab):
 
         def trabajo() -> None:
             try:
-                engine = self._crear_engine()
                 filas = self.store.calcular(
-                    engine=engine,
                     progreso=lambda texto: self._programar(
                         lambda t=texto: self._pintar_progreso(str(t))),
                 )
@@ -478,7 +472,7 @@ class VacantesTab(BaseTab):
     def _calcular_en_linea(self) -> None:
         """Calculo sincronico (pestana no montada)."""
         try:
-            filas = self.store.calcular(engine=self._crear_engine())
+            filas = self.store.calcular()
         except Exception as error:  # pragma: no cover - defensivo
             self._widgets["estado"].configure(text=f"Error al calcular: {error}")
             return
@@ -508,13 +502,6 @@ class VacantesTab(BaseTab):
         self._widgets["badge"].set_text(t("Error"))
         self._widgets["badge"].set_tone("danger")
         messagebox.showerror(t("Ranking ATS"), t("No se pudo calcular el score:\n{}").format(mensaje))
-
-    @staticmethod
-    def _crear_engine() -> Any:
-        """Motor de embeddings local (opcional: sin él, el score funciona igual)."""
-        from jobpulse_v15.search_engine import SemanticSearchEngine
-
-        return SemanticSearchEngine()
 
     def _filas_visibles(self) -> list[VacanteAts]:
         combo = self._widgets.get("veredicto")
@@ -556,7 +543,6 @@ class VacantesTab(BaseTab):
                     fila.title,
                     fila.company,
                     fila.area,
-                    _pct(fila.semantica_pct),
                     _pct(fila.skills_pct),
                     _pct(fila.experiencia_pct),
                     _pct(fila.idiomas_pct),
@@ -639,7 +625,6 @@ class VacantesTab(BaseTab):
             "paso5": fila.estado_paso5 or "sin correr",
             "analisis": fila.analysis_status or "not_analyzed",
             "idioma_aviso": fila.posting_language or "—",
-            "semantica": _detalle(fila.semantica_pct, fila.componentes.get("semantica", "")),
             "skills": _detalle(fila.skills_pct, fila.componentes.get("skills", "")),
             "experiencia": _detalle(fila.experiencia_pct, fila.componentes.get("experiencia", "")),
             "educacion": _detalle(fila.educacion_pct, fila.componentes.get("educacion", "")),

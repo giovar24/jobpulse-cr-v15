@@ -61,7 +61,7 @@ echo  - Perfil: botón "Mi perfil"
 echo ============================================================
 echo.
 
-"%PYTHON%" -m jobpulse_v15.ui
+"%PYTHON%" -m jobpulse_v15.ui_v2
 
 echo.
 echo JobPulse CR finalizado.

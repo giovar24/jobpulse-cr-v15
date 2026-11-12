@@ -2,8 +2,8 @@
 REM ============================================================
 REM JobPulse CR v1.5 - Launcher UI v2 (plana y modular)
 REM
-REM La UI clasica (jobpulse_v15.ui) sigue intacta en
-REM jobpulse-v15.bat. Esta version vive aparte.
+REM Es la UNICA interfaz grafica: la UI clasica se retiro el 2026-11-11.
+REM jobpulse-v15.bat lanza esta misma UI.
 REM ============================================================
 
 cd /d "%~dp0"

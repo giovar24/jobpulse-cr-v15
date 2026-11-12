@@ -1,9 +1,17 @@
 # Flujo CLI vs. UI — comparación paso a paso
 
+> **⚠️ 2026-11-11 — la UI clásica (`ui.py`) se RETIRÓ.** Este documento compara
+> el flujo del CLI contra el de las dos UIs que existían hasta esa fecha. Hoy
+> la **única** interfaz gráfica es la **UI v2** (`src/jobpulse_v15/ui_v2/`), así
+> que **donde dice "UI clásica" léelo como histórico**: no hay nada que ejecutar
+> ahí. El componente semántico (embeddings) también se eliminó el 2026-11-11.
+> La comparación sigue siendo útil porque documenta **qué comparten** el CLI y
+> la UI v2 (el motor y el orquestador) y por qué.
+
 Comparación del flujo ejecutado en la corrida limpia del **2026-10-31**
 (scripts `run_full_flow.py` + `run_paso5.py` + evidencia) contra el flujo que
-ofrecen las **dos UIs**: la clásica (`src/jobpulse_v15/ui.py`) y la v2
-(`src/jobpulse_v15/ui_v2/`, plana y modular).
+ofrecen las UIs: la v2 (`src/jobpulse_v15/ui_v2/`, plana y modular) y —hasta el
+2026-11-11— la clásica (`src/jobpulse_v15/ui.py`).
 
 Regla que se mantiene: **la UI y el CLI deben compartir el mismo motor**. Lo
 que hoy comparten está marcado como *compartido*; lo que no, se señala como
@@ -47,12 +55,12 @@ diferencia con su consecuencia.
 | 2. Análisis por reglas | `run_full_flow.run_analysis()` | **Analizar** / **Analizar sin analizar** / (casilla del barrido) | ✅ `analysis_flow.extract_job_analysis` |
 | 3. Enriquecimiento IA | `run_enriquecimiento.py` (servidor local bajo demanda) | **Enriquecer** (diálogo propio) | ✅ `ia_enrichment.pase_completo` + `ia_servidor` |
 | 4. Comparar con el perfil | **no lo hace** (imprime "abre la UI") | **Buscar** con filtro de compatibilidad + área | ⚠️ UI usa `repository.compare_jobs_to_candidate_profile` (informativa) |
-| 5. Matching (Paso 5) | `run_paso5.py` → tabla `job_match` (corrida nueva) | UI v2: **Ejecutar Paso 5** → `job_match` (corrida nueva). UI clásica: ✅ desde 2026-11-08 (etapa `paso5` del orquestador) | ✅ `matching.ejecutar_paso5` (v2 por `ui_v2/data/paso5.py`; clásica y CLI por `pipeline.ejecutar`) |
-| 5.b Re-análisis con los campos de la IA | `enrich requirements-source --apply` (todo) o el paso `reanalisis` del orquestador | UI clásica: ✅ etapa `reanalisis` del orquestador. UI v2: etapa `reanalisis` del pipeline | ✅ `analysis_flow.reananalizar_con_campos_fuente` (incremental: solo lo que no está integrado) |
-| 6. Evidencia / firma | `generar_evidencia_paso5.py`, `verificar_evidencia.py`, `generar_revision_pendientes.py` | UI v2: **Evidencia** (genera + verifica, sin subprocess). UI clásica: ✅ etapa `evidencia` del orquestador. La hoja de firma sigue siendo CLI | ✅ `jobpulse_v15.evidencia` (los scripts son envoltorios) |
+| 5. Matching (Paso 5) | `run_paso5.py` → tabla `job_match` (corrida nueva) | UI v2: **Ejecutar Paso 5** → `job_match` (corrida nueva) | ✅ `matching.ejecutar_paso5` (v2 por `ui_v2/data/paso5.py`; CLI por `pipeline.ejecutar`) |
+| 5.b Re-análisis con los campos de la IA | `enrich requirements-source --apply` (todo) o el paso `reanalisis` del orquestador | UI v2: etapa `reanalisis` del pipeline | ✅ `analysis_flow.reananalizar_con_campos_fuente` (incremental: solo lo que no está integrado) |
+| 6. Evidencia / firma | `generar_evidencia_paso5.py`, `verificar_evidencia.py`, `generar_revision_pendientes.py` | UI v2: **Evidencia** (genera + verifica, sin subprocess). La hoja de firma sigue siendo CLI | ✅ `jobpulse_v15.evidencia` (los scripts son envoltorios) |
 | 7. Brave/CDP | `run_scrape` lo abre y lo cierra **solo si lo abrió** (O7.2) | igual (barrido, re-login ANE, enriquecimiento) | ✅ `browser_manager.asegurar_brave` |
-| 8. Filtro "solo con requisitos obligatorios" (O2.2) | `search --solo-requisitos-obligatorios` | UI clásica + UI v2: columna **"Req."** + casilla | ✅ `Repository.search_jobs` (SQL; definición única) |
-| 9. Salud de los sitios (O3) | `site list --needs-review`, `site mark-reviewed [--all-needs-review]` | UI clásica: pestaña Fuentes (revisión manual) | ✅ `Repository.list_sites` / `mark_site_reviewed` |
+| 8. Filtro "solo con requisitos obligatorios" (O2.2) | `search --solo-requisitos-obligatorios` | UI v2: columna **"Req."** + casilla | ✅ `Repository.search_jobs` (SQL; definición única) |
+| 9. Salud de los sitios (O3) | `site list --needs-review`, `site mark-reviewed [--all-needs-review]` | UI v2: pestaña Scraping (sondas/revisión manual) | ✅ `Repository.list_sites` / `mark_site_reviewed` |
 
 ## 2. Etapa por etapa
 
