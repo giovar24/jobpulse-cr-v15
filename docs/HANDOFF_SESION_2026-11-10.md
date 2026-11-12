@@ -35,6 +35,13 @@ persona**, no un dato: se re-firmó como `bloqueo_real` y la vacante pasó a
 anclada al sha256 del texto: si el perfil registra la licenciatura en curso con
 su avance, el caso se reabre solo. **Regla operativa: no se le pide el dato
 caso por caso** — el motor + la tabla derivan el veredicto.
+
+**O4 cerrado como *superseded*** (decisión del usuario, 2026-11-11): el `gate`
+ya no existe (el motor es `matching.py`; `gate.py` e `ia_calibracion.py`
+quedaron sin callers) → no hay contra-qué que calibrar. Lo sustituyen la
+viabilidad técnica y el ranking ATS; la calibración con datos reales tiene
+sentido cuando haya postulaciones reales. Detalle en
+`docs/PLAN_MEJORAS.md` §5.11.
 ---
 
 ## 0. Tabla de objetivos (estado al cierre del 2026-11-10)
@@ -44,7 +51,7 @@ caso por caso** — el motor + la tabla derivan el veredicto.
 | **O1** Enriquecimiento IA | Pase IA (Gemma local) llenando huecos | ✅ COMPLETO (27-10) |
 | **O2** Afinar la búsqueda | Filtros/req. obligatorios; la precisión viene de la data extraída | 🟡 O2.2 cerrado; la semántica queda como **ranking** (por defecto en viabilidad, 0 cambios de banda) |
 | **O3** Fetchers ATS huérfanos | Validar los 7 fetchers + resolver la salud de los sitios | ✅ COMPLETO (04-11) |
-| **O4** Calibración gate-vs-IA | Pearson/Spearman/MAE + umbral | ⏳ **superseded**: el `gate` ya no existe (el motor es `matching.py`) → proponer cerrarlo |
+| **O4** Calibración gate-vs-IA | Pearson/Spearman/MAE + umbral | ❌ **CERRADO como *superseded*** (2026-11-11, decisión del usuario): el `gate` ya no existe (el motor es `matching.py`); `gate.py` e `ia_calibracion.py` quedaron sin callers → ver `docs/PLAN_MEJORAS.md` §5.11 |
 | **O5** Higiene de datos | Auditoría, re-barrido de los login-wall, identidad por huella | 🟢 solo queda **O5.3** |
 | **O6** Perfil del candidato | Editor, capa IA de CVs, matching (niveles/CEFR), dedupe semántico | 🟢 O6.1/O6.2/O6.3 cerrados · **O6.4** (slugs ES/EN) pendiente de decisión · **O6.5**: registrar el hecho educativo "en curso" con 80 %+ de créditos → **AHORA CON POSIBILIDAD REAL**: el motor ya exige el dato (§4.1 de `docs/REGLAS_NEGOCIO_EDUCACION.md`) |
 | **O7** Operación UI-first | La app arranca/detiene lo que necesita | ✅ COMPLETO (27-10) |
@@ -232,6 +239,25 @@ firma ahora lo comprueba **al firmar**: `decisiones.validar_citas` +
 `aplicar_firma` rechazan la hoja si una cita no es literal del aviso
 (`decision sign` lo avisa y sale con error; `--dry-run` lo lista).
 
+### 2.2 O4 cerrado como *superseded* (2026-11-11)
+
+Decisión del usuario. Documentado en `docs/PLAN_MEJORAS.md` §5.11:
+
+- **Qué era**: calibrar (Pearson/Spearman/MAE) si el *gate* semántico y la IA
+  discrepaban, para sugerir un umbral.
+- **Por qué ya no tiene objeto**: el `gate` **ya no existe** como pieza del
+  sistema. El motor es `matching.py` (Paso 5, umbrales congelados 0.60/0.80) y
+  `gate.py` + `ia_calibracion.py` quedaron **sin callers** (verificado: solo
+  aparecen en sus propios docstrings). *Precisión*: `ats.py` **sí** sigue
+  vivo —lo usan `conceptos.py` y `skills_fuente.py`— y el ranking ATS es lo
+  que quedó del componente semántico.
+- **Qué lo sustituye**: la **viabilidad técnica** (`viabilidad.py`) y el
+  **ranking ATS** miden el ajuste contra el perfil, no contra un gate; y la
+  calibración con datos reales tiene sentido cuando haya **postulaciones
+  reales** (comparar lo que pasó con lo que el motor dijo). Un rechazo nunca
+  significa que el perfil no califique → no reentrena pesos.
+- Sin cambios de código (es una decisión de alcance, no una implementación).
+
 ---
 
 ## 3. Estado de la BD real
@@ -263,8 +289,8 @@ firma ahora lo comprueba **al firmar**: `decisiones.validar_citas` +
 5. **`espanol: nativo` es inferencia**, no texto literal (365 avisos): el
    modelo infiere el idioma del aviso. Inofensivo para el matching (el perfil
    lo cubre), pero a tener en cuenta al auditar.
-6. **Decisiones de usuario pendientes**: **O4** (cerrar el objetivo
-   *superseded*), **O6.4** (slugs ES/EN del perfil).
+6. **Decisiones de usuario pendientes**: **O6.4** (slugs ES/EN del perfil) y
+   **Ola 6 · 6.1/6.3** (diferidas). ~~O4~~ ya está cerrado (ver arriba).
 
 ---
 
@@ -282,7 +308,8 @@ firma ahora lo comprueba **al firmar**: `decisiones.validar_citas` +
 | `tests/test_migraciones.py` | `TestMigracion028` + versiones 27→28 |
 | `tests/test_pipeline_metricas.py` | Versión del esquema 28 |
 | `docs/REGLAS_NEGOCIO_EDUCACION.md` | **§1.1** (qué dice y qué no dice la tabla de EE. UU.), §4 (escalón 3), **§4.1 (el 80 % exigido)**, §5 (Abbott cerrado), §5.2 (la convención de citas), mediciones |
-| `docs/PLAN_MEJORAS.md` | §6.2 HECHO + **§6.2.1** (el 80 %) + **§6.2.2** (nivel efectivo según la tabla) |
+| `docs/PLAN_MEJORAS.md` | §6.2 HECHO + **§6.2.1** (el 80 %) + **§6.2.2** (nivel efectivo según la tabla) + **§6.2.3** (Abbott cerrado) + **§5.11** (O4 cerrado como *superseded*) |
+| `DESARROLLO_v15.md` | Tabla de objetivos: **O4 cerrado**; gaps y resumen actualizados |
 | `docs/PASO5_EVIDENCIA_2026-11-11.md` | **GENERADO** (no editar) |
 | `docs/PASO5_FIRMA_EDUCACION.json` | Hoja firmada (29 decisiones; Abbott en `bloqueo_real` del 2026-11-11) + la convención de citas |
 | `docs/PASO5_REVISION_PENDIENTES.md` | Hoja de firma regenerada (**0 casos abiertos**) |

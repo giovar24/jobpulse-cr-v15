@@ -14,7 +14,7 @@
 | 2 (hecha) | **O12** paridad CLI/UI | Una sola implementación del pipeline (orquestador + botones) |
 | 3 (hecha 2026-11-06) | **O13** cobertura de fuentes | LinkedIn 0 → 60 avisos · Elempleo 0 → 3 · `requires_login` · sesión de ANE entre arranques |
 | 4 (4.1 hecha 2026-11-06) | O5.3 / taxonomía / métricas | Calidad del dato (parser de ANE + re-barrido de detalle, aplicada a la BD real) |
-| 5 | O4, upsert, embeddings | Se pueden dejar de último |
+| 5 | O4 (cerrado como *superseded*), upsert, embeddings | Se pueden dejar de último |
 
 ## Contexto: el problema de fondo
 
@@ -895,6 +895,39 @@ como cumplido; si no, corresponde firmarlo `bloqueo_real`.
 
 > **Actualizado 2026-11-11**: Abbott se firmó `bloqueo_real` y quedó
 > `descartada` (§6.2.3). `educacion_no_confirmada` = **0 casos abiertos**.
+
+### 5.11 O4 · Calibración gate-vs-IA — **CERRADO como *superseded* (2026-11-11)**
+
+Decisión del usuario. El objetivo era: calcular Pearson/Spearman/MAE entre lo
+que decía el **gate semántico** y lo que decía la **IA**, y de ahí sugerir un
+umbral (`ia_calibracion.py`).
+
+**Por qué ya no tiene objeto**: el `gate` **ya no existe** como pieza del
+sistema. El motor de matching es `matching.py` (Paso 5: reglas de negocio y
+umbrales congelados 0.60 / 0.80), y `gate.py` quedó **sin callers** (solo se
+menciona en docstrings de `cv_analysis.py`). `ia_calibracion.py` (Pearson /
+Spearman / MAE gate-vs-IA) tampoco tiene callers. El motor semántico se usa
+hoy solo como **ranking ATS**, por decisión del usuario: la precisión viene
+de la data extraída, no del texto libre. Comparar el gate con la IA no es
+"calibrar": es comparar dos cosas que ya no se usan. Y un umbral calibrado
+contra un gate inexistente quedaría obsoleto al instante.
+
+> Precisión: `ats.py` **sí** está vivo (lo usan `conceptos.py` y
+> `skills_fuente.py` para detectar frases de tarea, y el ranking ATS de la
+> UI v2). Lo que está muerto es el **gate**, no el ATS.
+
+**Qué sustituye a O4** (las tres formas en que la calibración sí tiene
+sentido hoy):
+
+| Antes (O4) | Ahora |
+|---|---|
+| Pearson/Spearman/MAE entre gate e IA | **Viabilidad técnica** (`viabilidad.py`: ajuste 0-100 + banda `aplicar`/`revisar`/`no_prioritario`/`sin_datos`/`veto`) — mide el ajuste contra el **perfil**, no contra un gate |
+| Umbral sugerido para recalibrar el gate | **Ranking ATS** (score 0-100) — es un *ranking*, no una calificación: no toca los umbrales del Paso 5 |
+| Calibrar con el corpus de avisos | **Calibrar con postulaciones reales**: comparar lo que pasó (entrevista, oferta, rechazo) con lo que el motor dijo. Un rechazo no significa que el perfil no califique → no reentrena pesos |
+
+**Nota**: la calibración con datos de postulaciones sigue siendo válida como
+trabajo futuro (§5.10 y el registro `postulaciones`), pero es un objetivo
+**nuevo**, no una versión reparada de O4: no hay gate contra el cual comparar.
 
 ---
 

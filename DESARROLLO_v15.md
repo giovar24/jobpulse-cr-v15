@@ -59,7 +59,7 @@ browser reciben `port` CDP del caller (nunca crean navegador).
 |------------|-----------|-------|
 | **Dedupe cross-source (boards ↔ directos)** | 🟡 Alta | Hoy solo idempotencia misma-fuente + `quality duplicates` (revisión manual); `dup_of` previsto, sin columna |
 | **Scheduler / recordatorio Windows** | 🟢 Media | Launcher `jobpulse-v15.bat` ya existe; falta portar `recordatorio.py` |
-| **O2 / O3 / O4** (ATS + ranking en búsqueda UI; validar 7 fetchers ATS huérfanos; calibración gate-vs-IA) | 🟡 | O2.2 ✅ y O3 ✅ cerrados el 2026-11-04 · O4 sigue sin objeto (el `gate` ya no existe: el motor es `matching.py`) → **proponer cerrarlo como *superseded*** |
+| **O2 / O3 / O4** (ATS + ranking en búsqueda UI; validar 7 fetchers ATS huérfanos; calibración gate-vs-IA) | 🟡 | O2.2 ✅ y O3 ✅ cerrados el 2026-11-04 · **O4 cerrado como *superseded* el 2026-11-11** (el `gate` ya no existe: el motor es `matching.py`) |
 | **Operación UI-first / servidores bajo demanda (O7)** | ✅ Resuelto (2026-10-27) | La UI gestiona Brave (abre/cierra en el barrido) y el servidor IA (botón "Enriquecer", pase IA de CV) bajo demanda |
 
 ---
@@ -140,7 +140,7 @@ def fetch(self, site: dict, *, pages: int, search_text: str | None,
 | **O1** Enriquecimiento IA | Pase IA (Gemma local) llenando huecos: city/region/work_mode/employment_type/salary/skills/languages | ✅ **COMPLETO (27-10, 44 min; O7.3 E2E: servidor subió → pasó → se apagó solo)**. Resultado: skills 100%, date_published 100%, region 95.6%, employment_type 95.3%, languages 95.3%, city 91.9% (residuo = remotos / lat_raw de Indeed sin normalizar), work_mode 53.6% (137 'unknown': 46 basura O5.3 + 91 honestos sin mención), salary_raw 117 = fuente SIN texto salarial (irrecuperable). Los ciclos 2+ son replays de caché (ver gotcha: failed ≠ error) |
 | **O2** Afinar la búsqueda | ~~ATS + gate + ranking semántico~~ **Redefinido por el usuario (2026-10-27): la precisión viene de la data extraída** → completar O1 (huecos). Alcance operativo: **O2.1** normalizar locations crudas de Indeed ("Heredia, Provincia de Heredia" → city/region); **O2.2** filtro UI "solo con requisitos obligatorios" + columna "Req." (aprobado por el usuario, estaba pospuesto) — **✅ COMPLETO (2026-11-04)**: definición única en `Repository.search_jobs` (`req_obligatorios` = requisitos `required` del análisis vigente) + filtro `solo_requisitos_obligatorios`; columna "Req." y casilla en UI clásica, UI v2 y CLI (`search --solo-requisitos-obligatorios`); motor semántico **DORMIDO por decisión** (nicho: texto libre ES↔EN) | 🟡 **O2.2 cerrado (04-11)** · el motor semántico sigue en pie solo como ranking ATS en la UI v2 (no es filtro) · `ats.py`/`gate.py`/`ia_calibracion.py` sin callers |
 | **O3** Fetchers ATS huérfanos | Validar los 7 fetchers ATS (workday, greenhouse, ashby, lever, recruitee, workable, successfactors) con tableros reales · **y resolver la salud de los sitios**: 129 sitios cargados, 62 marcados `needs_review` (61 con 0 resultados en racha + 1 con error) sin resolver | ✅ **COMPLETO (2026-11-04)**: los 7 fetchers ya validados con tableros reales (7/7 plataformas activas) · la revisión manual se resolvió con `site mark-reviewed --all-needs-review` (nuevo flag; `mark_site_reviewed` reinicia el rache de ceros, `clean_run.py` reinicia la salud de los sitios) · BD real: 0 pendientes, 0 raches, 535 avisos intactos. Ojo: **el 0 no siempre es legítimo** (`workday-intel` devolvía 2 ofertas CR en vivo con 13 ceros acumulados) — los raches altos venían de corridas borradas por `clean_run`, que no reiniciaba la salud |
-| **O4** Calibración gate-vs-IA | Pearson/Spearman/MAE + umbral sugerido (`ia_calibracion.py`) | ⏳ depende de O1+O2 |
+| **O4** Calibración gate-vs-IA | Pearson/Spearman/MAE + umbral sugerido (`ia_calibracion.py`) | ❌ **CERRADO como *superseded* (2026-11-11, decisión del usuario)**: el objetivo medía si el *gate* semántico y la IA discrepaban, para calibrar un umbral. **El `gate` ya no existe como pieza del sistema**: el motor de matching es `matching.py` (Paso 5, reglas y umbrales congelados 0.60/0.80) y `gate.py` + `ia_calibracion.py` quedaron **sin callers**. No hay contra-qué que comparar, así que la calibración no se puede "hacer": quedaría obsoleta al instante. (Ojo: `ats.py` **sí** sigue vivo —lo usan `conceptos.py` y `skills_fuente.py`— y el ranking ATS es lo que quedó del componente semántico.) **Qué lo sustituye**: (a) la **viabilidad técnica** (`viabilidad.py`: ajuste 0-100 + banda) y el **ranking ATS** miden el ajuste contra el perfil y el corpus, no contra un gate; (b) la calibración con datos reales se hace cuando haya **postulaciones reales** (comparar lo que pasó con lo que el motor dijo), que es lo que sí tiene sentido; (c) el componente semántico quedó como **ranking** (no filtro), por decisión del usuario |
 | **O5** Higiene de datos | O5.1 ✅ auditoría/huecos · O5.3 re-barrido de los ~14-19 jobs con descripción basura (login-wall) · **O5.4 ✅ CERRADO (2026-10-27)**: análisis por **huella de descripción** (en ANE el título+empresa NO es identidad — "Confidencial"); solo 4/120 del lote 26-10 eran republicaciones → **las 4 viejas marcadas `dismissed` con nota** (parejas 121034/121185, 121026/121184, 121025/121183, 120958/121094), las nuevas quedan activas; grupos misma-empresa+misma-ciudad (INAMU ×3, SALESLAND ×2) = **plazas múltiples, decisión del usuario, intactos**; multi-sede (INAMU 8 ciudades, HIPERMASCOTAS 2 tiendas) = vacantes reales | 🟢 solo queda O5.3 |
 | **O6** Perfil del candidato | O6.1 editor ✅ · O6.2 capa IA de CVs + integración UI ✅ · **O6.3 matching afinado (niveles/CEFR) ✅ CERRADO (2026-10-29)** — ver bloque "O6.3 — Matching (Paso 5)" más abajo · O6.4 dedupe semántico del perfil (slugs ES/EN del mismo hecho: normalizar al importar vs. decidir en diálogo — pendiente decisión del usuario) | 🟢 O6.1/O6.2/O6.3 cerrados · O6.4 pendiente decisión |
 | **O7** Operación UI-first (servidores bajo demanda) | La app arranca/detiene lo que necesita; el usuario no toca CLI ni launchers | ✅ **completo (2026-10-27)** |
@@ -548,9 +548,10 @@ completo en `docs/PLAN_MEJORAS.md`):
    `Repository.search_jobs`); motor semántico DORMIDO (vive como ranking ATS,
    que NO es un filtro).
 8. Luego: **O6.4** (dedupe semántico del perfil: slugs ES/EN — decidir import
-   vs diálogo) · **O9** (optimización de UI — alcances por definir) · **O4**
-   (calibración — **redefinir o cerrar como *superseded***: sin gate semántico
-   no tiene contra-qué comparar; el motor real es `matching.py`).
+   vs diálogo) · **O9** (optimización de UI — alcances por definir).
+   ~~O4 (calibración)~~ — **✅ cerrado como *superseded* el 2026-11-11**: sin
+   gate semántico no tiene contra-qué comparar; el motor real es `matching.py`
+   (ver `docs/PLAN_MEJORAS.md` §5.11).
    ~~O3 (validar 7 fetchers ATS + resolver los sitios `needs_review`)~~ —
    **✅ cerrado el 2026-11-04**.
 
@@ -964,8 +965,9 @@ ejecución**:
 
 **Metas replanteadas** (tabla O1–O14): la prioridad ya no es "más features"
 sino **O12 (paridad CLI/UI)** y **O13 (cobertura de fuentes)**; O11/O14
-quedan hechos; O4 se propone cerrar como *superseded*. Plan de 5 olas con
-criterio de aceptación en `docs/PLAN_MEJORAS.md`.
+quedan hechos; O4 se cerró como *superseded* el 2026-11-11 (el `gate` ya no
+existe: el motor es `matching.py`). Plan de 5 olas con criterio de aceptación
+en `docs/PLAN_MEJORAS.md`.
 
 **Suite**: **961 passed + 241 subtests** (base 922 → +39 tests nuevos en
 `tests/test_ia_externa.py`, con un end-to-end contra un proveedor
