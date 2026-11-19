@@ -47,10 +47,14 @@ caro de descubrir**; lo puntual vive en los handoffs.
   (análisis por reglas, implementación única).
 - Scripts de raíz = operaciones manuales del pipeline: `run_full_flow.py`,
   `run_enriquecimiento.py`, `run_paso5.py`, `generar_evidencia_paso5.py`,
-  `verificar_evidencia.py`, `clean_run.py`.
-- `tools/` = estado y medición (`corrida_medicion.py` **escribe** en la BD; los
-  `estado_*`/`comparar_*` son de lectura). `tests/` usa BD temporales, sin red
-  ni credenciales.
+  `verificar_evidencia.py`, `generar_revision_pendientes.py`, `clean_run.py`.
+- `tools/` = estado y medición (`corrida_medicion.py` y `limpiar_null.py`
+  **escriben datos** en la BD; los `estado_*`/`comparar_*` son de lectura). Ojo:
+  `estado_bd.py`, `cobertura_campos.py`, `ver_sitio.py`, `limpiar_null.py` y
+  `comparar_ia.py` llaman `Database.initialize()`, que **puede aplicar
+  migraciones pendientes** y mover `PRAGMA user_version` (solo `estado_extraccion.py`
+  abre la BD en modo lectura y salta las migraciones). `tests/`
+  usa BD temporales, sin red ni credenciales.
 - Dependencias solo en `pyproject.toml` (no hay `requirements.txt`); extras
   `[dev]` (pytest) y `[ia]` (openai, huggingface_hub).
 
@@ -84,7 +88,9 @@ caro de descubrir**; lo puntual vive en los handoffs.
   corpus; `init-db` crea una base vacía, `init-sources` (o `site seed-cr`)
   registra plataformas/sitios de CR y los scrapers la llenan.
 - **El CLI migra el esquema al abrir la BD** (avisa `[esquema] Se aplicaron las
-  migraciones N-M`). `init-db`, `backup` y `db check` **no** migran.
+  migraciones N-M (base: <ruta>)`). `backup` y `db check` **no** migran;
+  `init-db` **sí** (llama `database.initialize()` y aplica las migraciones
+  pendientes; su help es "Crear la base y aplicar migraciones").
 - Esquema por migraciones: `src/jobpulse_v15/migrations/0NN_*.sql`. Cambio de
   esquema = **archivo nuevo**; nunca `ALTER` manual ni editar una migración ya
   aplicada. Versionado con `PRAGMA user_version` (actual: **28**).
@@ -398,10 +404,11 @@ anteriores `valida=0`); nunca `UPDATE` in-place.
    Curar la taxonomía = **migración de datos** nueva (`02x_taxonomia_*`),
    nunca `UPDATE` a mano. **Para medir la demanda usa
    `taxonomia.demanda_corpus`**, no el `veces` de la cola (se reescribe en
-   cada curación). Estado verificado 2026-11-09 (sin cambios desde el cierre
-   del 2026-11-08): cola **1150** (tanda 3 = migración `026`), conceptos
-   **775** (336 códigos), 2956 requisitos (0 sin código), 29 decisiones
-   firmadas, corrida vigente `20261108_214123`.
+   cada curación). Estado verificado 2026-11-10 (handoff): cola **1150**
+   (tanda 3 = migración `026`; la siguiente sería `029` — la `028` ya la usa
+   la escalera educativa), conceptos **775** (336 códigos), 2956 requisitos
+   (0 sin código), 29 decisiones firmadas (0 casos abiertos de
+   `educacion_no_confirmada`), corrida vigente `20261111_074200`.
 3. **Nunca insertar requisitos por SQL directo**: `job_requirements` tiene
    `analysis_id` (FK a `job_analysis`), no `job_id`. Usa `Repository.save_analysis`.
 4. `jobs.posting_language` es NOT NULL (tests: `undetermined`); `mixed` es
@@ -500,9 +507,9 @@ anteriores `valida=0`); nunca `UPDATE` in-place.
 
 - **UI v2** (`ui_v2/`, plana y modular) es la **única** interfaz gráfica: la
   UI clásica (`ui.py`) y sus módulos (`ui_perfil.py`, `configuration_window.py`,
-  `cv2profile.py`, `cv_analysis.py`) se retiraron el 2026-11-11. Capas
-  `theme`/`widgets`/`dialogs`/`i18n`/`configuracion` + `data/` (stores sin Tk)
-  + `tabs/`.
+  `cv2profile.py`, `cv_analysis.py`) se retiraron el 2026-11-11. Capas =
+  **módulos planos** (`theme`, `widgets`, `dialogs`, `i18n`, `configuracion`)
+  + `data/` (stores sin Tk) + `tabs/`.
   **Agregar una pestaña = módulo nuevo + 1 línea en `PESTANIAS`** (`ui_v2/app.py`).
   Humo sin ventana:
   `python -X utf8 -c "from jobpulse_v15.ui_v2.app import crear_app; r,s=crear_app(); [r.update() for _ in range(20)]; t=s.pestana_activa(); t.refresh(); print(t.key, len(t._widgets['tabla'].get_children())); r.destroy()"`
@@ -537,8 +544,8 @@ $py = ".\.venv\Scripts\python.exe"
 & $py -X utf8 -m jobpulse_v15 postulaciones workday --apply
 & $py -X utf8 -m jobpulse_v15 db check
 & $py -X utf8 tools\estado_bd.py | tools\progreso_enriquecimiento.py | tools\huecos_restantes.py
-& $py -X utf8 tools\corrida_medicion.py [--sin-ia]  # corre el pipeline SOBRE el corpus actual (sin scrape) para medir una etapa; ESCRIBE en la BD → respalda antes
+& $py -X utf8 tools\corrida_medicion.py [--sin-ia] [--db RUTA]  # corre el pipeline SOBRE el corpus actual (sin scrape) para medir una etapa; ESCRIBE en la BD → respalda antes
 # Medir el efecto de una corrida (ANTES -> corrida -> DESPUES -> comparar)
-& $py -X utf8 tools\estado_extraccion.py antes antes.json
+& $py -X utf8 tools\estado_extraccion.py antes antes.json [--db RUTA]
 & $py -X utf8 tools\comparar_extraccion.py antes.json despues.json
 ```

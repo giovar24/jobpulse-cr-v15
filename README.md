@@ -1,7 +1,273 @@
-# JobPulse CR 1.5 (en desarrollo)
+# JobPulse CR 1.5 — Blueprint
 
-Esta carpeta inicia el desarrollo aislado de la version 1.5. La aplicacion
-actual, sus datos y `data/jobs.db` no se modifican ni se migran.
+> Contrato raíz (EGM "Hay"). Las instrucciones operativas para agentes están en
+> [`AGENTS.md`](AGENTS.md); el contrato de cada directorio vive en su `README.md`.
+
+## System Overview
+
+JobPulse CR v1.5 es un pipeline de búsqueda de empleo sobre **SQLite** con dos
+fachadas que comparten una única implementación: el **CLI** (`jobpulse-v15`) y la
+**UI v2** de escritorio (`python -m jobpulse_v15.ui_v2`). El orquestador
+(`pipeline.py`) encadena el flujo `scrape → análisis por reglas → IA →
+re-análisis → backfill → Paso 5 → evidencia` y el veredicto auditable es el
+**Paso 5** (`matching.py`), que deja su resultado en `job_match` y su
+justificación por vacante en `docs/PASO5_EVIDENCIA_*.md`. La base del corpus es
+`data/jobpulse_v15.db` (no versionada); el esquema se versiona solo con
+migraciones y el esquema actual es la versión **28**.
+
+**Por qué el orden no se puede alterar**
+
+El orquestador (`pipeline.py`) ejecuta siete etapas, siempre en este orden:
+
+`1 scrape → 2 análisis → 3 IA → 4 re-análisis → 5 backfill → 6 Paso 5 → 7 evidencia`
+
+(La lista canónica es `pipeline_metricas.ETAPAS`; el **Paso 5 es la etapa 6**,
+porque la numeración del «Paso 5» es histórica y no coincide con la posición
+dentro del flujo.)
+
+- **Etapa 2 antes que la 3**: los scrapers no rellenan `jobs.skills` ni
+  `jobs.languages`; los produce el pase IA. Sin la etapa 3, la etapa 4 no tiene
+  nada que integrar y la taxonomía queda sin cubrir.
+- **Etapa 4 antes que la 5**: hasta que los campos estructurados del aviso no
+  se integran como requisitos, no existen filas que normalizar. La etapa 4 la
+  implementa `enrich requirements-source --apply`.
+- **Etapa 5 antes que la 6**: `enrich requirements-canonico --apply` rellena
+  `job_requirements.codigo_canonico` solo donde falta; **un requisito sin
+  `codigo_canonico` se ignora en silencio**, así que la vacante se evalúa con
+  menos requisitos de los que realmente pide.
+- **Etapa 6 = corrida nueva**: cada ejecución escribe filas nuevas en
+  `job_match` con su `corrida_id` y marca `valida=0` en las anteriores; nunca se
+  actualiza en sitio. Estados posibles: `calificada`, `revisar_a_mano`,
+  `descartada`, `datos_insuficientes`, `sin_requisitos`,
+  `baja_compatibilidad`, `fuera_de_area`.
+
+El comando que encadena las siete etapas es `run_full_flow.py` (o el botón
+«Procesar» de la UI v2). Las etapas sueltas se ejecutan por CLI; cada una tiene
+su comando en la tabla «Subsistemas y comandos no detallados aquí».
+
+> `run_enriquecimiento.py` es un **atajo**: hace la etapa 3 (IA) y encadena la
+> etapa 4 al terminar, porque un pase IA que no re-analiza deja el texto
+> desactualizado. No es una etapa aparte ni un segundo re-análisis.
+
+## Terminología
+
+Vocabulario canónico del proyecto. El manual funcional heredado (más abajo) usa
+a veces otra palabra para el mismo concepto; manda esta tabla.
+
+| Término canónico | Significado | Cómo lo llama el manual heredado |
+|---|---|---|
+| **Paso 5** | El motor de matching (`matching.py`). Escribe `job_match`. | «comparación con el perfil», «compatibilidad» |
+| **corrida** | Una ejecución registrada: fila de `source_runs` o de `job_match` con su `corrida_id`. | «corrida», «historial» |
+| **análisis** | Fila de `job_analysis` con sus `job_requirements` (versión `rules-2`). | «análisis», «busqueda/extracción» |
+| **re-análisis** | Reejecutar el análisis porque cambió el texto del aviso o porque se integraron campos nuevos. | «reanalizar» |
+| **backfill** | Rellenar `codigo_canonico` en requisitos ya guardados. | (no aparece) |
+| **UI v2** | La única interfaz gráfica (`ui_v2/`). | «interfaz Tkinter», «aplicación», «ventana» |
+| **áreas** | Clasificación de la vacante en `job_area` desde `seeds/areas.json`. «Las áreas marcadas en el perfil» = las que el perfil declara como objetivo. | «áreas» |
+| **viabilidad** | Banda de **ajuste técnico** perfil↔aviso (0-100). No es probabilidad de contratación. | (no aparece) |
+| **Paso 7** | Numeração **histórica de los hitos del proyecto**, no de las etapas del pipeline: es la fase en que se firman las decisiones de segunda persona sobre la educación no confirmada (`job_match_decision`). | «firma de decisiones» |
+| **educacion_no_confirmada** | Caso de revisión manual: el motor no pudo decidir si el aviso exige un título universitario (no lo descarta nunca por falta de información). Lo resuelve una **firma de segunda persona**, que solo aplica si el motor no pudo decidir. | «caso abierto», «revisar a mano» |
+| **orquestador** | `pipeline.py`: el componente que encadena las etapas del pipeline y cronometra cada una. | «el flujo», «run_full_flow» |
+| **fetcher / adaptador** | El módulo que obtiene ofertas crudas de **una** fuente (API, RSS o navegador). «Scraper» se usa como sinónimo de fetcher; la distinción real es por **transporte**, no por nombre. | «adaptador», «scraper» |
+| **`codigo_canonico`** | Identificador normalizado de un concepto (`skills`, `languages`, `license`, …) en la tabla `concepto`. **Sin él, el motor ignora el requisito en silencio.** | «código», «taxonomía» |
+| **evidencia / `evidence`** | Cita literal del aviso que justifica un requisito (`job_requirements.evidence`). Es lo que se audita: el veredicto del Paso 5 debe poder rastrearse a la frase del texto. | «evidencia» |
+| **huella del texto** | `text_hash` de `job_analysis`: sha256 de descripción + requisitos. Si cambia, el análisis queda obsoleto y hay que re-analizar. | «huella», «hash» |
+| **salud de sitios** | Estado de un sitio en `source_run_sites`: `ok`, `zero_results`, `error`, `requires_login` (pide sesión) y la bandera `review_required` en `source_sites`, que se activa tras **3 corridas seguidas con 0 avisos** y no desactiva el sitio. `site mark-reviewed` la limpia. | (no aparece) |
+| **idempotente** | Una ingesta repetida no duplica: actualiza la oferta existente y la cuenta como **duplicada en la corrida**. | «idempotente» |
+
+Glosario de siglas y términos externos usados en este documento:
+
+- **ANE** — Agencia Nacional de Empleo (portal público de Costa Rica; exige sesión).
+- **API pública** — endpoint HTTP/REST/GraphQL sin credenciales, consultado con `httpx` o `urllib`; no abre navegador.
+- **ATS** — *Applicant Tracking System* (Workday, Greenhouse, Ashby, Lever, Recruitee, Workable, SuccessFactors). **No confundir con el «ranking ATS»**, que es una puntuación propia de 0-100 y no toca los umbrales del Paso 5.
+- **CDP** — *Chrome DevTools Protocol*; el puerto por el que se controla un Brave ya abierto (`BRAVE_CDP_PORT`, 9222 por defecto).
+- **corpus** — los avisos guardados en la BD SQLite local `data/jobpulse_v15.db`.
+- **CR** — Costa Rica.
+- **EGM «Hay»** — la convención de contratos documentales por directorio del bundle EGM: cada carpeta declara su interfaz, invariantes y efectos.
+- **IMAP** — protocolo de correo con el que `postulaciones correo` lee el buzón de candidaturas.
+- **keyring** — el Administrador de Credenciales de Windows; aquí guarda las contraseñas de ANE y del buzón.
+- **RSS** — *Really Simple Syndication*: feed XML público (lo usa SuccessFactors) que se lee como una lista de avisos.
+- **Playwright** — librería de automatización de navegador; su chromium solo hace falta en los scrapers de navegador.
+- **httpx** — cliente HTTP asíncrono con soporte HTTP/2; es la dependencia de red declarada en `pyproject.toml` y la usa el grueso de los adaptadores.
+- **urllib** — módulo de la biblioteca estándar de Python para HTTP; algunos adaptadores lo usan sin dependencias externas.
+- **payload** — la respuesta cruda de la fuente, tal como llegó, guardada para trazabilidad (`job_source_records`).
+- **taxonomía** — el registro `concepto` (variante de texto → `codigo_canonico`) que el motor necesita para entender un requisito.
+- **tenant** — el espacio de una empresa en la URL de Workday (`<tenant>.wdN.myworkdayjobs.com`).
+- **VACUUM** — compactación del archivo SQLite (reconstruye la BD y reduce tamaño).
+
+## Local Interface & Invariants
+
+Scripts de raíz = operaciones manuales del pipeline. Todos se ejecutan con el
+python del **venv** y `-X utf8` cuando imprimen texto de la BD.
+
+| Script | Contrato |
+|---|---|
+| `run_full_flow.py` | Envoltorio del orquestador: corre `scrape → … → evidencia`. Flags `sites…`, `--pages`, `--only-scrape`, `--evaluar-todo`, `--no-notify`. Sin `sites` toma los activos. Imprime `pipeline.resumen_linea`. |
+| `run_enriquecimiento.py` | Pase IA (rellena `jobs.skills`/`jobs.languages`): `--solo-criticos`, `--confirmar-externo`. Arranca el `llama-server` local solo si él lo abre y lo apaga al terminar; re-analiza después. |
+| `run_paso5.py` | Matching: `--dry` (no escribe), `--corrida`, `--evaluar-todo`. **Corrida NUEVA siempre** en `job_match`; por defecto solo evalúa las áreas marcadas en el perfil. |
+| `run_scrapes.py` | Barrido mixto: **incluye** plataformas de API pública (`cinde`, `procomer`: `port=None`, sin CDP) y de navegador (`ane`, `indeed`, `linkedin`: exigen el `port` CDP de `browser_manager.puerto_cdp_configurado()`). |
+| `run_ats_scrapes.py` | Barrido de tableros ATS (`ashby`, `greenhouse`, `harvie`, `lever`, `recruitee`, `successfactors`, `workable`, `workday`); `--platform`, `--site`, `--dry-run`, `--continue-on-error`. |
+| `generar_evidencia_paso5.py` | Escribe `docs/PASO5_EVIDENCIA_<fecha>.md` de la corrida vigente. |
+| `verificar_evidencia.py` | Verifica citas literales y firmas; **exit 0 = TODO CUADRA**. |
+| `generar_revision_pendientes.py` | Escribe `docs/PASO5_REVISION_PENDIENTES.md` (casos `educacion_no_confirmada`). |
+| `clean_run.py` | **Destructivo**: exige el argumento literal `SI`. Borra scraping y derivados, conserva perfil/sitios/taxonomías (más `source_sites_review_log`, tabla que ninguna migración crea), reinicia la salud de sitios y hace `VACUUM`. |
+| `login_ane.py` | Login de ANE (`--port`, `--mantener-abierto`). Cierra por CDP y de forma ordenada **solo el Brave que él abrió**; `--mantener-abierto` lo deja vivo y un Brave preexistente no se toca. |
+| `start_ia_server.py` | Arranca/verifica el `llama-server` local (`--check`); no lo detiene (lo apaga quien lo usa). |
+| `instalar_modelo_ia.py` | Instalador del modelo IA local (`--check`, `--solo-modelo`, `--solo-llama`). |
+| `migrar_perfil.py` | Importa un `profile.json` legado a `candidate_profile_facts`. Ruta por defecto: `<repo-v1x>\data\usuario\profile.json` (el repo v1.x **archivado**, de solo lectura; `auditoria_db.py` apunta a otro nivel, `<repo-v1x>\v1_5\…`). |
+| `evidencia_descartadas.py`, `resumen_bloqueo.py` | Informes de **solo lectura** (escriben su `.txt`). |
+| `verificar_corridas.py` | Trazabilidad de corridas de `job_match` (solo lectura). |
+| `auditoria_db.py` | **Apunta a la ruta vieja** del repo v1.x archivado (`<repo-v1x>/v1_5`): **no lo uses**; para el estado usa `tools/estado_bd.py`. |
+
+Los adaptadores de scraping combinan tres transportes: **API pública/REST**,
+**RSS** y **navegador** (este último exige CDP).
+
+**Launchers** (`*.bat`/`.ps1`, operación de escritorio): `jobpulse-v15.bat` crea
+el venv si falta, instala deps, verifica CDP 9222 y lanza la UI v2;
+`jobpulse-v15-v2.bat` exige el venv y lanza la UI v2; `jobpulse-v15.ps1` elige
+Brave, arranca CDP 9222 y lanza la UI v2; `ia-server.bat` e
+`instalar-modelo-ia.bat` delegan en los scripts Python homónimos.
+
+## Subdirectories & System Boundaries
+
+- [`src/`](src/README.md) — el paquete instalable `jobpulse_v15` (todo el
+  dominio, los scrapers, la IA y la UI v2).
+- [`tools/`](tools/README.md) — scripts manuales de estado y medición. Dos
+  escriben **datos** en la BD (`corrida_medicion.py`, `limpiar_null.py`) y otros
+  cuatro (`estado_bd.py`, `cobertura_campos.py`, `ver_sitio.py`,
+  `comparar_ia.py`) llaman `Database.initialize()`, que **puede aplicar
+  migraciones pendientes** y mover `PRAGMA user_version`.
+- `docs/` — bitácora por sesión (`HANDOFF_SESION_*.md`), reglas de negocio y
+  evidencia generada (`PASO5_EVIDENCIA_*.md`, **no editar**). Sin código.
+- `data/` — corpus real `jobpulse_v15.db` y datos personales (no versionados).
+- `tests/` — suite `pytest` sobre BD temporales (sin red ni credenciales).
+
+## Global Invariants
+
+- **Esquema solo con migraciones** (`src/jobpulse_v15/migrations/0NN_*.sql`),
+  nunca `ALTER` a mano; cambio de esquema = archivo nuevo.
+- **Secretos y datos personales nunca al repo**: `.env`, `data/usuario/`,
+  `data/empresas/` y los CV (`*.pdf/docx/doc`) están gitignoreados a propósito.
+- **General, no "para mí"**: el perfil son hechos en la BD, los filtros
+  `site_config` declarativos y las credenciales el Administrador de
+  Credenciales de Windows (keyring).
+- **Cada fetcher nuevo** lleva test en `tests/test_<nombre>.py`.
+- **Todo requisito vigente** lleva `evidence` literal (trazable al texto).
+- **El Paso 5 es siempre corrida nueva** y la viabilidad ≠ contratación (un
+  rechazo nunca etiqueta aptitud ni reentrena pesos).
+
+## Global Side Effects
+
+- **BD SQLite** `data/jobpulse_v15.db` (no versionada). Los respaldos los elige
+  el operador: `backup --output <RUTA>` exige una ruta explícita (la convención
+  del repo es `data/backups\X.db`).
+- **Archivos escritos**: `.env` (IA y navegador), `~/.jobpulse_v15/ui_config.json`
+  (incluye la política de retención) y `data/empresas/*.json`.
+- **Directorios y cachés**: `data/usuario/sesiones/` (sesiones de navegador
+  guardadas aparte), `data/usuario/ia_cache/` (caché del pase IA, por
+  proveedor+modelo) y `docs/` (evidencia y hojas de firma, algunas **generadas**).
+- **Datos de perfil y seguimiento**: `candidate_profile_facts` +
+  `candidate_profile_imports` (importación de CV, reversible) y
+  `postulacion` + `postulacion_senal` (registro de candidaturas por correo y
+  Workday). Las credenciales del buzón viven en keyring o `.env`, nunca en la BD.
+- **Procesos**: `llama-server` y Brave (CDP) se arrancan **solo si el ejecutor
+  los abrió**; se usa el keyring de Windows.
+- **Red (peticiones salientes)**: scraping (HTTP/HTTPS y CDP), cliente IA
+  OpenAI-compatible e IMAP (buzón de postulaciones: servidor, puerto SSL,
+  carpeta y credencial del keyring se pasan por flags).
+
+## System Verification
+
+Sin CI/linter/formatter: la verificación es la suite de `pytest`, que corre en
+el **python del sistema** (el `.venv` no trae pytest). Ejecuta estos comandos
+**fuera** de `.venv`:
+
+```powershell
+python -m pytest tests/ -q          # suite completa (~20-25 min)
+python -m pytest tests/test_matching.py -q
+```
+
+Un archivo o un patrón: `python -m pytest tests/ -k <patrón> -q`. Muchos tests
+crean una BD temporal y aplican las 28 migraciones en `setUp`: la suite tarda
+minutos, no segundos.
+
+### Prerrequisitos
+
+- **App, CLI y scripts**: `.venv` con Python 3.11 (`py -3.11 -m venv .venv`) y
+  `pip install -e .`. Extras: `[dev]` (pytest) e `[ia]` (openai,
+  huggingface_hub); las dependencias solo se declaran en `pyproject.toml`.
+- **Tests**: intérprete del **sistema** con pytest instalado
+  (`py -3.11 -m pip install pytest`); pytest no es dependencia de runtime. Si
+  `python` resuelve a otro intérprete, usa `py -3.11 -m pytest`.
+- **Navegador**: la vía de navegador exige **dos componentes distintos**:
+  1. **Brave instalado y arrancado con un puerto CDP abierto** — es el
+     navegador que se controla. El puerto sale de `BRAVE_CDP_PORT` (9222 por
+     defecto); el CLI **no** abre Brave por su cuenta, así que hay que
+     levantarlo antes:
+     `python -c "from jobpulse_v15.browser_manager import asegurar_brave; asegurar_brave(9222)"`
+     o usar el launcher `jobpulse-v15.ps1`, que ya lo hace.
+  2. **chromium de Playwright** (opcional) — solo para la capa de automatización;
+     no lo necesitan los tableros ATS ni las API públicas, que van por HTTP.
+- **IA local**: opcional (`instalar-modelo-ia.bat`); la externa se configura en
+  `.env` con `IA_PROVEEDOR`/`IA_BASE_URL`/`IA_MODEL`.
+
+## Subsistemas y comandos no detallados aquí
+
+El manual funcional de abajo cubre la ingesta y la búsqueda. El resto de la CLI
+existe y está documentado en [`src/jobpulse_v15/README.md`](src/jobpulse_v15/README.md):
+
+| Subsistema | Comando(s) | Qué hace / etapa | Tabla(s) que lee o escribe |
+|---|---|---|---|
+| Viabilidad (ajuste técnico) | `viabilidad list [--banda aplicar]`, `viabilidad top [--limit N]` | Lee `job_match`; bandas `aplicar` ≥85, `revisar` 80-85, `no_prioritario` <80, `sin_datos`, `veto` | `job_match` |
+| Decisiones firmadas | `decision list`, `decision sign --file <firma.json>` (`--dry-run`) | Firma de **segunda persona** sobre `educacion_no_confirmada`. Solo aplica si el motor no pudo decidir: `bloqueo_real` → descarta, `no_bloqueo` → falta, `dudoso` → sin cambio. **Nunca pisa un veredicto del motor.** Es el hito «Paso 7», fuera del flujo del pipeline | `job_match_decision` |
+| Métricas por etapa | `pipeline etapas [--limite N] [--corrida ID] [--json]` | Cronometraje por etapa que deja el orquestador | `pipeline_etapa` |
+| Áreas de empleo | `init-areas [--classify]`, `areas list`, `areas classify [--dry-run]` | Taxonomía de áreas y clasificación de cada vacante | `area`, `area_regla`, `job_area` |
+| Normalización canónica | `enrich requirements-source --apply` | **Etapa 4** (re-análisis): integra como requisitos los campos estructurados del aviso | `job_analysis`, `job_requirements` |
+| Normalización canónica | `enrich requirements-canonico --apply` | **Etapa 5** (backfill): rellena `codigo_canonico` de los requisitos ya guardados | `job_requirements.codigo_canonico`, `concepto` |
+| Normalización canónica | `enrich posting-language [--apply]` | Rellena el idioma del aviso cuando la fuente no lo da (regla local, no IA) | `jobs.posting_language` |
+| Normalización canónica | `enrich work-mode` | Rellena la modalidad **solo si está vacía** (nunca pisa una conocida ni editada a mano) | `jobs.work_mode` |
+| Normalización canónica | `enrich profile-canonico [--apply]` | Fuera del flujo: normaliza los datos del perfil candidato, no de los avisos | `candidate_profile_facts.codigo_canonico` |
+| Taxonomía | `taxonomy curate [--apply] [--limit N]` | Reconstruye la cola de variantes sin normalizar (migración de datos, no un `UPDATE` manual) | `concepto`, `concepto_no_normalizado` |
+| Postulaciones | `postulaciones correo --dias 90 [--apply]` (IMAP: `--host`, `--puerto`, `--carpeta`, `--cred`), `postulaciones workday --apply` | Registro de candidaturas y señales de respuesta; solo derivados mínimos (el cuerpo del correo nunca se guarda) | `postulacion`, `postulacion_senal` |
+| Registro de fuentes | `init-sources`, `site seed-cr`, `platform add`, `site add`, `credenciales` (`list`, `set`, `del`, `auto`, `add-site`, `rm-site`), `login` | Alta de plataformas, sitios y credenciales | `source_platforms`, `source_sites` |
+| Salud de sitios | `site list --needs-review`, `site mark-reviewed --id <id>` | Bandera `review_required`: se activa tras **3 corridas seguidas con 0 avisos** y **no desactiva el sitio**. Un sitio que pide sesión tiene estado `requires_login` (no cuenta para la racha de ceros) | `source_sites.review_required`, `source_run_sites` |
+| Operación de base | `init-db`, `schema-version`, `backup --output <RUTA>`, `db check` | Crear/migrar, versionar, respaldar y verificar integridad | esquema completo |
+
+El comando `enrich` aplica **reglas locales**, nunca IA. La sección «Esquema
+inicial» de más abajo describe solo el núcleo; el listado completo de tablas
+está en [`src/jobpulse_v15/migrations/README.md`](src/jobpulse_v15/migrations/README.md).
+
+### Problemas conocidos de los lanzadores
+
+- `jobpulse-v15.bat:45` fija `--user-data-dir="C:\Users\giova\...\Brave\User Data"`
+  (ruta de una máquina concreta) y `jobpulse-v15.bat:28-29` /
+  `jobpulse-v15.ps1:72-73` invocan `.venv\Scripts\pip` y
+  `.venv\Scripts\playwright`, rutas que quedan obsoletas al mover el repo (un
+  venv no se recrea al mover: usa siempre `python.exe -m pip`).
+- `jobpulse-v15.ps1:11-20` sí resuelve Brave con `%ProgramFiles%`/
+  `%LOCALAPPDATA%`, así que los dos lanzadores se contradicen.
+- `source_sites_review_log` la usa `clean_run.py`, pero **ninguna migración la
+  crea**: en una base recién inicializada no existe.
+
+---
+
+> **Jerarquía de este documento.** Las secciones de arriba son el **contrato
+> vigente** y mandan en caso de conflicto. Lo que sigue es el **manual funcional
+> heredado** de la fase de arranque: se conserva por su detalle operativo y
+> puede citar interfaces ya retiradas (por ejemplo, la UI clásica).
+>
+> **Sobre las referencias a «la UI» del manual:** cuando una capacidad **existe
+> hoy**, se dice **UI v2**; cuando pertenece a la **UI clásica retirada**, se
+> marca como tal. La UI v2 tiene seis pestañas (Datos crudos, Perfil, Vacantes,
+> Scraping, Cuentas, Configuración): puede agregar sitios, consultar tableros,
+> exportar CSV y lanzar el pipeline, pero **no** ofrece el «Calidad de datos»,
+> los estados manuales por vacante, los filtros de motivo de revisión ni la
+> edición de datos de fuente.
+
+## Documentación funcional
+
+JobPulse CR v1.5 usa una base independiente en `data/jobpulse_v15.db`. No
+modifica ni migra las bases de versiones anteriores (v1.x, `data/jobs.db`), que
+viven en un repositorio aparte, archivado y de solo lectura.
 
 ## Alcance de esta fase
 
@@ -59,6 +325,14 @@ El comando es de solo lectura, ejecuta `integrity_check` y `foreign_key_check`,
 devuelve JSON y usa codigo de salida distinto de cero ante problemas.
 
 ## Interfaz de escritorio
+
+> **Histórico.** Esta sección describe la **UI clásica** (`ui.py` con pestañas
+> como «Calidad de datos», «Revisar duplicados», «Editar datos» o «Seguimiento»),
+> retirada el 2026-11-11. La única interfaz vigente es la **UI v2**
+> ([`src/jobpulse_v15/ui_v2/README.md`](src/jobpulse_v15/ui_v2/README.md)), con
+> seis pestañas: Datos crudos, Perfil, Vacantes, Scraping, Cuentas y
+> Configuración. Los controles citados abajo (estados manuales, filtros de
+> revisión y edición de fuente) **ya no existen** en la interfaz.
 
 La interfaz Tkinter muestra las vacantes guardadas, permite filtrarlas por
 texto, ubicacion, modalidad e idioma, y revisar la evidencia del analisis.
@@ -160,18 +434,28 @@ La interfaz solo consulta la DB v1.5 y no inicia scraping automaticamente.
 La administracion de fuentes permite activar o
 pausar sitios, agregar tableros Workday, Greenhouse, Ashby, Lever, Recruitee,
 Workable y SuccessFactors, y consultar manualmente un tablero tras
-confirmacion. El boton `Historial` muestra las ultimas corridas de la fuente
-seleccionada, con su estado, conteos y errores:
+confirmacion. Las ultimas corridas se consultan con
+`run list --limit N` y el detalle de una corrida (sitios, conteos y errores)
+con `run show --id <RUN_ID>`:
 
 ```powershell
-.\.venv\Scripts\python.exe -m pip install -e .
-.\.venv\Scripts\python.exe -m jobpulse_v15.ui_v2
+.\.venv\Scripts\python.exe -m jobpulse_v15 run list --limit 10
+.\.venv\Scripts\python.exe -m jobpulse_v15 run show --id <RUN_ID>
 ```
 
 La UI v2 (`jobpulse_v15.ui_v2`) es la unica interfaz grafica; tambien se abre
 con `jobpulse-v15-v2.bat`.
 
 ## Ingesta controlada de ofertas
+
+> **Contrato común de todos los proveedores.** Cada fetcher (API pública, RSS o
+> navegador) solo obtiene ofertas crudas: el registro, la validación y la
+> escritura pasan siempre por `IngestionService`, que abre la corrida del sitio,
+> guarda `job_source_records` y `source_job_memory`, es idempotente por
+> `(site_id, source_job_id)` y actualiza la salud en `source_run_sites`. Desde
+> ahí el pipeline es el mismo para todas las fuentes: `scrape → análisis → IA →
+> re-análisis → backfill → Paso 5`. Ningún adaptador escribe en la base de
+> versiones anteriores ni abre un navegador por su cuenta.
 
 El comando `ingest import-json` importa resultados ya obtenidos desde un
 archivo JSON local, sin hacer solicitudes web. Cada importacion crea una
@@ -278,7 +562,7 @@ publico de Greenhouse con descripciones; solo se importan vacantes cuya
 ubicacion o alguna oficina contiene el texto `country_query` (por defecto
 `Costa Rica`). La URL del tablero se valida contra los dominios oficiales antes
 de construir la URL fija de API. Cada fuente tiene su propia corrida; un fallo
-se registra y no detiene las demas. La UI permite agregar tableros Greenhouse
+se registra y no detiene las demas. La UI v2 permite agregar tableros Greenhouse
 y consultarlos individualmente o en seleccion multiple, siempre tras confirmar.
 
 ### Consulta explicita de tableros Ashby
@@ -303,7 +587,7 @@ conserva el payload original y filtra por `country_query` (por defecto
 Cuando una oferta coincidente solo indica el pais en una ubicacion secundaria
 o en el titulo, guarda `<country_query> (multi-loc)` como ubicacion sin inferir
 ciudad o provincia. La modalidad se mapea solo si Ashby especifica modalidad
-remota, hibrida o presencial; de lo contrario queda `unknown`. La UI permite
+remota, hibrida o presencial; de lo contrario queda `unknown`. La UI v2 permite
 agregar tableros Ashby y consultarlos individualmente o en seleccion multiple,
 siempre tras confirmar. Las pruebas usan respuestas simuladas y no consultan
 tableros reales.
@@ -357,7 +641,7 @@ defecto `Costa Rica`) en el titulo, la ubicacion principal o las ubicaciones
 secundarias. Completa la descripcion con la seccion de requisitos del anuncio.
 Cuando una oferta coincidente no indica el pais en su ubicacion principal,
 guarda `<country_query> (multi-loc)` sin inferir ciudad o provincia; la
-modalidad no se deduce y queda `unknown`. La UI permite agregar tableros
+modalidad no se deduce y queda `unknown`. La UI v2 permite agregar tableros
 Recruitee y consultarlos individualmente o en seleccion multiple, siempre tras
 confirmar. Las pruebas usan respuestas simuladas y no consultan tableros
 reales.
@@ -378,13 +662,18 @@ tablero con una URL `https://apply.workable.com/<token>`:
 .\.venv\Scripts\python.exe -m jobpulse_v15 scrape workable --group directos
 ```
 
-El adaptador consulta el endpoint publico de Workable con detalles, conserva
-el payload original y filtra por `country_query` (por defecto `Costa Rica`)
-en el titulo, ciudad o pais de la ubicacion. Completa la descripcion con la
-seccion de requisitos. La ubicacion guarda ciudad, region y pais tal como
-llegan; cuando una oferta coincidente no menciona el pais, guarda
-`<country_query> (multi-loc)`. La modalidad solo se marca `remote` si
-Workable indica telecommuting; de lo contrario queda `unknown`. La UI permite
+El adaptador descarga la lista del tablero como **markdown**
+(`https://apply.workable.com/<token>/jobs.md`) y despues la ficha de cada aviso
+(`.../jobs/view/<id>.md`), con `urllib` y sin abrir navegador. Filtra por
+`country_query` (por defecto `Costa Rica`) sobre el titulo y la ubicacion de la
+tabla. Conserva la ubicacion tal como llega en `location_raw` y toma `country`
+del sitio: **no infiere** ciudad ni provincia y no fabrica valores
+`<country_query> (multi-loc)` (la normalizacion geografica la hace despues el
+pipeline de ubicaciones). La modalidad se mapea desde la linea
+`**Workplace:**` del detalle (`remote`, `hybrid`, `on-site`); si no aparece
+queda `unknown`. Tambien extrae el tipo de empleo del encabezado, la fecha de
+publicacion y el salario como texto (`salary_raw`), y guarda en
+`description_raw` la descripcion con la seccion de requisitos. La UI v2 permite
 agregar tableros Workable y consultarlos individualmente o en seleccion
 multiple, siempre tras confirmar. Las pruebas usan respuestas simuladas y no
 consultan tableros reales.
@@ -417,6 +706,8 @@ permite agregar portales SuccessFactors y consultarlos individualmente o en
 seleccion multiple, siempre tras confirmar. Las pruebas usan feeds simulados
 y no consultan portales reales.
 
+## Normalizacion de ubicaciones (Workday y catalogo CR)
+
 Workday devuelve una ubicacion original que v1.5 siempre conserva en
 `location_raw` y en el payload de origen. Para Costa Rica, el adaptador separa
 ciudad y provincia cuando recibe `Ciudad, Provincia, Costa Rica`, o reconoce
@@ -428,8 +719,10 @@ las respuestas; no hacen peticiones al portal.
 
 Para normalizar registros Workday que ya estan guardados, se puede revisar
 primero el reporte de simulacion. `--site` limita la operacion a un tablero y
-`--apply` aplica solo los campos vacios, sin reemplazar valores de ciudad o
-provincia existentes:
+`--apply` escribe los cambios, pero **no es solo aditivo**: rellena ciudad y
+provincia vacias y ademas **corrige** las ciudades que `ciudad_es_basura`
+delata como basura del parser viejo (no podrian ser un lugar); en ese caso el
+reporte expone `corrected_cities` y no se respeta el valor existente:
 
 ```powershell
 .\.venv\Scripts\python.exe -m jobpulse_v15 location normalize-workday `
@@ -438,9 +731,16 @@ provincia existentes:
   --site intel-cr --apply
 ```
 
+Ademas existe `location normalize --platform <p> [--apply]`, que rellena y
+corrige ciudad/provincia de **todas** las plataformas con el catalogo
+geografico pais -> provincia -> canton -> distrito
+(`src/jobpulse_v15/cli.py:3207-3286`). Tambien **muta** filas existentes:
+cuenta `filled_city`, `filled_region`, `corrected_city` y `corrected_region`.
+
 La operacion usa exclusivamente el payload original persistido y no hace
 consultas web. Las ubicaciones no reconocidas y registros con fuentes
-conflictivas se omiten y aparecen contados en el reporte.
+conflictivas se omiten y aparecen contados en el reporte. Respalda la base
+antes de cualquier `--apply`.
 
 ## Ejecutar las pruebas
 
@@ -497,7 +797,7 @@ registra un resultado exitoso con `--found` mayor que cero y `--new 0`, no
 como un sitio sin resultados. Un error se registra con `--error "mensaje"`
 y no incrementa la racha de ceros.
 
-## Esquema inicial
+## Esquema: tablas del núcleo (manual heredado)
 
 - `jobs`: identidad y campos comunes normalizados; conserva los textos
   originales cuando los proporciona la fuente.
@@ -510,6 +810,17 @@ y no incrementa la racha de ceros.
   versionada, requisitos con evidencia y estado de campos ausentes.
 - `user_job_state` y `applications`: decisiones manuales y seguimiento que
   sobreviven a la purga del contenido de una oferta.
+
+> Este listado es solo el **nucleo** del esquema, tal como lo.describe el manual
+> heredado: **no** delimita el alcance actual del sistema. Las tablas que quedan
+> fuera se reparten en dos inventarios: el **listado completo** por migración,
+> en
+> [`src/jobpulse_v15/migrations/README.md`](src/jobpulse_v15/migrations/README.md),
+> y la **tabla de subsistemas** de arriba, que dice qué comando toca qué tabla
+> (`job_match`, `job_area`, `concepto`, `pipeline_etapa`, `job_match_decision`,
+> `postulacion*`).
+> `user_job_state` y `applications` siguen en el esquema, pero la UI v2 ya no
+> expone el flujo de estados manuales que describe el capitulo de interfaz.
 
 Los requisitos son filas relacionadas y repetibles, no columnas especificas
 por portal. `posting_language` describe el idioma del anuncio y no implica
@@ -531,7 +842,7 @@ evidencia. `complete` no puede ocultar campos ambiguos o desconocidos.
 repository.save_analysis(
     "job-123",
     text_hash="sha256-of-description",
-    extractor_version="rules-1",
+    extractor_version="rules-2",
     analysis_status="complete",
     source_site_id="intel-cr",
     source_config_hash="sha256-of-site-config",
@@ -581,10 +892,11 @@ sola vez aunque coincida con varios requisitos. Por defecto la busqueda exige
 requisitos `required`; se pueden incluir preferencias/inferencias pasando
 `requirement_levels`. Los filtros y criterios se validan y parametrizan en SQL.
 `get_current_analysis` permite recuperar el analisis vigente con sus estados y
-evidencias. El esquema migra automaticamente a la version 2.
+evidencias. El esquema migra automaticamente a la version actual (28).
 
 La busqueda tambien esta disponible desde la CLI; `--text` busca en titulo,
-empresa, ubicacion y descripcion, y se pueden repetir criterios de requisitos:
+empresa, ubicacion, descripcion y `requirements_raw`, y se pueden repetir
+criterios de requisitos:
 
 ```powershell
 .\.venv\Scripts\python.exe -m jobpulse_v15 search `
@@ -602,8 +914,8 @@ La CLI devuelve JSON. Sin `--include-preferred`, `--include-inferred` o
 como `required`. La busqueda de texto trata `%`, `_` y `!` como caracteres
 literales, no como comodines SQL.
 La salida JSON se mantiene por defecto. Para producir el mismo CSV controlado
-que ofrece la UI (incluidos compatibilidad, motivos de revision y enlace, sin
-descripcion ni payload), usa `--format csv`:
+que ofrece la UI v2 (incluidos compatibilidad, motivos de revision y enlace,
+sin descripcion ni payload), usa `--format csv`:
 
 ```powershell
 .\.venv\Scripts\python.exe -m jobpulse_v15 search `
@@ -618,7 +930,9 @@ aceptan fechas inclusivas en formato `AAAA-MM-DD`:
 .\.venv\Scripts\python.exe -m jobpulse_v15 search `
   --published-from 2026-10-01 --published-to 2026-10-31
 ```
-La casilla de revision de datos en la UI y `--needs-review` en la CLI muestran
+La revision de datos se consulta con `--needs-review` en la CLI (en la UI v2 no
+hay casilla equivalente: la UI clásica tenía el botón «Calidad de datos»).
+Muestra
 vacantes sin empresa o pais, con ubicacion original pero sin ciudad/provincia
 normalizada, sin analisis registrado, con analisis pendiente/parcial/con error
 o con campos `unknown` o `ambiguous`. No se marca por si sola como error una
@@ -628,11 +942,15 @@ reglas no encontraron una mencion. Esta vista prioriza la revision, pero no
 modifica los datos ni convierte incertidumbre en un hecho.
 Los resultados incluyen `review_reasons` en el JSON de busqueda, con codigos
 estables como `missing_company`, `location_not_normalized`,
-`analysis_partial` o `unknown_field:license`. La UI muestra el conteo en la
-columna `Datos` y detalla los motivos al seleccionar la vacante. Cuando no hay
+`analysis_partial` o `unknown_field:license`. Son la **forma actual y estable**
+del resumen que la UI clásica mostraba como «Calidad de datos»: los calcula el
+motor de busqueda (`repository.search_jobs`) y los expone el CLI. La UI clásica
+mostraba el conteo en la columna `Datos` y detallaba los motivos al seleccionar
+la vacante; la UI v2 no expone esa columna. Cuando no hay
 motivos detectados se muestra `OK`; esto no garantiza que todos los datos sean
 correctos, solo que las reglas actuales no detectaron faltantes.
-El filtro `Motivo de revision` permite limitar los resultados a un codigo; por
+El filtro `Motivo de revision` de la UI clásica limitaba los resultados a un
+codigo; por
 ejemplo, `missing_country`, `analysis_partial` o `unknown_field:license`.
 La CLI acepta el mismo filtro con `--review-reason`:
 
@@ -653,21 +971,28 @@ Cuando se solicita este filtro, la salida JSON incluye la etiqueta
 antes de exportar. La comparacion usa solo datos guardados y aprobados del
 perfil; no significa que un requisito no registrado sea una carencia real.
 Las vacantes con `skip_automatic = 1` se excluyen por defecto de la busqueda;
-usa `--include-manually-skipped` para volver a incluirlas. Este filtro de
+usa `--include-manually-skipped` para volver a incluirlas. Ese estado lo fijaba
+la UI clásica (botón «Excluir de la búsqueda»); la UI v2 no lo expone, de modo
+que en la práctica solo se activa por SQL o por una edición puntual de la base. Este filtro de
 busqueda no elimina los anuncios del listado resumido solicitado a Workday;
 cuando el ID de origen es reconocible, el adaptador evita descargar su detalle
 y cuenta el anuncio como omitido, no como cero resultados. Si no se puede
 reconocer un ID estable en el listado, Workday puede requerir descargar el
 detalle para identificarlo.
 
-## Extractor inicial de requisitos
+## Extractor de requisitos
 
-La version `rules-1` reconoce frases explicitas en ingles y espanol para
-idiomas, estudios universitarios/secundarios, licencia de conducir y años de
-experiencia. No usa red ni IA. Los hallazgos guardan como evidencia la frase
-que activó la regla; los indicadores de preferencia y obligatoriedad se
-clasifican por separado. Cuando el texto alude a un requisito que las reglas no
-pueden interpretar, el campo queda `unknown`, no se presenta como ausente.
+La version vigente del analisis por reglas es `rules-2` (`analysis.py`); el
+analisis que integra ademas los campos estructurados de la fuente se registra
+como `rules-2+fuente` (`analysis_flow.py`). Reconoce frases explicitas en ingles
+y espanol para idiomas, estudios universitarios/secundarios, licencia de
+conducir **con su clase** (`B1`, `D3`...) y años de experiencia, y extrae
+competencias tecnicas con un vocabulario cerrado (Python, SQL, Excel, Power BI,
+AWS, Java, Linux, SAP...). No usa red ni IA. Los hallazgos guardan como
+evidencia la frase que activó la regla; los indicadores de preferencia y
+obligatoriedad se clasifican por separado. Cuando el texto alude a un requisito
+que las reglas no pueden interpretar, el campo queda `unknown`, no se presenta
+como ausente.
 Un campo `not_mentioned` significa que no se detectaron menciones de esa
 categoria en las reglas actuales, por lo que los resultados deben revisarse
 antes de utilizarlos para excluir candidatos u ofertas.
@@ -689,8 +1014,9 @@ Para procesar en lote solo vacantes que no tengan analisis vigente, usa:
 .\.venv\Scripts\python.exe -m jobpulse_v15 analysis extract-pending `
   --limit 25
 ```
-El limite permitido es de 1 a 500. El modo normal es local y no consulta sitios
-web; no reanaliza vacantes que ya tienen analisis, devuelve resumen y errores
+El limite permitido es de 1 a 500 (predeterminado 25). El modo normal es local y
+no consulta sitios web; no reanaliza vacantes que ya tienen analisis, devuelve
+resumen y errores
 por vacante, y retorna codigo de salida distinto de cero si algun registro
 fallo. Las vacantes sin texto quedan reportadas como error. Para incluir
 vacantes excluidas manualmente de las busquedas normales, agrega
