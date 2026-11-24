@@ -579,7 +579,8 @@ entradas exigidas por `comprehension`).
 - Rondas ejecutadas: **4 de 5** (tope).
 - Ninguna ronda ha salido «limpia» en sentido estricto (todas trajeron hallazgos, todos asentados).
 - **Convergencia (2 rondas limpias consecutivas): no acreditada**, y con el tope en 5 ya no es alcanzable en sentido estricto.
-- Trabajo de las rondas 1-2 commiteado en `39a55a0`; **las rondas 3 y 4 van sin commitear** (`README.md` + `goldfish_review_report.md`).
+- Trabajo de las rondas 1-2 commiteado en `39a55a0`; el de las rondas 3-5 se
+  commiteó al cierre de la sesión del 2026-11-23 (`0ee82a5`).
 
 ## Ronda 5 (última, tope)
 
@@ -657,8 +658,9 @@ corregido antes de la verificación final.
 - **Cierre:** por **tope**, con verificación mecánica completa (tablas, enlaces,
   esquema 28, 7 valores de salud, 24 grupos de comando, default de BD). El README
   queda íntegro: **1187 líneas, 6 tablas homogéneas, 0 corrupción, 0 CJK**.
-- Trabajo de las rondas 1-2 commiteado en `39a55a0`; **las rondas 3-5 van sin
-  commitear** (`README.md`, `goldfish_review_report.md` y los dos docs anexos).
+- **Loop cerrado el 2026-11-23** (sesión `HANDOFF_SESION_2026-11-23.md`).
+  Trabajo de las rondas 1-2 commiteado en `39a55a0`; las rondas 3-5 y el
+  `git mv` del informe de deriva, en **`0ee82a5`** (4 archivos, +840/−396).
 
 ### Verificación mecánica (ronda 5, independiente de los subagentes)
 
