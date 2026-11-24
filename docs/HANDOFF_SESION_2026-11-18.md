@@ -152,6 +152,9 @@ aplicadas; Ola 6 6.1/6.3 diferidas.
    5 bandas, 2 firmas de API, 4 límites numéricos, 3 tablas homogéneas).
 3. **Decisión pendiente**: mover `2026-11-13_DRIFT_REPORT.md` de la raíz a
    `docs/` (ofrecido, sin decidir).
+   → **Resuelto el 2026-11-22**: el informe se movió a
+   `docs/2026-11-13_DRIFT_REPORT.md` y quedó enlazado desde el README
+   (sección «Subdirectories & System Boundaries»).
 4. **Recomendación**: al tocar de nuevo un contrato EGM, re-verificar las
    afirmaciones numéricas y de flags con un barrido de `--help` como el de esta
    sesión; es lo que detectó los defectos A y B que los revisores no vieron.
@@ -195,3 +198,4 @@ aplicadas; Ola 6 6.1/6.3 diferidas.
    y confirmado por el usuario). Esto es lo que cierra el punto 3 de §4.
 2. **Ronda 3 del loop** (o cierre del loop con la verificación mecánica).
 3. **Decidir** la ubicación de `2026-11-13_DRIFT_REPORT.md` (raíz vs `docs/`).
+   → **Hecho el 2026-11-22**: vive en `docs/`.

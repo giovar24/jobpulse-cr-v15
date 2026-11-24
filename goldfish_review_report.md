@@ -381,5 +381,298 @@ usuario). Criterio de convergencia: 2 rondas limpias consecutivas; tope 5.
   skill (ambas tienen revisores `not run` por fallos del proveedor).
 - Convergencia (2 rondas limpias consecutivas): **no acreditada**.
 - Tope: 5 rondas. Quedan 3.
-- Todo el trabajo queda **sin commitear**.
+- ~~Todo el trabajo queda **sin commitear**~~ → **commiteado y pusheado** en
+  `39a55a0` (14 archivos, +2685/−55).
+
+---
+
+# Ronda 3
+
+**Target:** `README.md` (1-1040 al lanzar; 1065 tras aplicar)
+**Revisores:** `codebase_details` (completed, 11 hallazgos) · `style` (pendiente) · `comprehension` (pendiente)
+**Total parcial:** 11 hallazgos — 2 Blocker · 7 Major · 2 Nit. Aprobados y aplicados: **9 PROPOSE FIX + 2 Nits**.
+
+> Los tres revisores se despachan **secuencialmente y con prompt corto** (el
+> prompt largo dispara el screening del proveedor), decisión del usuario en
+> la ronda 3.
+
+## Hallazgos de `codebase_details` (ronda 3)
+
+| # | Hallazgo | Sev. | Verificación | Estado |
+|---|---|---|---|---|
+| 1 | «La UI v2 permite agregar tableros X … siempre tras confirmar» (6 pasajes) + ventana `Administrar fuentes` inexistente | **Blocker** | `ui_v2` no tiene alta de tableros (el único «Agregar» es `cuentas.py:381`, sitios con login); el único `confirmar` de `scraping.py` es el de IA externa; `Administrar fuentes`/`Consultar seleccionadas` existían solo en `ui.py:441,2561` | **Aplicado** — los 6 pasajes reescritos (alta por CLI `site add`, UI v2 solo ejecuta) + la ventana marcada como UI clásica |
+| 2 | `Respaldar DB` (l. 315) y `Marcar revisada` (l. 791) no existen en `ui_v2` | **Blocker** | Ambos existían en la UI clásica (`ui.py:461,2570`); el de l. 791 estaba fuera del aviso histórico | **Aplicado** — ambos marcados como UI clásica con su equivalente CLI (`backup`, `site mark-reviewed`) |
+| 3 | «Procesar» ejecuta **6 etapas sin `scrape`**; la tabla no daba comandos de las etapas 1-3 | Major | `scraping.py:411` → `("analisis","ia","reanalisis","backfill","paso5","evidencia")` | **Aplicado** — texto corregido + comandos de etapas 1-3 apuntando a la tabla «Local Interface» |
+| 4 | `run_enriquecimiento.py` solo hace la mitad de la etapa 4; la justificación era errónea | Major | `reananalizar_tras_ia` llama solo a `reananalizar_con_campos_fuente` (no `reananalizar_texto_cambiado`, `analysis_flow.py:287,321`) | **Aplicado** — nota y fila de la tabla reescritas: hace el grupo «campos sin integrar», no el de texto cambiado |
+| 5 | `viabilidad` **no lee `job_match`** | Major | `calcular_viabilidades` construye `EvaluadorPaso5` sobre `job_analysis` (`viabilidad.py:536-559`); `job_match` solo en un comentario | **Aplicado** — celda corregida: recalcula al vuelo; tablas `job_analysis`+`job_requirements`+`candidate_profile_facts` |
+| 6 | `enrich work-mode` sin `[--apply]` (es dry-run por defecto) | Major | `cli.py:1377-1381` lo define; `cli.py:3299` → `"dry_run"` sin él | **Aplicado** — `[--apply]` añadido + aviso «Sin `--apply` es dry-run» |
+| 7 | Versión vigente `rules-2+fuente`, no `rules-2` | Major | `analysis_flow.py:29` → `VERSION_ANALISIS = f"{EXTRACTOR_VERSION}+fuente"`; único llamador en producción `analysis_flow.py:382` | **Aplicado** — glosario, ejemplo de código (`save_analysis`) y sección «Extractor de requisitos» corregidos |
+| 8 | Playwright nunca lanza Chromium | Major | Cero `.launch(` en `src/`; solo `subprocess.Popen` de Brave + `connect_over_cdp` (`browser_manager.py:181,216`). **Las citas del revisor no existían en el README**; sí eran engañosos el glosario (l. 89) y el prerrequisito (l. 208), **míos de la ronda 2** | **Aplicado (derivado)** — ambos reescritos: Playwright = solo cliente CDP, sin chromium propio; el `.bat` sí ejecuta `playwright install chromium` (`jobpulse-v15.bat:29`) pero el código no lo usa |
+| 9 | No existe valor `OK` en motivos de revisión | Major | JSON `[]` y CSV `""` (`exports.py:70-72`); el `OK` era el render de la UI clásica (`ui.py:164`) | **Aplicado** — frase corregida con el comportamiento real de cada formato |
+| 10 | Estados de `source_run_sites` incompletos (4 de 7) | Nit | `CHECK` de la migración 022: `running`, `ok`, `zero_results`, `error`, `skipped`, `unsupported`, `requires_login` | **Aplicado** — los 7 estados en la entrada de glosario |
+| 11 | Omisiones: `scrape ane --revisitar`, `postulaciones list`, `search --solo-requisitos-obligatorios`, `ElempleoFetcher` | Nit | Existen en `cli.py:1137,1543,1287` y `scraper.py:30`; ausentes del README | **Aplicado** — fila nueva «Scraping por plataforma» (con Elempleo como CLI-less), `postulaciones list` y el flag de `search` |
+
+## Defectos propios detectados al aplicar la ronda 3
+
+| # | Defecto | Estado |
+|---|---|---|
+| F | Referencia colgante a «Esquema inicial» (renombrado en la ronda 2) | **Corregida** |
+| G | Descripción imprecisa de `--solo-requisitos-obligatorios` (la escribí yo al añadirla) | **Corregida** contra `cli.py:1289-1292` («al menos un requisito obligatorio», no «sobre el resultado») |
+
+## Hallazgos de `style` (ronda 3b)
+
+26 hallazgos (13 Major · 13 Nit · 0 Blocker). **Todos verificados contra el
+archivo/código: 0 DECLINE. Aprobados y aplicados: los 26** (decisión del
+usuario en la puerta de la ronda 3b).
+
+### Major (13)
+
+| # | Hallazgo | Verificación | Estado |
+|---|---|---|---|
+| 1 | Cross-ref erróneo: «los comandos de las etapas 4 a 7 en *Subsistemas*» (la 6-7 están en *Local Interface*) | `run_paso5.py`, evidencia en la tabla de scripts de raíz (110-127); solo `enrich requirements-*` (4-5) en *Subsistemas* (235-236) | **Aplicado** — ahora el texto lista los comandos de las 7 etapas y dice dónde vive cada grupo (defecto **mío, ronda 3**) |
+| 2 | Lista de pipeline sin `→ evidencia` (contrato de ingesta, l. 471) | El propio doc define 7 etapas canónicas | **Aplicado** |
+| 3 | Tres redacciones contradictorias de quién abre Brave (l. 134 «verifica», l. 216 ps1 «que ya lo hace», l. 312 «abre») | `jobpulse-v15.bat:40-45` verifica y **abre si no responde** | **Aplicado** — las 3 unificadas |
+| 4 | Ortografía: manual sin tildes vs blueprint con tildes; híbridos introducidos por las reparaciones («misma accion», «activó») | Confirmado | **Aplicado** — normalización mecánica de 227+17+25 reemplazos, protegida fuera de fences/código inline; etiquetas verbatim de la UI clásica se conservan sin tildes (verificadas en `ui.py:554,297`) |
+| 5 | Muro de texto sin párrafos en «Interfaz de escritorio» (~60 y ~40 líneas) | Confirmado | **Aplicado** — 8 subsecciones temáticas |
+| 6 | UI clásica en presente + contradicción «agregar tableros» (449-451) vs «alta es por CLI» (557+) | Confirmado | **Aplicado** — todo el bloque a pasado + nota «Hoy el alta es por CLI» |
+| 7 | Repetición de «única interfaz»/6 pestañas (4×) | L. 71, 279, 351, 486 | **Aplicado** — la lista queda solo en el bloque jerárquico |
+| 8 | Plantilla repetida 7× («El alta es de la CLI…») + «Las pruebas usan…» 5× | Confirmado | **Aplicado** — subida a «Consulta explicita de tableros ATS» introductorio |
+| 9 | Duplicación blueprint↔manual (venv/pytest) | L. 189-196 ≡ 303-309 ≡ 779-784 | **Aplicado** — el manual remite a «System Verification» |
+| 10 | Glosario sin aviso/oferta/vacante; «0 avisos» (81,250) vs «cero ofertas» (804) | Confirmado | **Aplicado** — fila nueva **aviso** + unificación a «0 avisos» |
+| 11 | Typo «lo.describe» (l. 834) | Confirmado (defecto **mío, ronda 3**) | **Aplicado** |
+| 12 | «Este filtro de busqueda» con antecedente ambiguo: mezcla `skip_automatic` con la omisión de detalle del adaptador Workday | Confirmado | **Aplicado** — dos afirmaciones separadas con sujeto nombrado |
+| 13 | `pip install -e .` a secas contradice la regla `python -m pip` (l. 258) | Confirmado | **Aplicado** |
+
+### Nit (13)
+
+| # | Hallazgo | Estado |
+|---|---|---|
+| 1 | Solape de bandas en el 85 (`aplicar ≥85` / `revisar 80-85`) | **Aplicado** — `revisar` ≥80 y <85 (verificado contra `viabilidad.py:49-50,469-474`) |
+| 2 | Ruta mezclada `data/backups\X.db` | **Aplicado** |
+| 3 | Botón «Enriquecer» vs real «Enriquecer IA» (`scraping.py:124`) | **Aplicado** |
+| 4 | Bloque `run_enriquecimiento.py` que se resume a sí mismo | **Aplicado** — última oración eliminada |
+| 5 | Razonamiento de la suite pegado al comando individual (l. 198-200) | **Aplicado** — justificación movida al bloque de la suite, cifra unificada (~20-25 min) |
+| 6 | Duplicados internos: `source_sites_review_log` (121 vs 267), `auditoria_db.py` (125 vs 131), idempotencia (477 vs 542), racha de 3 corridas | **Aplicado** — remisiones cruzadas, redacción unificada |
+| 7 | «La UI clásica mostraba» dos veces en un párrafo (965-979) | **Aplicado** — comprimido |
+| 8 | «nueva versión del extractor» + `Analizar seleccionada` sin marcar | **Aplicado** — «versión actual» + control marcado como retirado |
+| 9 | «de la UI» ambiguo (l. 1062) | **Aplicado** — «`Max. resultados` de la interfaz» |
+| 10 | «delata como basura» (l. 742) | **Aplicado** — «marca como inválidas» |
+| 11 | «v1.5 incluye» en minúscula a inicio de párrafo | **Aplicado** — «El paquete incluye» |
+| 12 | «Sin `sites` toma los activos» sin antecedente | **Aplicado** — «usa los sitios activos» |
+| 13 | Párrafos fusionados (l. 332-333) | **Aplicado** |
+
+### Defectos propios cazados durante la aplicación
+
+| # | Defecto | Estado |
+|---|---|---|
+| H | Pase de tildes por stdin corrompió la codificación (`ubicaci?n` ×16, `ah?` ×1) | **Reparado** (pase de reparación; corrupción residual: 0) |
+| I | 3 palabras sin tildes restantes en backticks (`Revertir ultima importacion`, `Motivo de revision`, `analisis → ia`) | **Correctas tal cual**: son etiquetas verbatim de la UI clásica (sin tildes también en `ui.py:554,297`) y nombres de etapa del orquestador |
+
+## Hallazgos de `comprehension` (ronda 3c)
+
+16 hallazgos (6 Major · 10 Nit · 0 Blocker). **Todos verificados contra el
+archivo/código: 0 DECLINE. Aprobados y aplicados: los 16** (decisión del
+usuario en la puerta de la ronda 3c). Nota: el sandbox bloqueó la lectura de
+persona/estándar EGM (`external_directory`); auditó con los criterios del
+prompt (mismo trato que en la ronda 1).
+
+### Major (6)
+
+| # | Hallazgo | Verificación | Estado |
+|---|---|---|---|
+| 1 | «Las migraciones solo modifican la ruta de base configurada» (l. 298-299) — frase incomprensible | Redacción original: no puede significar eso | **Aplicado** — «se aplican únicamente al archivo de BD configurado (por defecto `data/jobpulse_v15.db`); nunca tocan las bases de v1.x» |
+| 2 | Instrucción en imperativo presente que remite al control retirado `Analizar seleccionada` (l. 465-468) | El sustituto vivo es `analysis extract --job <id>` («Local Interface»). Defecto parcial **mío, ronda 3b** (marqué el control como retirado sin cambiar el verbo) | **Aplicado** — la instrucción actual usa la CLI; el botón queda como historia |
+| 3 | `perfil` sin fila en Terminología; su única narrativa de creación está en pasado en la sección UI clásica | grep: sin fila; `candidate_profile_facts` solo en líneas sueltas | **Aplicado** — fila nueva **perfil** (qué es, dónde vive, cómo se carga hoy) |
+| 4 | «Retención»/«purga» referidas 4 veces (l. 177, 410, 840, 845) sin definir mecanismo | `ui_v2/data/retencion.py` existe; la política vive en `ui_config.json` | **Aplicado** — definición en «Global Side Effects»: oculta avisos antiguos, **nunca los borra** |
+| 5 | Fuentes `harvie`, `cinde`, `procomer`, `elempleo` sin identificar | `harvie` = HeyHarvie API (`harvie.py`); `cinde` = `cindejobs.com` GraphQL (`cinde.py`); `procomer` = `talento.procomer.com` (`cli.py:305`); `elempleo` = `elempleo.com/cr` | **Aplicado** — 4 entradas nuevas en el glosario |
+| 6 | Historia de credenciales incompleta (`data/empresas/*.json` vs keyring vs `credenciales`) | `credenciales set` → keyring (contraseña) + `data/empresas/credenciales.json` (metadatos) (`credenciales.py:126`, `ui_v2/data/cuentas.py:9`) | **Aplicado** — glosario «keyring» + «Global Side Effects» |
+
+### Nit (10)
+
+| # | Hallazgo | Estado |
+|---|---|---|
+| 1 | Flags sin contrato: `--no-notify`, `--solo-criticos`, `--confirmar-externo` | **Aplicado** — efecto de cada uno (verificado: `run_full_flow.py:154`, `ia_estado.CRITICOS`, privacidad IA externa) |
+| 2 | «Firma de segunda persona» sin decir segunda respecto de quién | **Aplicado** — «persona distinta del autor de la regla/motor, para no autoconfirmar» (Terminología + subsistemas) |
+| 3 | Bandas `veto`/`sin_datos` sin criterio | **Aplicado** — `veto` = fuera de área o requisito educativo bloqueante (`viabilidad.py:395,418`); `sin_datos` = sin requisitos evaluables (`:404,427`) |
+| 4 | Ruta contradictoria `v1_5/data/jobpulse_v15.db` (l. 324) | **Aplicado** — `data/jobpulse_v15.db` relativa a la raíz |
+| 5 | Placeholder `<repo-v1x>` nunca resuelto | **Aplicado** — resuelto en su primer uso (`D:\Proyectos\jobpulse_cr`) |
+| 6 | `country_query` sin lugar de configuración | **Aplicado** — `site_config_json` del sitio (verificado: `greenhouse.py:72`, `cli.py:3136`) |
+| 7 | Ejemplo `run start/site-result/finish` sin encuadrar | **Aplicado** — «registra una corrida a mano (p. ej. para pruebas); el scraping normal la registra solo» |
+| 8 | `ejecutar_barrido` citado sin vía de invocación | **Aplicado** — «etapa `scrape` del orquestador: `run_full_flow.py` o botón «Procesar»» |
+| 9 | `llama-server` sin definición en el glosario | **Aplicado** — entrada nueva (llama.cpp, lo arranca/apaga quien lo usa) |
+| 10 | «Pase IA de CV» en presente sin ubicación actual (l. 316) | **Aplicado** — `cv_ia.py` existe pero **nada lo importa** fuera de tests: queda como módulo sin botón en la UI v2 |
+
+### Defectos propios cazados durante la aplicación
+
+| # | Defecto | Estado |
+|---|---|---|
+| J | Barrida final de tildes: 6 palabras sin tilde en prosa se escaparon de los pases 3b (`abria`, `postulacion`, `requeria`, `maximo`, `minima/retencion`, `nucleo`) | **Corregidas** (las de `retencion.py`/`postulacion*` en backticks son rutas/tablas y quedan tal cual) |
+
+## Ronda 4
+
+### Hallazgos de `codebase_details` (ronda 4a)
+
+3 hallazgos (3 Major · 0 Nit · 0 Blocker). **Todos verificados contra el
+código: 0 DECLINE. Aprobados y aplicados: los 3** (decisión del usuario).
+Primer intento falló por cuota del proveedor; el reintento (protocolo: 1
+reintento) funcionó.
+
+| # | Hallazgo | Verificación | Estado |
+|---|---|---|---|
+| 1 | `health_status` (acumulado) confundido con `source_run_sites.status` (por corrida) | `migrations/001:22-26` y `022:41-45` (valores de `health_status`), `repository.py:514-567` (actualización por corrida) | **Aplicado** — la fila «salud de sitios» del glosario ahora describe los **dos campos** |
+| 2 | El botón «Procesar» atribuido al scraping | `ui_v2/tabs/scraping.py:114-136,403-408`: «Procesar» = pipeline sin `scrape`; el scraping lo lanzan «Ejecutar grupo»/«Ejecutar seleccionados» | **Aplicado** — Elempleo atribuido a esas acciones (defecto **mío, ronda 3c**) |
+| 3 | La UI v2 no ofrece alta de tableros ni consulta manual | `ui_v2/tabs/cuentas.py:107,381` (solo «Agregar sitio» con login); no hay alta de ATS ni consulta de tablero | **Aplicado** — el bloque de jerarquía lo dice: alta y consulta **solo por CLI** (defecto **mío, ronda 3b**) |
+
+### Hallazgos de `style` (ronda 4b)
+
+10 hallazgos (5 Major · 5 Nit · 0 Blocker). **Todos verificados leyendo los
+pasajes citados: 0 DECLINE. Aprobados y aplicados: los 10**, con N3 acotado por
+decisión del usuario (se recorta lo redundante del glosario, sin quitar las
+entradas exigidas por `comprehension`).
+
+#### Major (5)
+
+| # | Hallazgo | Estado |
+|---|---|---|
+| 1 | Tabla de subsistemas con celdas desiguales | **Aplicado** — filas «Viabilidad» divididas en 3 (comando / bandas / filtro de áreas) y fila propia para Elempleo |
+| 2 | Repetición del contrato de los 7 tableros ATS | **Aplicado** — tabla «Contrato común» (consulta, alta, filtrado, persistencia, corridas, modalidad) + cada proveedor queda con sus **variantes** |
+| 3 | Muros de texto en la interfaz heredada | **Aplicado** — «Filtros de fecha…» pasa a tabla (Control/Comportamiento/Excepción); el resto a viñetas |
+| 4 | Bloque CLI entrelazado de párrafos (963-1036) | **Aplicado** — fragmentos sueltos («Muestra», «por») unidos y bloques separados |
+| 5 | Repetición de advertencias sobre la UI clásica (8 sitios) | **Aplicado** — regla de lectura única en el bloque de jerarquía; avisos posteriores reducidos a «UI clásica (retirada)» + vía vigente |
+
+#### Nit (5)
+
+| # | Hallazgo | Estado |
+|---|---|---|
+| 1 | Redundancia entre el resumen de etapas y la tabla de scripts | **Aplicado** — el resumen pasa a tabla de 7 etapas |
+| 2 | Exceso de negrita («mostraba», «permitía», «podían») | **Aplicado** — negrita reservada a términos de interfaz, estados, rutas y advertencias |
+| 3 | Glosario sobredimensionado | **Aplicado (acotado)** — se quitan `httpx` y `urllib` (ya explicados en «API pública»); se conservan el resto, incluidas las entradas exigidas por `comprehension` (CINDE, Elempleo, Procomer, harvie, keyring, llama-server) |
+| 4 | Degradación entre documento vigente y manual heredado | **Aplicado** — «## Documentación funcional» → «## Manual funcional heredado» + nota de estado |
+
+### Defectos propios cazados durante la aplicación
+
+| # | Defecto | Estado |
+|---|---|---|
+| K | La tabla «Contrato común» (M2) llevaba un pipe sin escapar en `api\|rss` → rompía la tabla (columnas 4/5) | **Corregido** antes de cerrar la ronda |
+| L | 6 palabras sin tilde en prosa (`abría`, `postulación`, `requería`, `máximo`, `mínima/retención`, `núcleo`) | **Corregidas** |
+| M | Dos bloques con el mismo nombre «Contrato común» (todos los fetchers vs. 7 tableros) | **Desambiguado** — el nuevo pasa a «Contrato común de los tableros ATS» |
+| N | Typo `platforma` en 2 entradas nuevas del glosario | **Corregido** |
+| O | 3 palabras sin tilde en prosa (`existian`, `categoria` ×2) | **Corregidas** |
+| P | **Encabezado con caracteres CJK** (`首选`) al dividir la fila de Viabilidad | **Corregido**; barrido: 0 caracteres CJK en README e informe (lo cazó `comprehension`, ronda 4c) |
+
+### Hallazgos de `comprehension` (ronda 4c)
+
+2 hallazgos (2 Major · 0 Blocker). **Ambos verificados: 0 DECLINE. Aplicados los 2.**
+
+| # | Hallazgo | Verificación | Estado |
+|---|---|---|---|
+| 1 | Encabezado corrupto «Viabilidad —首选 área» (l. 254) | **Defecto mío de la ronda 4a**: al dividir la fila de Viabilidad se colaron caracteres CJK | **Corregido** — «Viabilidad — filtro de áreas»; barrido defensivo: 0 caracteres CJK en README e informe |
+| 2 | «Datos guardados y aprobados del perfil» sin definir qué es «aprobado» | `candidate_profile_facts` **no tiene columna de aprobación** (`016_areas.sql:56-85`): solo `origin` (`manual`/`imported`); la revisión ocurre antes de guardar | **Corregido** — «los hechos guardados del perfil (la importación ya pasó por revisión antes de guardarse, así que no hay un estado «aprobado» aparte)» |
+
+### Resumen de la ronda 4
+
+- `codebase_details` (3 Major) · `style` (5 Major + 5 Nit) · `comprehension` (2 Major) = **15 hallazgos, 0 Blocker, 0 DECLINE, 15 aplicados**.
+- **Tendencia:** 31 → 8 → 53 → 15 hallazgos. La ronda 4 es la primera en la que **ningún revisor encontró un problema de fondo nuevo** (los 4 defectos de esta ronda eran míos: `health_status`, «Procesar», consulta de tableros y el encabezado CJK, todos introducidos en rondas 3b/3c/4a).
+
+## Estado del loop tras la ronda 4
+
+- Rondas ejecutadas: **4 de 5** (tope).
+- Ninguna ronda ha salido «limpia» en sentido estricto (todas trajeron hallazgos, todos asentados).
+- **Convergencia (2 rondas limpias consecutivas): no acreditada**, y con el tope en 5 ya no es alcanzable en sentido estricto.
+- Trabajo de las rondas 1-2 commiteado en `39a55a0`; **las rondas 3 y 4 van sin commitear** (`README.md` + `goldfish_review_report.md`).
+
+## Ronda 5 (última, tope)
+
+### `codebase_details` (5a)
+
+- **Intentos 1 y 2**: fallos del proveedor (cuota agotada; después, el subagente
+  terminó sin emitir informe).
+- **Intento 3**: reintento sobre la misma sesión → informe entregado.
+- Resultado: **3 hallazgos (1 Blocker + 2 Major). Los 3 verificados contra el
+  código: 0 DECLINE, aplicados los 3.**
+
+| # | Hallazgo | Verificación | Estado |
+|---|---|---|---|
+| 1 | **Blocker** — el README afirmaba que `search --format csv` produce «el mismo CSV que la UI v2». **Falso** | La UI v2 tiene **dos** CSV propios: `ui_v2/data/jobs.py:271` (datos crudos) y `ui_v2/data/vacantes.py:342` (ranking ATS); **ninguno** lleva `compatibilidad_perfil` ni `motivos_revision`. Esas columnas solo existen en `exports.write_job_search_csv` (`exports.py:45-47`), que la UI v2 nunca invoca | **Corregido** — se describe el export propio de la CLI y se aclara que las dos exportaciones de la UI v2 son distintas, sin equivalencia de esquema |
+| 2 | **Major** — la fila «Filtrado» del contrato común prometía `<country_query> (multi-loc)` y filtro por título a los **7** adaptadores | `multi-loc` existe solo en **3**: `ashby.py:130`, `lever.py:131`, `recruitee.py:136`. Greenhouse solo mira `location.name` + oficinas (`greenhouse.py:104-125`); SuccessFactors guarda `location_raw = country_query` (`successfactors.py:139`); Workday normaliza con `ubicaciones_cr` (`workday.py:224`); Workable no fabrica el marcador (`workable.py:85`) | **Corregido** — la fila «Filtrado» queda solo con lo común (filtro por `country_query`, oferta omitida si no aparece); nota nueva con el comportamiento de los 4 restantes; el marcador se documenta en las subsecciones de Ashby, Lever y Recruitee |
+| 3 | **Major** — `review_required` «se activa tras 3 corridas con 0 avisos» | **Tres** disparadores: `error` (`repository.py:518`), `requires_login` (`repository.py:532`) y la racha de ceros (`repository.py:538-562`); `site list --needs-review` filtra por `review_required = 1` (`repository.py:312`); `mark_site_reviewed` (`repository.py:277-282`) limpia la bandera y reinicia la racha pero conserva `health_status`; una corrida correcta limpia la bandera (`repository.py:564-568`) | **Corregido** en el glosario y en la tabla de subsistemas, con los tres disparadores y el efecto de `mark-reviewed` |
+
+### `style` (5b)
+
+- **Un solo intento**: informe entregado.
+- Resultado: **30 hallazgos (18 Major + 12 Nit). Los 30 verificados y
+  aplicados (0 DECLINE).**
+
+| Grupo | Hallazgos | Verificación / corrección |
+|---|---|---|
+| Errores factuales | `--revisitar` documentado con `--dias` (el flag real es `--limite`); «los 7 adaptadores» ignoraba harvie; «activar o pausar sitios» aparecía como capacidad retirada (sigue en la UI v2); remisión «ver «Local Interface»» a una sección que no documenta `analysis extract` | `scrape ane --help`: `--dias` = ventana del listado, `--limite` = tope del re-barrido. `run_ats_scrapes.py` incluye harvie en `PLATFORM_ORDER`; `ui_v2/tabs/configuracion.py:1410-1443` activa/pausa sitios; el comando se documenta en «Extractor de requisitos». **Los 4 corregidos** |
+| Jerga sin definir | `<country_query> (multi-loc)` usado 5 veces sin definir; «export controlado» sin definir | `exports._safe_csv_cell` neutraliza fórmulas (`=`, `+`, `-`, `@`): se definió el marcador (texto literal en `location_raw`, no es ciudad) y el export |
+| Repetición / consistencia | regla de salud enunciada 4 veces; dos blockquotes seguidos idénticos; `mark-reviewed` descrito distinto en 2 sitios; tiempos verbales mezclados en el manual | Glosario reducido a definición + remisión; segundo blockquote eliminado; los dos enunciados de `mark-reviewed` unificados; tabla de filtros y «Postulaciones» pasadas a pretérito |
+| Claridad | etiqueta «Variantes:» ×7 para contenido que no son variantes; «consulta» con dos sentidos (lanzar vs. mostrar); heurística `ciudad_es_basura` opaca; «Respalda la base» sin sujeto; `last_seen` mal descrito | «Variantes:» → «Comportamiento:»; «lanzar el scrape» vs. «mostrar los resultados»; criterio de `ciudad_es_basura` descrito (Costa Rica, `_`, dígitos, país, empresa, provincia+zona); respaldo atribuido al operador con `backup --output`; orden descendente explícito |
+| Nits | «Numeração» (portugués); «un API» ×4; «la interfaz» ambiguo; Playwright duplicado; sección que solo remite; números de línea en la cita; «siempre» desmentido 3 líneas después; «solo lectura» que escribe; frase con dos predicados; etiquetas de estado inventadas; formulación telegráfica | **Los 12 corregidos** |
+
+**Defecto propio cazado al aplicar:** `Respaldá` (voseo rioplatense) → `Respalda`,
+corregido antes de la verificación final.
+
+### `comprehension` (5c)
+
+- **Un solo intento**: informe entregado.
+- Resultado: **13 hallazgos (10 Major + 3 Nit). Los 13 verificados y
+  aplicados (0 DECLINE).**
+
+| # | Hallazgo | Verificación / corrección |
+|---|---|---|
+| 1 | Contradicción UI/CLI: la transición decía que el scrape ATS era «solo por CLI», pero el manual y la sección ATS dicen que la UI v2 lo lanza | **Real**: `scraper.ejecutar_barrido` es la etapa `scrape` que usan UI v2 y orquestador. **Corregido**: «el alta» es solo CLI; «el scrape de sitios ya registrados» se lanza desde «Scraping» o por CLI |
+| 2 | La justificación 4→5 decía que «no existen filas que normalizar» antes de la 4, pero la 2 ya crea requisitos | **Real**: la 4 añade requisitos nuevos que la 5 normaliza; invertirlo deja requisitos sin `codigo_canonico` (ignorados en silencio). **Reescrito** |
+| 3 | No se aclaraba quién abre Brave en cada vía de scraping | **Verificado**: `scrape <plataforma>` y `run_scrapes.py` exigen CDP; `scraper.ejecutar_barrido` abre bajo demanda y cierra solo lo suyo (O7.2). **Añadido** párrafo «Quién abre Brave» con cada punto de entrada |
+| 4 | `bloqueante`/`faltante`/`educacion_no_cumple` usados sin definir su escala | **Verificado** en `matching.py`: estados **por requisito** (la vacante tiene los suyos). **Añadida** la escala y el motivo |
+| 5 | Dos «compatibilidades» sin distinguir (Paso 5 vs. `search`) y cabecera CSV mal descrita | **Verificado**: JSON `profile_compatibility`, CSV `compatibilidad_perfil` (mismos valores, cabecera distinta); es cálculo informativo del motor de búsqueda. **Corregido** y desambiguado |
+| 6 | `normalize-workday` y `normalize` mezclados (payload/conflictos atribuidos al general) | **Verificado** en `cli.py:3060-3284`: `normalize-workday` lee `raw_payload` y cuenta `corrected_cities`/`skipped_conflicting_sources`; `normalize` lee `location_raw`/descripción y cuenta `filled_*`/`corrected_*`. **Separados** ambos contratos y enlazado `ubicaciones_cr` |
+| 7 | `inferred` listado como estado de campo | **Verificado** (`001:159-193`): `inferred` es **nivel**; los estados de campo son `found`/`not_mentioned`/`unknown`/`ambiguous`. **Corregido** con los dos vocabularios ortogonales |
+| 8 | «Umbrales del Paso 5» citados sin regla | **Verificado** en `matching.py:72-80` y `112-113`. **Añadida** la precedencia mínima (cobertura 0.60, puntaje 0.80, etc.) |
+| 9 | Ciclo de vida de postulaciones y «purga» sin definir; tres almacenes sin jerarquía | **Verificado**: `postulacion` (vigente, FK `ON DELETE SET NULL`), `postulacion_senal`; `user_job_state`/`applications` (legado, cascada). **Aclarado** qué purga (`clean_run.py`) y qué sobrevive |
+| 10 | Remisión a «Salud de sitios» sin sección | **Real**: es una fila de la tabla de subsistemas. **Corregida** la remisión |
+| 11 | «0 avisos» ambiguo (¿nuevos?) y estados intermedios sin definir | **Verificado** en `repository.record_site_result`: solo `zero_results` incrementa; `ok` reinicia; `error`/`requires_login` no modifican. **Corregido** a `jobs_found = 0` |
+| 12 | `ia-server.bat` «delega en el script homónimo» (no existe `ia_server.py`) | **Corregido**: `ia-server.bat` → `start_ia_server.py`; `instalar-modelo-ia.bat` → `instalar_modelo_ia.py` |
+| 13 | «Procesar» ejecuta la etapa `ia` pero el texto solo atribuía el arranque del servidor a «Enriquecer IA» | **Verificado** en `pipeline.py:350`: la etapa `ia` llama `asegurar_servidor`. **Corregido**: cualquier ejecución con `ia` y proveedor local lo levanta |
+
+### Resumen de la ronda 5
+
+- `codebase_details` (3) · `style` (30) · `comprehension` (13) = **46 hallazgos,
+  0 Blocker tras la corrección del CSV, 0 DECLINE, 46 aplicados**.
+- **Tendencia:** 31 → 8 → 53 → 15 → **46**. La subida no indica regresión: la
+  ronda 5 reescribió zonas nuevas (contrato ATS, export CSV, transición al
+  manual) y los revisores auditaron esas zonas; 10 de los 13 hallazgos de
+  `comprehension` fueron consecuencia directa de los cambios de la 5a/5b.
+
+## Estado del loop tras la ronda 5
+
+- Rondas ejecutadas: **5 de 5** (tope alcanzado).
+- **Convergencia estricta (2 rondas limpias consecutivas): no acreditada.**
+  Ninguna ronda salió sin hallazgos y el tope impide ya alcanzarla.
+- **Estabilización:** la ronda 4 fue la primera sin problemas de fondo nuevos de
+  los revisores (los 4 defectos eran del autor); la ronda 5 encontró un
+  **Blocker real** (equivalencia CSV CLI↔UI v2 inexistente) y varios errores de
+  contenido introducidos en las rondas previas, todos corregidos.
+- **Cierre:** por **tope**, con verificación mecánica completa (tablas, enlaces,
+  esquema 28, 7 valores de salud, 24 grupos de comando, default de BD). El README
+  queda íntegro: **1187 líneas, 6 tablas homogéneas, 0 corrupción, 0 CJK**.
+- Trabajo de las rondas 1-2 commiteado en `39a55a0`; **las rondas 3-5 van sin
+  commitear** (`README.md`, `goldfish_review_report.md` y los dos docs anexos).
+
+### Verificación mecánica (ronda 5, independiente de los subagentes)
+
+Barrido de `--help` y de esquema contra el README (el método que en la sesión
+anterior detectó defectos que los revisores no vieron):
+
+| Afirmación del README | Comprobación | Veredicto |
+|---|---|---|
+| Los 24 grupos de comando citados existen | `jobpulse-v15 --help` | ✅ los 24 aparecen |
+| BD por defecto en `data/jobpulse_v15.db` (raíz del repo) | `db.py:32` (`parents[2]/data/jobpulse_v15.db`) y `schema-version` en vivo | ✅ el README acierta |
+| Texto de ayuda del CLI | `cli.py:659` aún dice «por defecto usa `v1_5/data/jobpulse_v15.db`» | ⚠️ **defecto de CÓDIGO**, no del doc: el README documenta la ruta real; el help quedó obsoleto (no se toca: esta tarea es solo documentación) |
+| Esquema vigente = 28 | `schema-version` en la BD real | ✅ |
+| `source_run_sites.status` con 7 valores | `001:116-119` + `022:76` | ✅ |
+| `source_sites.health_status` con 7 valores | `001:22-26` + `022:41-45` | ✅ |
+
+
 
