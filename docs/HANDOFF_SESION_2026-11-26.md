@@ -9,7 +9,11 @@ corrigió un **bug latente que hacía invisibles 78 de 291 skills** al guardarla
 como hechos de perfil. Además se creó `docs/ESTRUCTURA_BD.md` (mapa de las 27
 tablas) con la regla de **mantenerlo actualizado en cada migración**.
 
-Todo está **commiteado pero NO pusheado** (falta confirmación del usuario).
+Todo está **commiteado en `37ff80c` pero NO pusheado** (falta confirmación del
+usuario).
+
+**Verificación**: suite completa `python -m pytest tests/ -q` →
+**1191 passed + 2648 subtests** en 9:28 (baseline: 1164 + 2648).
 
 ---
 
@@ -205,6 +209,9 @@ python -m pytest tests/test_perfil_huecos.py tests/test_conceptos.py -q
 6. **No hay migración nueva**: el esquema sigue en **28** y las 27 tablas no
    cambian → `docs/ESTRUCTURA_BD.md` no requiere cambios de estructura (solo la
    nota del flujo en §7).
+7. **Los 9 facts con `codigo_canonico` NULL** del perfil real son de categoría
+   `experience` (títulos de puesto: 'Soporte Técnico', 'total') → **correcto**:
+   no son conceptos y el motor no los lee. Con el fix siguen en NULL (0/9).
 
 ---
 
@@ -217,4 +224,4 @@ python -m pytest tests/test_perfil_huecos.py tests/test_conceptos.py -q
 3. **Fase D sigue sin UI** (`postulaciones`): es lo único del plan que aún no
    está expuesto en la UI v2.
 4. **Commit pendiente de push**: todo el trabajo de esta sesión está commiteado
-   en local. **No pushear sin confirmación del usuario.**
+   en local (`37ff80c`). **No pushear sin confirmación del usuario.**
