@@ -479,6 +479,195 @@ class TestPerfilTab(unittest.TestCase):
         self.assertEqual(self.pestana._widgets["tabla"].get_children(), ())
         self.assertEqual(self.pestana._widgets["vacio"].winfo_manager(), "grid")
 
+    def test_el_flujo_completar_perfil_guarda_y_deja_de_preguntar(self):
+        """Flujo completo: el hueco se guarda y desaparece del cuestionario.
+
+        Se parchea el diálogo para no abrir ventana: lo que se prueba es el
+        ENCUADRE de la pestaña (calcular huecos -> guardar -> recalcular).
+        """
+        from jobpulse_v15.perfil_huecos import Hueco, HuecosPerfil
+
+        huecos = HuecosPerfil(
+            faltan=(Hueco(categoria="skill", codigo="python", avisos=3),),
+            areas_catalogo=(("informatica", "Informática"),),
+        )
+
+        class _FalsoDialogo:
+            @staticmethod
+            def mostrar(_parent, _theme, _huecos):
+                return {
+                    "facts": [
+                        {"category": "skill", "value_code": "python",
+                         "value_text": "Python"},
+                    ],
+                    "areas": ["informatica"],
+                }
+
+        with unittest.mock.patch.object(
+            perfil_mod, "CompletarPerfilDialog", _FalsoDialogo
+        ):
+            self.pestana.completar_perfil()
+
+        hechos = self.repository.list_candidate_profile_facts()
+        self.assertEqual(
+            sorted((h["category"], h["value_code"]) for h in hechos),
+            [("area", "informatica"), ("skill", "python")],
+        )
+        # Relleno una sola vez: el hueco ya no se vuelve a preguntar.
+        self.assertNotIn(
+            "python", [h.codigo for h in self.pestana.store.huecos().faltan]
+        )
+        # Y el área quedó marcada.
+        self.assertIn(
+            "informatica", self.pestana.store.huecos().areas_marcadas
+        )
+
+
+class TestStoreHuecos(unittest.TestCase):
+    """La capa de datos expone los huecos y sincroniza las áreas."""
+
+    def setUp(self):
+        self.temp_dir = tempfile.TemporaryDirectory()
+        self.database = Database(Path(self.temp_dir.name) / "huecos-ui.db")
+        self.database.initialize()
+        self.repository = Repository(self.database)
+        self.store = ProfileStore(self.repository)
+
+    def tearDown(self):
+        self.temp_dir.cleanup()
+
+    def test_sincronizar_areas_deja_exacto_el_conjunto(self):
+        from jobpulse_v15 import areas as areas_mod
+        import sqlite3
+        from contextlib import closing
+
+        with closing(sqlite3.connect(self.database.path)) as connection:
+            areas_mod.sembrar_taxonomia(connection)
+            connection.commit()
+
+        resultado = self.store.sincronizar_areas(["informatica", "ventas"])
+        self.assertEqual(resultado["guardadas"], 2)
+        self.assertEqual(resultado["quitadas"], 0)
+
+        hechos = self.store.load(ProfileQuery(categoria="area"))
+        self.assertEqual(
+            sorted(h.value_code for h in hechos), ["informatica", "ventas"]
+        )
+
+    def test_sincronizar_areas_quita_las_que_dejan_de_estar(self):
+        from jobpulse_v15 import areas as areas_mod
+        import sqlite3
+        from contextlib import closing
+
+        with closing(sqlite3.connect(self.database.path)) as connection:
+            areas_mod.sembrar_taxonomia(connection)
+            connection.commit()
+
+        self.store.sincronizar_areas(["informatica", "ventas"])
+        resultado = self.store.sincronizar_areas(["informatica"])
+        self.assertEqual(resultado["quitadas"], 1)
+        self.assertEqual(resultado["guardadas"], 0)
+
+        hechos = self.store.load(ProfileQuery(categoria="area"))
+        self.assertEqual([h.value_code for h in hechos], ["informatica"])
+
+    def test_sincronizar_areas_es_idempotente(self):
+        from jobpulse_v15 import areas as areas_mod
+        import sqlite3
+        from contextlib import closing
+
+        with closing(sqlite3.connect(self.database.path)) as connection:
+            areas_mod.sembrar_taxonomia(connection)
+            connection.commit()
+
+        self.store.sincronizar_areas(["informatica"])
+        resultado = self.store.sincronizar_areas(["informatica"])
+        self.assertEqual(resultado["guardadas"], 0)
+        self.assertEqual(resultado["quitadas"], 0)
+        self.assertEqual(
+            len(self.store.load(ProfileQuery(categoria="area"))), 1
+        )
+
+    def test_save_many_guarda_los_hechos(self):
+        total = self.store.save_many([
+            {"category": "skill", "value_code": "python", "value_text": "Python"},
+        ])
+        self.assertEqual(total, 1)
+        hechos = self.store.load(ProfileQuery(categoria="skill"))
+        self.assertEqual([h.value_code for h in hechos], ["python"])
+
+
+class TestDialogoCompletarPerfil(unittest.TestCase):
+    """El diálogo «Completar perfil» muestra los huecos y devuelve lo marcado."""
+
+    def setUp(self):
+        from jobpulse_v15.perfil_huecos import HuecosPerfil, Hueco
+
+        self.temp_dir = tempfile.TemporaryDirectory()
+        self.database = Database(Path(self.temp_dir.name) / "dialogo.db")
+        self.database.initialize()
+        self.repository = Repository(self.database)
+        self.root = _tkroot_reintentos()
+        self.theme = apply_theme(self.root)
+        self.huecos = HuecosPerfil(
+            faltan=(
+                Hueco(categoria="skill", codigo="python", avisos=31,
+                      niveles=("required",)),
+                Hueco(categoria="skill", codigo="excel", avisos=12),
+            ),
+            areas_catalogo=(("informatica", "Informática"),),
+            areas_marcadas=(),
+        )
+
+    def tearDown(self):
+        self.root.update_idletasks()
+        self.root.destroy()
+        gc.collect()
+        self.temp_dir.cleanup()
+
+    def _abrir(self):
+        from jobpulse_v15.ui_v2.dialogs import CompletarPerfilDialog
+
+        dialogo = CompletarPerfilDialog(self.root, self.theme, self.huecos)
+        self.root.update()
+        return dialogo
+
+    def test_lista_los_huecos_y_las_areas(self):
+        dialogo = self._abrir()
+        self.assertEqual(len(dialogo._variables), 2)
+        self.assertEqual(len(dialogo._areas), 1)
+        dialogo.destroy()
+
+    def test_devuelve_solo_los_marcados(self):
+        dialogo = self._abrir()
+        dialogo._variables[0][0].set(True)
+        dialogo._areas["informatica"].set(True)
+        dialogo._aceptar()
+        self.assertIsNotNone(dialogo.resultado)
+        self.assertEqual(
+            [h["value_code"] for h in dialogo.resultado["facts"]], ["python"]
+        )
+        self.assertEqual(dialogo.resultado["areas"], ["informatica"])
+
+    def test_cancelar_no_devuelve_nada(self):
+        dialogo = self._abrir()
+        dialogo._variables[0][0].set(True)
+        dialogo._cancelar()
+        self.assertIsNone(dialogo.resultado)
+
+    def test_el_filtro_oculta_las_filas_que_no_coinciden(self):
+        dialogo = self._abrir()
+        # Las secciones: (marco, [(fila, texto_buscable)]). La de skills es
+        # la segunda (la primera es la de areas).
+        seccion = dialogo._secciones[1]
+        filas = dict((texto, fila) for fila, texto in seccion[1])
+        dialogo._filtrar("excel")
+        self.root.update()
+        # La fila de 'excel' sigue visible; la de 'python' no.
+        self.assertNotEqual(filas["excel"].winfo_manager(), "")
+        self.assertEqual(filas["python"].winfo_manager(), "")
+        dialogo.destroy()
+
 
 class TestVacantesTab(unittest.TestCase):
     """La pestaña del ranking ATS se monta y no rompe el shell."""

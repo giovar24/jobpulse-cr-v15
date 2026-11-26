@@ -1,10 +1,13 @@
 # -*- coding: utf-8 -*-
-"""Pestaña "Perfil": datos del candidato (importar CV + alta manual).
+"""Pestaña "Perfil": datos del candidato (completar, importar CV, alta manual).
 
-Dos formas de llenar el perfil, en la misma pantalla:
-1. **Importar CV…** — lee un PDF/DOCX/TXT local, propone datos y abre un
+Tres formas de llenar el perfil, en la misma pantalla:
+1. **Completar perfil…** — el flujo guiado: calcula los huecos (lo que el
+   corpus pide y aún no registras) desde la BD y guarda los que el usuario
+   confirma. Relleno una sola vez: lo ya registrado deja de aparecer.
+2. **Importar CV…** — lee un PDF/DOCX/TXT local, propone datos y abre un
    diálogo de revisión donde el usuario elige cuáles guardar.
-2. **Alta/edición manual** — el formulario de la derecha crea o actualiza
+3. **Alta/edición manual** — el formulario de la derecha crea o actualiza
    un dato identificado por (categoría, código).
 
 La pestaña NO toca SQLite: usa :class:`ProfileStore`.
@@ -29,7 +32,7 @@ from jobpulse_v15.ui_v2.data.profile import (
     exportar_csv,
     recortar,
 )
-from jobpulse_v15.ui_v2.dialogs import RevisionImportacionDialog
+from jobpulse_v15.ui_v2.dialogs import CompletarPerfilDialog, RevisionImportacionDialog
 from jobpulse_v15.ui_v2.tabs.base import BaseTab
 from jobpulse_v15.ui_v2.widgets import (
     Badge,
@@ -98,20 +101,23 @@ class PerfilTab(BaseTab):
         barra = tk.Frame(parent, bg=theme.color("bg"))
         barra.grid(row=0, column=0, sticky="ew", padx=theme.metrics.pad,
                    pady=(theme.metrics.pad, 8))
-        barra.columnconfigure(2, weight=1)
+        barra.columnconfigure(3, weight=1)
 
-        FlatButton(barra, theme, "Importar CV…", command=self.importar_cv,
+        FlatButton(barra, theme, "Completar perfil…",
+                   command=self.completar_perfil,
                    variant="accent").grid(row=0, column=0)
+        FlatButton(barra, theme, "Importar CV…", command=self.importar_cv,
+                   variant="flat").grid(row=0, column=1, padx=(8, 0))
         self._widgets["revertir"] = FlatButton(
             barra, theme, "Revertir importación", command=self.revertir_importacion,
             variant="flat",
         )
-        self._widgets["revertir"].grid(row=0, column=1, padx=(8, 0))
+        self._widgets["revertir"].grid(row=0, column=2, padx=(8, 0))
 
         FlatButton(barra, theme, "Exportar CSV", command=self.exportar,
-                   variant="flat").grid(row=0, column=3, padx=(8, 0))
-        FlatButton(barra, theme, "Actualizar", command=self.refresh,
                    variant="flat").grid(row=0, column=4, padx=(8, 0))
+        FlatButton(barra, theme, "Actualizar", command=self.refresh,
+                   variant="flat").grid(row=0, column=5, padx=(8, 0))
 
     def _build_resumen(self, parent: tk.Misc) -> None:
         theme = self.theme
@@ -539,6 +545,42 @@ class PerfilTab(BaseTab):
         if self.store.delete(self._editando_id):
             self.refresh()
             self.limpiar_formulario()
+
+    # -- completar perfil (flujo guiado) --
+    def completar_perfil(self) -> None:
+        """Muestra los huecos del corpus y guarda los que el usuario confirma.
+
+        El cálculo es **siempre** desde la BD (implementación única en
+        ``jobpulse_v15.perfil_huecos``): lo ya registrado deja de aparecer,
+        así que el flujo es «relleno una sola vez» y sirve para cualquier
+        perfil cargado (nada está supuesto del titular).
+        """
+        huecos = self.store.huecos()
+        if huecos.vacios:
+            messagebox.showinfo(
+                t("Completar perfil"),
+                t("El perfil ya cubre todo lo que el corpus pide."),
+                parent=self._toplevel(),
+            )
+            return
+        datos = CompletarPerfilDialog.mostrar(self._toplevel(), self.theme, huecos)
+        if not datos:
+            return
+        try:
+            guardados = self.store.save_many(datos["facts"])
+            areas = self.store.sincronizar_areas(datos["areas"])
+        except ValueError as error:
+            messagebox.showerror(t("Completar perfil"), str(error),
+                                 parent=self._toplevel())
+            return
+        self.refresh()
+        messagebox.showinfo(
+            t("Completar perfil"),
+            t("Guardados {} dato(s) · áreas: {} añadida(s), {} retirada(s)."
+              "\nLos huecos restantes se recalculan al pulsar Actualizar.").format(
+                guardados, areas["guardadas"], areas["quitadas"]),
+            parent=self._toplevel(),
+        )
 
     # -- importación --
     def importar_cv(self) -> None:

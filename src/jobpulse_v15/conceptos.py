@@ -280,6 +280,17 @@ def resolver(
       deben encolarse en ``concepto_no_normalizado``.
     """
     mapa = _mapa_conceptos(connection)
+    # Codigos canonicos por categoria: si el value_code YA ES un codigo
+    # canonico ('microsoft-365', 'educacion-universitaria'), se resuelve a
+    # si mismo. Sin este fallback, guardar un hueco del corpus como hecho de
+    # perfil quedaba con codigo_canonico NULL (78 de 291 en la BD real) y el
+    # motor lo IGNORABA en silencio.
+    codigos_por_categoria: dict[str, dict[str, str]] = {}
+    for (categoria, _variante_mapa), codigo in mapa.items():
+        if codigo:
+            codigos_por_categoria.setdefault(categoria, {})[
+                codigo.casefold()
+            ] = codigo
     resueltos: list[dict[str, Any]] = []
     sin_concepto: list[tuple[str, str]] = []
     vistas: set[tuple[str, str]] = set()
@@ -303,6 +314,9 @@ def resolver(
                     codigo = mapa.get((category, alterna))
                     if codigo is not None:
                         break
+            if codigo is None:
+                # El value_code ya ES un codigo canonico de la categoria.
+                codigo = codigos_por_categoria.get(category, {}).get(variante)
         copia["codigo_canonico"] = codigo
         resueltos.append(copia)
         if codigo is None and category in CATEGORIAS_CONCEPTO and variante:

@@ -105,6 +105,29 @@ class TestConceptos(unittest.TestCase):
         self.assertEqual(codigos["university_degree"], "educacion-universitaria")
         self.assertEqual(codigos["excel"], "excel")
 
+    def test_value_code_que_ya_es_codigo_canonico(self):
+        """Regresion (2026-11-26): el value_code puede SER el codigo canonico.
+
+        Los huecos del perfil vienen como codigo canonico ('dotnet' solo
+        tiene la variante '.net' en la semilla): sin el fallback quedaban en
+        NULL y el motor los ignoraba (78 de 291 en la BD real).
+        """
+        self.repository.save_analysis(
+            "job-1",
+            text_hash="hash-1",
+            extractor_version="rules-1",
+            analysis_status="partial",
+            field_statuses={
+                "language": "not_mentioned",
+                "education": "not_mentioned",
+                "license": "not_mentioned",
+                "experience": "not_mentioned",
+                "skill": "found",
+            },
+            requirements=[_requisito("skill", "dotnet", level="required")],
+        )
+        self.assertEqual(self._codigos()["dotnet"], "dotnet")
+
     def test_variante_sin_concepto_queda_null_y_se_encola(self):
         # 'autocad' ya tiene concepto (migracion 020): se usa una variante
         # que sigue sin estar en la taxonomia.
@@ -162,8 +185,14 @@ class TestConceptos(unittest.TestCase):
 
     def test_no_usa_conceptos_inactivos(self):
         with closing(sqlite3.connect(self.database.path)) as connection:
+            # Se desactiva el CODIGO completo (todas sus variantes): desde el
+            # fallback de `resolver` (2026-11-26), un value_code que ya ES un
+            # codigo canonico activo se resuelve aunque su variante este
+            # inactiva ('excel' sigue canonicamente activo via 'excel
+            # avanzado'). Para probar que lo inactivo no se usa, hay que
+            # apagar el codigo entero.
             connection.execute(
-                "UPDATE concepto SET activa = 0 WHERE variante = 'excel'"
+                "UPDATE concepto SET activa = 0 WHERE codigo_canonico = 'excel'"
             )
             connection.commit()
         self.repository.save_analysis(

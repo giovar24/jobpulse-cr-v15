@@ -4,6 +4,11 @@
 > arregla con poco código) a **lo que puede esperar** (mucho esfuerzo, poco
 > efecto inmediato). Cada bloque dice qué se toca, por qué y cómo se sabe que
 > quedó bien.
+>
+> **Relacionado**: el plan *operativo* para la meta «encontrar los mejores
+> puestos para el perfil cargado» (fases A–D + checkpoints S1–S8) vive en
+> `docs/PLAN_MEJORES_PUESTOS.md`; su estado se mide con
+> `python tools\checkpoint_objetivos.py`.
 
 ## A qué metas del proyecto pertenece cada ola
 

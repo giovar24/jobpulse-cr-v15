@@ -44,7 +44,8 @@ caro de descubrir**; lo puntual vive en los handoffs.
   `jobpulse-v15-v2.bat` (no tiene entrypoint en `pyproject.toml`).
 - Núcleo: `pipeline.py` (orquestador), `matching.py` (Paso 5), `repository.py`
   (persistencia), `db.py` + `migrations/` (esquema), `analysis_flow.py`
-  (análisis por reglas, implementación única).
+  (análisis por reglas, implementación única), `perfil_huecos.py` (huecos del
+  perfil vs. corpus, implementación única **sin Tk**).
 - Scripts de raíz = operaciones manuales del pipeline: `run_full_flow.py`,
   `run_enriquecimiento.py`, `run_paso5.py`, `generar_evidencia_paso5.py`,
   `verificar_evidencia.py`, `generar_revision_pendientes.py`, `clean_run.py`.
@@ -97,6 +98,10 @@ caro de descubrir**; lo puntual vive en los handoffs.
   Al añadir una migración hay que actualizar las aserciones de versión
   hardcodeadas en `tests/test_migraciones.py` y `tests/test_pipeline_metricas.py`
   (busca `28`), o la suite falla.
+- **…y actualizar `docs/ESTRUCTURA_BD.md`** con cada cambio de BD (mapa
+  completo: 27 tablas, columnas, FK, índices y recuentos). Regenerar el
+  listado con `… -X utf8 tools\esquema_bd.py` (solo lectura). Un esquema
+  cambiado sin tocar ese doc deja a la siguiente sesión con el mapa viejo.
 - Si una migración tiene que **recrear una tabla** (cambiar un `CHECK`), SQLite
   no lo permite con `ALTER` y `PRAGMA foreign_keys` no se puede cambiar dentro
   de una transacción: la migración gestiona su propia transacción y lo marca
@@ -304,6 +309,12 @@ anteriores `valida=0`); nunca `UPDATE` in-place.
   él el motor **lo ignora en silencio** (perfil invisible → todo `sin_requisitos`).
   Se resuelve **al guardar** (`conceptos.resolver`); el backfill solo rellena
   `NULL`.
+  - Desde 2026-11-26, `conceptos.resolver` tiene un **fallback**: si el
+    `value_code` **ya es** un código canónico activo de esa categoría, se
+    resuelve a sí mismo (antes quedaba NULL → invisible). Sin él, 78 de los
+    291 huecos del corpus quedaban sin código al guardarlos como hechos.
+    Regla: si la taxonomía tiene una variante *distinta* con ese código, el
+    código sigue activo (desactivar una variante NO desactiva el código).
 - **Idioma del aviso**: el requisito de idioma es el idioma en que está escrito
   el aviso, salvo que el aviso **pida** idiomas (mandan los que pide).
   `mixed`/`undetermined` no generan requisito; el idioma del aviso solo cuenta
@@ -513,6 +524,26 @@ anteriores `valida=0`); nunca `UPDATE` in-place.
   **Agregar una pestaña = módulo nuevo + 1 línea en `PESTANIAS`** (`ui_v2/app.py`).
   Humo sin ventana:
   `python -X utf8 -c "from jobpulse_v15.ui_v2.app import crear_app; r,s=crear_app(); [r.update() for _ in range(20)]; t=s.pestana_activa(); t.refresh(); print(t.key, len(t._widgets['tabla'].get_children())); r.destroy()"`
+
+### Flujo «Completar perfil» (pestaña Perfil)
+
+- **Una sola implementación**: `src/jobpulse_v15/perfil_huecos.py`
+  (`calcular_huecos`, **sin Tk**, solo lectura). La usan la UI v2
+  (`ProfileStore.huecos()` → `PerfilTab.completar_perfil()` →
+  `ui_v2/dialogs.py::CompletarPerfilDialog`) y el envoltorio de verificación
+  `tools/perfil_preguntas.py`. **No duplicar la lógica.**
+- **Agnóstico del titular**: los huecos se derivan de la BD (lo que el corpus
+  pide con `codigo_canonico` vs. lo que el perfil registra), solo en las
+  categorías que el motor lee (`skill`, `language`, `education`, `license`) +
+  áreas + hechos sin código. Nada hardcodeado.
+- **Relleno una sola vez**: se recalcula en cada llamada → lo ya registrado
+  deja de aparecer. Abrir el diálogo dos veces no pregunta lo mismo.
+- El perfil es **singleton**: cargar datos de otra persona = **reemplazar**
+  (`Repository.clear_candidate_profile_facts()`; `ProfileStore.reemplazar()`).
+- Al guardar, `Repository.save_candidate_profile_facts` resuelve
+  `codigo_canonico` con `conceptos.resolver`. Desde 2026-11-26, un
+  `value_code` que **ya es** un código canónico se resuelve a sí mismo
+  (fallback); sin él, 78 de 291 huecos quedaban en NULL (invisibles).
 
 ## Reglas del proyecto (no negociables)
 

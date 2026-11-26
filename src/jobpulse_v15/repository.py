@@ -3238,6 +3238,33 @@ class Repository:
             )
         return cursor.rowcount > 0
 
+    def clear_candidate_profile_facts(self) -> dict[str, int]:
+        """Vacia el perfil COMPLETO (hechos, importaciones y snapshots).
+
+        El perfil es **singleton** (no hay ``candidate_id``), asi que cargar
+        los datos de OTRA persona = reemplazar el actual. Se borran tambien
+        las importaciones para que «Revertir importación» no restaure datos
+        de la persona anterior.
+
+        **No toca el corpus** (jobs, analisis, matching): solo el perfil.
+        Devuelve cuantas filas borró de cada tabla.
+        """
+        with self.database.connection() as connection:
+            hechos = connection.execute(
+                "DELETE FROM candidate_profile_facts"
+            ).rowcount
+            snapshots = connection.execute(
+                "DELETE FROM candidate_profile_import_snapshots"
+            ).rowcount
+            importaciones = connection.execute(
+                "DELETE FROM candidate_profile_imports"
+            ).rowcount
+        return {
+            "hechos": int(hechos or 0),
+            "snapshots": int(snapshots or 0),
+            "importaciones": int(importaciones or 0),
+        }
+
     def compare_job_to_candidate_profile(self, job_id: str) -> dict[str, Any]:
         """Compara requisitos vigentes con datos exactos del perfil, sin inferir."""
         self._required_text(job_id, "job_id")

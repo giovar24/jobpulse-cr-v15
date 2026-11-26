@@ -10,11 +10,13 @@ en ``candidate_profile_facts`` y se identifican por ``(category, value_code)``.
 
 IMPORTANTE (vínculo con el matching)
 ------------------------------------
-``Repository.save_candidate_profile_facts`` **no** escribe
-``codigo_canonico``; el motor del Paso 5 exige ``codigo_canonico IS NOT NULL``
-para skill/idioma/educación. Por eso un hecho guardado aquí puede ser
-invisible para el motor mientras siga pendiente la capa B (ver AGENTS.md,
-migración 017). La UI lo muestra sin ocultarlo (columna "Canónico").
+``Repository.save_candidate_profile_facts`` **sí** escribe ``codigo_canonico``
+(CAPA B, 2026-11-04): usa la misma regla que los requisitos
+(`conceptos.resolver`), así que un hecho guardado desde aquí **es visible**
+para el motor del Paso 5 (que exige ``codigo_canonico IS NOT NULL`` para
+skill/idioma/educación). Si la variante no existe en la taxonomía, queda en
+NULL y aparece en la cola `concepto_no_normalizado`. La UI lo muestra sin
+ocultarlo (columna "Canónico").
 """
 from __future__ import annotations
 
@@ -23,8 +25,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Iterable, Mapping, Sequence
 
-from jobpulse_v15 import candidate_profile
+from jobpulse_v15 import candidate_profile, perfil_huecos
 from jobpulse_v15.candidate_profile import CandidateProfileImport
+from jobpulse_v15.perfil_huecos import HuecosPerfil
 from jobpulse_v15.repository import Repository
 
 # --- categorías (espejo de repository.PROFILE_FACT_CATEGORIES) ---
@@ -276,11 +279,71 @@ class ProfileStore:
         self.repository.import_candidate_profile_facts(source_name, list(facts))
         return len(facts)
 
+    def save_many(self, facts: Sequence[Mapping[str, Any]]) -> int:
+        """Guarda un lote de hechos manuales (atómico, con código canónico).
+
+        Lo usa el flujo «Completar perfil»: los hechos vienen del corpus ya
+        con su ``codigo_canonico``, que se re-resuelve al guardar (el mismo
+        ``conceptos.resolver`` que los requisitos).
+        """
+        if not facts:
+            return 0
+        self.repository.save_candidate_profile_facts(list(facts))
+        return len(facts)
+
+    def sincronizar_areas(self, marcadas: Sequence[str]) -> dict[str, int]:
+        """Deja exactamente el conjunto ``marcadas`` como áreas del perfil.
+
+        Devuelve ``{"guardadas": n, "quitadas": n}``. Idempotente: un área ya
+        marcada no se reescribe.
+        """
+        actuales = {
+            hecho.value_code: hecho
+            for hecho in self.load(ProfileQuery(categoria="area"))
+        }
+        deseadas = {str(c) for c in marcadas}
+        guardadas = 0
+        catalogo = dict(self.huecos().areas_catalogo)
+        for codigo in sorted(deseadas - set(actuales)):
+            self.save("area", codigo, catalogo.get(codigo, codigo))
+            guardadas += 1
+        quitadas = 0
+        for codigo in sorted(set(actuales) - deseadas):
+            if self.delete(actuales[codigo].fact_id):
+                quitadas += 1
+        return {"guardadas": guardadas, "quitadas": quitadas}
+
     def importaciones(self, *, limit: int = 20) -> list[dict[str, Any]]:
         return self.repository.list_candidate_profile_imports(limit=limit)
 
     def revertir_ultima(self) -> dict[str, Any] | None:
         return self.repository.revert_last_candidate_profile_import()
+
+    # -- huecos: lo que el corpus pide y el perfil no registra --
+    def huecos(self) -> HuecosPerfil:
+        """Huecos del perfil contra el corpus cargado.
+
+        Implementación única en :mod:`jobpulse_v15.perfil_huecos` (la misma
+        que usa la CLI de verificación). Se recalcula en **cada** llamada, así
+        que es **relleno una sola vez**: lo ya registrado deja de aparecer.
+        Agnóstico del titular: todo sale de la BD, nada está supuesto.
+        """
+        with self.repository.database.connection() as connection:
+            return perfil_huecos.calcular_huecos(connection)
+
+    def reemplazar(
+        self, facts: Sequence[Mapping[str, Any]] | None = None
+    ) -> dict[str, int]:
+        """Carga los datos de OTRA persona: limpia el perfil actual y guarda
+        lo nuevo (si se pasa).
+
+        El perfil es singleton, así que «cambiar de persona» = reemplazar.
+        Devuelve cuántas filas borró de cada tabla.
+        """
+        borrado = self.repository.clear_candidate_profile_facts()
+        if facts:
+            self.import_facts("reemplazo", list(facts))
+        return borrado
 
     # -- apoyo --
     def _fact_por_id(self, fact_id: int) -> ProfileFact | None:
